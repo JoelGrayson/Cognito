@@ -18,8 +18,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Tldraw, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
 import { latexToMathjs } from "@/lib/whiteboard/ink";
+import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
+import { marksFor } from "@/lib/whiteboard/marks";
+import type { HintLevel } from "@/lib/whiteboard/policy";
 import {
   recordStrokes,
+  mergeBounds,
+  type Bounds,
   toStrokePayload,
   DEFAULT_ENDPOINT_CONFIG,
   type Commit,
@@ -29,6 +34,7 @@ import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
 
 interface Reading {
   lineId: number;
+  bounds: Bounds | null;
   provisional: boolean;
   raw: string;
   parsed: string;
@@ -71,6 +77,10 @@ export default function SpikePage() {
   // Readings mirrored into a ref: the commit callback is registered once at mount
   // and would otherwise close over a stale array.
   const recorderRef = useRef<StrokeRecorder | null>(null);
+  const annotatorRef = useRef<Annotator | null>(null);
+  /** lineId -> where that line sits on the canvas. This is what lets marks be placed
+   *  without anyone computing coordinates. */
+  const boundsRef = useRef<Map<number, Bounds>>(new Map());
   const readingsRef = useRef<Reading[]>([]);
   // Synced in an effect, not during render -- a render-phase ref write is unsafe
   // under concurrent rendering.
@@ -78,9 +88,23 @@ export default function SpikePage() {
     readingsRef.current = readings;
   }, [readings]);
 
+  // TESTING: mark immediately at this rung instead of waiting for the learner to ask.
+  // Ship-time default is 1 (a "?" in the margin, no location) -- see policy.ts.
+  const [rung, setRung] = useState<HintLevel>(3);
+  const rungRef = useRef<HintLevel>(rung);
+  useEffect(() => {
+    rungRef.current = rung;
+  }, [rung]);
+
   const submitLine = useCallback(async ({ strokes, lineId, reason }: Commit) => {
     const payload = toStrokePayload(strokes);
     if (!payload) return;
+
+    // Remember where this line is before anything async happens.
+    const lineBounds = strokes.length
+      ? strokes.map((s) => s.bounds).reduce(mergeBounds)
+      : null;
+    if (lineBounds) boundsRef.current.set(lineId, lineBounds);
 
     setBusy(true);
     setError(null);
@@ -109,8 +133,17 @@ export default function SpikePage() {
       const verdict = previous ? checkStep(previous, parsed) : null;
       const checkMs = previous ? performance.now() - t0 : null;
 
+      // Draw on the learner's work. Marks are tagged, so redrawing never touches ink.
+      if (verdict) {
+        const marks = marksFor(verdict, lineId, rungRef.current);
+        if (marks.length > 0) {
+          annotatorRef.current?.draw(marks, (id) => boundsRef.current.get(id));
+        }
+      }
+
       const next: Reading = {
         lineId,
+        bounds: lineBounds,
         provisional: reason === "idle",
         raw,
         parsed,
@@ -139,6 +172,8 @@ export default function SpikePage() {
     setReadings([]);
     setError(null);
     recorderRef.current?.clear();
+    annotatorRef.current?.clear();
+    boundsRef.current.clear();
     const editor = editorRef.current;
     if (editor) {
       editor.selectAll();
@@ -156,6 +191,21 @@ export default function SpikePage() {
         <span className="hidden text-xs text-neutral-500 sm:inline">
           just write — lines commit themselves
         </span>
+        <label className="flex items-center gap-1 text-[11px] text-neutral-500">
+          rung
+          <select
+            value={rung}
+            onChange={(e) => setRung(Number(e.target.value) as HintLevel)}
+            className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-[11px] text-neutral-200"
+          >
+            <option value={0}>0 — silent</option>
+            <option value={1}>1 — “?” in margin</option>
+            <option value={2}>2 — “look here”</option>
+            <option value={3}>3 — circle / strike</option>
+            <option value={4}>4 — + what went wrong</option>
+            <option value={5}>5 — + arrow to prior step</option>
+          </select>
+        </label>
         <span className="font-mono text-[10px] text-neutral-600">
           idle {idleMs}ms
         </span>
@@ -186,6 +236,7 @@ export default function SpikePage() {
               editor.setCurrentTool("draw");
               // Auto-commit: starting a new line commits the previous one. No timer,
               // so you can pause mid-line to think without anything firing.
+              annotatorRef.current = createAnnotator(editor);
               recorderRef.current = recordStrokes(
                 editor,
                 (commit) => void submitLine(commit),
