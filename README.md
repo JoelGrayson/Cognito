@@ -7,9 +7,9 @@ Click any block to open its lesson: a written explanation with a worked example,
 ## Run it
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env.local   # then fill in the keys you have
-npm run dev
+pnpm dev
 ```
 
 Open http://localhost:3000.
@@ -17,7 +17,7 @@ Open http://localhost:3000.
 ## Database
 
 Drizzle is configured for Supabase Postgres. Set `DATABASE_URL` in `.env.local`,
-review the generated SQL in `drizzle/`, then run `npm run db:migrate`.
+review the generated SQL in `drizzle/`, then run `pnpm db:migrate`.
 See [the database guide](db/README.md) for the schema, connection options,
 migration workflow, and remaining application integration work.
 
