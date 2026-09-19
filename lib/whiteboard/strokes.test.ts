@@ -49,11 +49,29 @@ for (const [label, s, want] of CASES) {
   console.log(`${got === want ? "ok  " : "FAIL"}  ${String(want).padEnd(5)} ${label}`);
 }
 
+// REGRESSION, seen live: writing "x > -3" under a previous line committed as
+// 1 stroke then 4, because the second diagonal of the "x" broke against a "line"
+// that was only the first diagonal. Mathpix then read that second diagonal as "1".
+{
+  const firstDiagonalOfX = boundsOf([{ x: 50, y: 160 }, { x: 74, y: 190 }]);
+  const secondDiagonalOfX = stroke(74, 160, -24, 30); // drawn the other way
+  const got = startsNewLine(firstDiagonalOfX, secondDiagonalOfX);
+  console.log(`${got === false ? "ok  " : "FAIL"}  false second stroke of an "x" is not a new line`);
+  if (got === false) pass++; else fails.push("  x-split regression");
+}
+// ...and once a real line IS written, a genuine next line still breaks.
+{
+  const realLine: Bounds = { minX: 50, minY: 160, maxX: 300, maxY: 190 };
+  const got = startsNewLine(realLine, stroke(52, 225));
+  console.log(`${got === true ? "ok  " : "FAIL"}  true  a genuine next line still breaks after a real line`);
+  if (got === true) pass++; else fails.push("  real line break regression");
+}
+
 // A degenerate first line (a single dot) must not make everything after it a new line.
 const DOT: Bounds = { minX: 100, minY: 100, maxX: 102, maxY: 102 };
 const nearDot = startsNewLine(DOT, stroke(104, 101));
 console.log(`${nearDot === false ? "ok  " : "FAIL"}  false continuing next to a single-dot line (minLineHeight guard)`);
 if (nearDot === false) pass++; else fails.push("  single-dot line guard failed");
 
-console.log(`\n${pass}/${CASES.length + 1} correct`);
+console.log(`\n${pass}/${CASES.length + 3} correct`);
 if (fails.length) { console.log("\nFAILURES:\n" + fails.join("\n")); process.exit(1); }

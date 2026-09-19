@@ -62,6 +62,13 @@ export interface EndpointConfig {
   /** Minimum line height in px, so a single dot or dash doesn't produce a degenerate
    *  line box that makes every later stroke look like a new line. */
   minLineHeight: number;
+  /** A line must be at least this wide before a break can fire against it.
+   *  WHY: the first stroke of a new line is often one diagonal of an "x" or the stem
+   *  of a "4". Compared against a box that narrow, the SECOND stroke of the same
+   *  character looks like a carriage return, and the character gets split across two
+   *  lines -- observed live as "x > -3" committing as 1 stroke then "1>-3".
+   *  One stroke is not a line. Wait until there's a line to compare against. */
+  minLineWidthForBreak: number;
   /** Fallback only, for the final line: commit after the pen is idle this long.
    *  Tuned DOWN from a cautious 2500ms because the commit is provisional -- firing
    *  early costs one wasted read and a briefly-wrong line in the panel, both of which
@@ -74,6 +81,7 @@ export const DEFAULT_ENDPOINT_CONFIG: EndpointConfig = {
   belowRatio: 0.75,
   carriageReturnRatio: 0.35,
   minLineHeight: 12,
+  minLineWidthForBreak: 40,
   finalLineIdleMs: 1200,
 };
 
@@ -109,6 +117,9 @@ export function startsNewLine(
   const lineWidth = Math.max(line.maxX - line.minX, 1);
   const start = stroke.points[0];
   if (!start) return false;
+
+  // Too little written to judge against -- see minLineWidthForBreak.
+  if (lineWidth < cfg.minLineWidthForBreak) return false;
 
   const isBelow = stroke.bounds.minY > line.minY + lineHeight * cfg.belowRatio;
   const isCarriageReturn = start.x < line.minX + lineWidth * cfg.carriageReturnRatio;

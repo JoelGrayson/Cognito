@@ -237,6 +237,9 @@ export default function SpikePage() {
               // Auto-commit: starting a new line commits the previous one. No timer,
               // so you can pause mid-line to think without anything firing.
               annotatorRef.current = createAnnotator(editor);
+              // React dev-mode mounts twice. Without this, two store listeners end up
+              // registered and every line is submitted twice.
+              recorderRef.current?.stop();
               recorderRef.current = recordStrokes(
                 editor,
                 (commit) => void submitLine(commit),
