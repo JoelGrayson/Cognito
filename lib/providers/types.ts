@@ -1,4 +1,4 @@
-import type { GenerateRequest, MindMap } from "@/lib/schema";
+import type { z } from "zod";
 
 export type ProviderId = "anthropic" | "openai" | "xai" | "local";
 
@@ -14,6 +14,29 @@ export interface ProviderInfo {
   hint: string;
 }
 
+/** One call that must come back as JSON matching a schema. */
+export interface StructuredRequest<T> {
+  /** Identifier for the output schema, e.g. "mind_map". */
+  name: string;
+  schema: z.ZodType<T>;
+  system: string;
+  user: string;
+  maxTokens?: number;
+  /** How hard a reasoning model should think. Unset means the model's default. */
+  effort?: "minimal" | "low" | "medium" | "high";
+  /**
+   * When given, the reply is streamed and this is called with the raw JSON
+   * text accumulated so far, each time more arrives.
+   */
+  onText?: (text: string) => void;
+}
+
+export interface StructuredResult<T> {
+  output: T;
+  /** The model that actually produced it. */
+  model: string;
+}
+
 export interface Provider {
   id: ProviderId;
   label: string;
@@ -21,14 +44,8 @@ export interface Provider {
   model(): string;
   /** Cheap check: is this provider usable right now? */
   info(): Promise<ProviderInfo>;
-  /** Generate or revise a roadmap. Throws on failure. */
-  generate(req: GenerateRequest, model?: string): Promise<GenerateResult>;
-}
-
-export interface GenerateResult {
-  mindMap: MindMap;
-  /** The model that actually produced it. */
-  model: string;
+  /** Ask the model for output matching a schema. Throws ProviderError on failure. */
+  structured<T>(req: StructuredRequest<T>, model?: string): Promise<StructuredResult<T>>;
 }
 
 export class ProviderError extends Error {

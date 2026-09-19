@@ -1,8 +1,14 @@
 import OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
-import { MindMapSchema, mindMapJsonSchema, type GenerateRequest } from "@/lib/schema";
-import { SYSTEM_PROMPT, userPrompt } from "@/lib/prompt";
-import { ProviderError, type GenerateResult, type Provider, type ProviderId, type ProviderInfo } from "./types";
+import { toJsonSchema } from "@/lib/schema";
+import {
+  ProviderError,
+  type Provider,
+  type ProviderId,
+  type ProviderInfo,
+  type StructuredRequest,
+  type StructuredResult,
+} from "./types";
 
 /**
  * OpenAI, xAI (Grok), Ollama, LM Studio, vLLM and llama.cpp all speak the
@@ -31,6 +37,8 @@ export interface OpenAICompatibleConfig {
    */
   autoDetectModel?: boolean;
   preferModel?: string;
+  /** Whether the server accepts `reasoning_effort` (OpenAI does; most others reject it). */
+  supportsReasoningEffort?: boolean;
 }
 
 type ResponseFormat = NonNullable<ChatCompletionCreateParamsNonStreaming["response_format"]>;
@@ -83,19 +91,19 @@ export function createOpenAICompatibleProvider(cfg: OpenAICompatibleConfig): Pro
     };
   }
 
-  async function generate(req: GenerateRequest, override?: string): Promise<GenerateResult> {
+  async function structured<T>(req: StructuredRequest<T>, override?: string): Promise<StructuredResult<T>> {
     const key = apiKey();
     if (!key) {
       throw new ProviderError(`${cfg.label} is not configured. ${cfg.hint}.`, 400);
     }
     const client = new OpenAI({ apiKey: key, baseURL: baseURL() });
     const chosen = await resolveModel(override);
-    const schema = mindMapJsonSchema();
+    const schema = toJsonSchema(req.schema);
 
     // Most servers accept a JSON schema. Older local servers only accept
     // json_object, and some accept neither, so degrade gracefully.
     const attempts: Array<{ format?: ResponseFormat; remind: boolean }> = [
-      { format: { type: "json_schema", json_schema: { name: "mind_map", schema, strict: true } }, remind: false },
+      { format: { type: "json_schema", json_schema: { name: req.name, schema, strict: true } }, remind: false },
       { format: { type: "json_object" }, remind: true },
       { format: undefined, remind: true },
     ];
@@ -103,24 +111,43 @@ export function createOpenAICompatibleProvider(cfg: OpenAICompatibleConfig): Pro
     let lastError: unknown;
     for (const attempt of attempts) {
       const system = attempt.remind
-        ? `${SYSTEM_PROMPT}\n\nRespond with a single JSON object and nothing else. It must match this JSON Schema:\n${JSON.stringify(schema)}`
-        : SYSTEM_PROMPT;
+        ? `${req.system}\n\nRespond with a single JSON object and nothing else. It must match this JSON Schema:\n${JSON.stringify(schema)}`
+        : req.system;
+      const params = {
+        model: chosen,
+        messages: [
+          { role: "system" as const, content: system },
+          { role: "user" as const, content: req.user },
+        ],
+        ...(attempt.format ? { response_format: attempt.format } : {}),
+        ...(cfg.supportsReasoningEffort && req.effort ? { reasoning_effort: req.effort } : {}),
+      };
       try {
-        const completion = await client.chat.completions.create({
-          model: chosen,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: userPrompt(req) },
-          ],
-          ...(attempt.format ? { response_format: attempt.format } : {}),
-        });
-        const choice = completion.choices[0];
-        if (!choice) throw new ProviderError(`${cfg.label} returned no choices.`, 502);
-        if (choice.finish_reason === "length") {
-          throw new ProviderError(`${cfg.label} ran out of output tokens before finishing the map.`, 502);
+        let text = "";
+        let finish: string | null = null;
+        if (req.onText) {
+          const stream = await client.chat.completions.create({ ...params, stream: true });
+          for await (const chunk of stream) {
+            const choice = chunk.choices[0];
+            if (!choice) continue;
+            const delta = choice.delta?.content;
+            if (delta) {
+              text += delta;
+              req.onText(text);
+            }
+            if (choice.finish_reason) finish = choice.finish_reason;
+          }
+        } else {
+          const completion = await client.chat.completions.create(params);
+          const choice = completion.choices[0];
+          if (!choice) throw new ProviderError(`${cfg.label} returned no choices.`, 502);
+          text = choice.message.content ?? "";
+          finish = choice.finish_reason;
         }
-        const text = choice.message.content ?? "";
-        const parsed = MindMapSchema.safeParse(JSON.parse(extractJson(text)));
+        if (finish === "length") {
+          throw new ProviderError(`${cfg.label} ran out of output tokens before finishing.`, 502);
+        }
+        const parsed = req.schema.safeParse(JSON.parse(extractJson(text)));
         if (!parsed.success) {
           const issue = parsed.error.issues[0];
           throw new ProviderError(
@@ -128,7 +155,7 @@ export function createOpenAICompatibleProvider(cfg: OpenAICompatibleConfig): Pro
             502,
           );
         }
-        return { mindMap: parsed.data, model: chosen };
+        return { output: parsed.data, model: chosen };
       } catch (error) {
         lastError = error;
         // Only a rejected request shape is worth retrying with a looser format.
@@ -139,7 +166,7 @@ export function createOpenAICompatibleProvider(cfg: OpenAICompatibleConfig): Pro
     throw normalize(lastError, cfg.label, baseURL());
   }
 
-  return { id: cfg.id, label: cfg.label, model, info, generate };
+  return { id: cfg.id, label: cfg.label, model, info, structured };
 }
 
 function normalize(error: unknown, label: string, baseURL?: string): Error {
