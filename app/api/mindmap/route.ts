@@ -7,6 +7,7 @@ import { SYSTEM_PROMPT, userPrompt } from "@/lib/prompt";
 import { MindMapInputSchema, MindMapSchema, type GenerateRequest } from "@/lib/schema";
 import { ndjson, throttle } from "@/lib/stream";
 import { getAuth } from "@/lib/auth";
+import { tidyMap } from "@/lib/roadmap";
 
 // Roadmap generation can take a while on reasoning models.
 export const maxDuration = 120;
@@ -17,6 +18,7 @@ const BodySchema = z.object({
   model: z.string().optional(),
   current: z.unknown().optional(),
   instruction: z.string().optional(),
+  details: z.string().max(2000, "Keep the details under 2000 characters.").optional(),
 });
 
 /**
@@ -37,7 +39,7 @@ export const POST = apiHandler(async (request) => {
   if (topic.length > 500) throw new BadRequest("Keep the topic under 500 characters.");
   const provider = providerFrom(body.provider);
 
-  const req: GenerateRequest = { topic };
+  const req: GenerateRequest = { topic, details: body.details?.trim() || undefined };
   if (body.instruction !== undefined || body.current !== undefined) {
     const instruction = body.instruction?.trim();
     if (!instruction) throw new BadRequest("Tell me what to change.");
@@ -68,7 +70,7 @@ export const POST = apiHandler(async (request) => {
     );
     emit({
       type: "done",
-      mindMap: result.output,
+      mindMap: tidyMap(result.output),
       provider: provider.id,
       model: result.model,
       ms: Date.now() - started,

@@ -28,7 +28,13 @@ Guidelines:
 - startingPoint: be honest about what the learner must already be able to do. If the roadmap starts from zero, give the one item "Nothing: this starts from zero".
 - Be strict about "requires". Test each one: could a motivated learner follow this stage if they skipped the stage above and got a one-paragraph recap? If yes, it is not "requires". Coming later in time or in a textbook is not a prerequisite: in history, a later period is "recommended" after an earlier one, not "requires". Good "requires" links are rare, like needing algebra before calculus or needing to know what a variable is before loops. Use "requires" at most three times in the whole map; when in doubt, use "recommended".
 - Look for groups: stages that build on the same foundation but not on each other (the army, religion and daily life of one era; several independent tools or techniques; separate applications) belong in one "any-order" group.
-- Aim for 4-7 stages. Most stages have 2 supporting nodes; use fewer when nothing genuinely belongs alongside.
+- Size the map to the topic, and put only the topic itself in it:
+  - A single concept, law, formula or construct (Ohm's law, the Pythagorean theorem, a for loop) is ONE stage with ONE block and no supporting blocks.
+  - A narrow skill gets 2-4 stages; a broad field gets 5-8.
+  - Background the learner needs first goes in startingPoint, not in the map. Topics that come after go in nextSteps, not in the map.
+  - Add supporting blocks only when something genuinely belongs alongside.
+- outcome lists only what this map teaches.
+- nextSteps: 2-4 topics to learn next, each a short name the learner could type as a new topic (e.g. "Power equations" after Ohm's law), with a one-line reason.
 - Node names are 1-4 words. Subtitles list the key concepts in 2-5 words, comma-separated (e.g. "P, Q, S, power factor"). Descriptions are one plain sentence.
 - Match the scope of the request. A narrow topic gets a narrow, deep roadmap; a broad field gets a broad one.
 - Be specific to the topic. Avoid generic filler like "Practice" or "Advanced topics" unless it names what to practice.
@@ -36,9 +42,13 @@ Guidelines:
 
 export function userPrompt(req: GenerateRequest): string {
   const topic = req.topic.trim();
+  const details = req.details?.trim()
+    ? [``, `About me and what I want (use this to set scope, depth and startingPoint): ${req.details.trim()}`]
+    : [];
   if (req.current && req.instruction?.trim()) {
     return [
       `I want to learn: ${topic}`,
+      ...details,
       ``,
       `Here is the current roadmap as JSON:`,
       JSON.stringify(req.current),
@@ -48,7 +58,12 @@ export function userPrompt(req: GenerateRequest): string {
       `Keep everything else as it is unless the change requires adjusting it. Return the full updated roadmap.`,
     ].join("\n");
   }
-  return `I want to learn: ${topic}`;
+  return [
+    `I want to learn: ${topic}`,
+    ...details,
+    ``,
+    `Size the map to exactly this topic. A single concept, law, formula or construct is 1 stage with 1 block and no supporting blocks. A narrow skill is 2-4 stages. A broad field is at most 8 stages. Background belongs in startingPoint and follow-on topics in nextSteps, not in the map.`,
+  ].join("\n");
 }
 
 /* ---------- Lesson: plan first, then sections in parallel ---------- */
@@ -252,6 +267,69 @@ export function callPrompt(req: {
     conversation,
     ``,
     `Take your next turn.`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+/* ---------- Code exercises ---------- */
+
+export const EXERCISE_SYSTEM_PROMPT = `You write one hands-on coding exercise that practises exactly one lesson in a learning roadmap. The learner solves it in a code editor; JavaScript, TypeScript and Python run in their browser, and tests are checked automatically.
+
+Rules:
+- Practise the lesson's core idea directly, at the depth the lesson teaches. For a non-programming lesson (physics, finance, statistics), write a small Python computation of what the lesson teaches, e.g. a function returning the acceleration on an incline.
+- Use the language the lesson is about. Otherwise use Python.
+- The task names the exact functions or variables to write, their inputs and their expected outputs, so the tests can call them.
+- Starter code runs as is but leaves the core logic as TODOs. Keep the learner's work to 5-20 lines.
+- Tests are boolean expressions evaluated after the learner's code runs, in the same language, e.g. add(2, 3) == 5 in Python or add(2, 3) === 5 in JavaScript. Compare floats with a tolerance, e.g. abs(f(1) - 2.5) < 1e-9. No statements, prints or asserts.
+- The solution must pass every test. Double-check each expected value.
+- Python runs in Pyodide: the standard library, numpy and pandas are available; no network or files. JavaScript and TypeScript run in a browser worker: no DOM, no Node APIs, no npm packages.
+- Be fact-dense: no filler in the task.`;
+
+export function exercisePrompt(req: { topic: string; lesson: LessonContent }): string {
+  return [
+    `Roadmap topic: ${req.topic}`,
+    `Lesson: ${req.lesson.title}. ${req.lesson.summary}`,
+    req.lesson.tldr ? `TL;DR: ${req.lesson.tldr}` : "",
+    `Lesson content:`,
+    ...req.lesson.sections.map((s) => `## ${s.heading}\n${s.body.slice(0, 1200)}`),
+    ``,
+    `Write the exercise.`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+export const CODE_REVIEW_SYSTEM_PROMPT = `You review a learner's answer to a coding exercise. You see the task, their code, and, when the language can run in the browser, what running it printed and which tests passed. For languages that did not run, trace the code yourself against the tests.
+
+- verdict: correct if it solves the task (failing only on something the task never asked for is still correct); almost if one small fix remains; incorrect otherwise.
+- feedback: specific and fact-dense, citing lines or values. Mention one improvement to style or idiom only if it matters.
+- hint: the single next step toward a fix, without writing the solution for them.`;
+
+export function codeReviewPrompt(req: {
+  exercise: { title: string; language: string; task: string; tests: { name: string; expression: string }[] };
+  code: string;
+  run: { output: string[]; error: string | null; results: { name: string; pass: boolean; error?: string }[] } | null;
+}): string {
+  const ran = req.run
+    ? [
+        `Output:`,
+        req.run.output.slice(-40).join("\n") || "(nothing printed)",
+        req.run.error ? `Error: ${req.run.error}` : "",
+        `Tests:`,
+        ...req.run.results.map((r) => `- ${r.pass ? "PASS" : "FAIL"} ${r.name}${r.error ? ` (${r.error})` : ""}`),
+      ]
+    : [`(This language does not run in the browser; trace the code yourself.)`, `Tests to check against:`, ...req.exercise.tests.map((t) => `- ${t.name}: ${t.expression}`)];
+  return [
+    `Exercise: ${req.exercise.title} (${req.exercise.language})`,
+    req.exercise.task,
+    ``,
+    `The learner's code:`,
+    "```" + req.exercise.language,
+    req.code.slice(0, 8000),
+    "```",
+    ``,
+    ...ran,
   ]
     .filter((line) => line !== "")
     .join("\n");

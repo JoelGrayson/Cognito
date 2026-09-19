@@ -18,6 +18,8 @@ export interface SavedMap {
   complete: boolean;
   /** For a revised map: the change the learner asked for. */
   instruction?: string;
+  /** What the learner added about their goal and what they already know. */
+  details?: string;
   savedAt: number;
 }
 
