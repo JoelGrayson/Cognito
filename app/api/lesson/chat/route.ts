@@ -5,7 +5,8 @@ import { parsePartialJson } from "@/lib/partial-json";
 import { TUTOR_SYSTEM_PROMPT, tutorPrompt } from "@/lib/prompt";
 import { ChatMessageSchema, LessonSchema, TutorReplySchema, type Lesson } from "@/lib/schema";
 import { ndjson, throttle } from "@/lib/stream";
-import { findVideo } from "@/lib/youtube";
+import { findHelpfulVideo } from "@/lib/video";
+import { getAuth } from "@/lib/auth";
 
 export const maxDuration = 120;
 
@@ -27,6 +28,7 @@ const BodySchema = z.object({
  *   {type:"error", error}
  */
 export const POST = apiHandler(async (request) => {
+  const session = await getAuth().api.getSession({ headers: request.headers });
   const body = await readJson(request, BodySchema);
   const provider = providerFrom(body.provider);
   const last = body.messages[body.messages.length - 1];
@@ -51,6 +53,7 @@ export const POST = apiHandler(async (request) => {
         },
       },
       body.model,
+      session ? { userId: session.user.id } : undefined,
     );
 
     let lesson: Lesson | null = null;
@@ -59,7 +62,15 @@ export const POST = apiHandler(async (request) => {
       const sameVideo = updated.videoQuery.trim() === content.videoQuery.trim();
       const [resources, newVideo] = await Promise.all([
         keepReachable(updated.resources),
-        sameVideo ? Promise.resolve(video) : findVideo(updated.videoQuery),
+        sameVideo
+          ? Promise.resolve(video)
+          : findHelpfulVideo(
+              provider,
+              { topic: body.topic, lesson: updated.title, summary: updated.summary },
+              updated.videoQuery,
+              body.model,
+              session ? { userId: session.user.id } : undefined,
+            ),
       ]);
       lesson = { ...updated, resources, video: newVideo };
     }

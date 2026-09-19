@@ -3,7 +3,24 @@
 PostgreSQL (Supabase) is the persistence layer. Drizzle owns the schema and SQL
 migrations; Zod schemas in `types/learning.ts` own the JSON contract.
 
-## Setup
+## Local Postgres with Docker
+
+```bash
+docker compose up -d --wait   # postgres:17 on localhost:5432, data in a named volume
+pnpm db:migrate               # apply drizzle/*.sql
+```
+
+Set in `.env.local`:
+
+```dotenv
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/structured_learning
+DIRECT_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/structured_learning
+```
+
+Set both: `drizzle.config.ts` prefers `DIRECT_DATABASE_URL`, so a leftover Supabase
+value there would make `pnpm db:migrate` target Supabase instead of the container.
+
+## Setup (Supabase)
 
 1. Copy `.env.example` to `.env.local` and set `DATABASE_URL` to the Supabase
    Postgres connection string. This is a server secret, not a public Supabase URL

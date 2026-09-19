@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     environment: "node",
     // .claude/worktrees holds agent worktrees whose tests resolve "@/" to this root.
-    exclude: [...defaultExclude, ".claude/**"],
+    // lib/whiteboard tests are plain node scripts, run via `pnpm whiteboard:test`.
+    exclude: [...defaultExclude, ".claude/**", "lib/whiteboard/**"],
   },
 });

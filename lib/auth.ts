@@ -4,6 +4,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { anonymous } from "better-auth/plugins";
+import { chatgptPlugin } from "@/lib/chatgpt/plugin";
 import { getDb } from "@/db";
 import { account, session, user, verification } from "@/db/schema";
 import { migrateUserData } from "@/lib/user-data";
@@ -26,6 +27,7 @@ function createAuth() {
       transaction: true,
     }),
     plugins: [
+      chatgptPlugin(),
       anonymous({
         onLinkAccount: async ({ anonymousUser, newUser }) => {
           await migrateUserData(anonymousUser.user.id, newUser.user.id);

@@ -1,15 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { LessonView, type LessonState } from "@/components/Lesson";
 import { ProviderSelect } from "@/components/ProviderSelect";
-import { Roadmap, RoadmapSkeleton } from "@/components/Roadmap";
+import { ChatGPTConnect } from "@/components/ChatGPTConnect";
+import { Roadmap, RoadmapLegend, RoadmapSkeleton } from "@/components/Roadmap";
 import { emptyDraft, type LessonDraft, type OutlineDraft } from "@/lib/drafts";
 import { ensureOk, readNdjson } from "@/lib/ndjson";
+import { RichText } from "@/components/RichText";
+import { readSettings } from "@/lib/settings";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import { ensureAnonymousSession } from "@/lib/auth-client";
-import { lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
-import type { Lesson, MindMap, Resource, Video } from "@/lib/schema";
+import { findRef, lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
+import {
+  deleteRoadmap,
+  listRoadmaps,
+  loadLesson as loadSavedLesson,
+  loadMap,
+  loadRoadmap,
+  newRoadmapId,
+  roadmapStorageKey,
+  roadmapsVersion,
+  roadmapUrl,
+  saveLesson,
+  saveMap,
+  subscribeRoadmaps,
+} from "@/lib/saved-roadmaps";
+import { asList, type Lesson, type MapNode, type MindMap, type Resource, type Video } from "@/lib/schema";
 import { trpc } from "@/lib/trpc";
 
 interface Meta {
@@ -26,6 +44,9 @@ interface GenerateBody {
 }
 
 const EXAMPLES = ["Three-phase power", "Machine learning", "Rust", "Jazz piano"];
+
+/** Lessons written at once by "Generate all". Each lesson already makes several calls in parallel. */
+const BULK_CONCURRENCY = 3;
 
 export default function Home() {
   const [topic, setTopic] = useState("");
@@ -45,7 +66,7 @@ export default function Home() {
   const [lessons, setLessons] = useState<Record<string, LessonState>>({});
 
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [providerId, setProviderId] = useState<ProviderId>("anthropic");
+  const [providerId, setProviderId] = useState<ProviderId>("openai");
   const abortRef = useRef<AbortController | null>(null);
   /** Mirrors `selected` for callbacks that must not re-create on every selection. */
   const selectedRef = useRef<NodeRef | null>(null);
@@ -53,36 +74,78 @@ export default function Home() {
     selectedRef.current = selected;
   }, [selected]);
 
+  /** Id of the current map in this browser's storage; lesson links point at it. */
+  const [roadmapId, setRoadmapId] = useState<string | null>(null);
+  const roadmapIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    roadmapIdRef.current = roadmapId;
+  }, [roadmapId]);
+  /** Maps this tab generated. Only these are written to storage; other tabs add lessons. */
+  const ownedIds = useRef(new Set<string>());
+  /** The change the learner asked for, by id of the revised map it produced. */
+  const instructions = useRef(new Map<string, string>());
+  /** Roadmaps saved in this browser, for the home page. -1 on the server, which has no storage. */
+  const savedVersion = useSyncExternalStore(subscribeRoadmaps, roadmapsVersion, () => -1);
+  /** This tab was opened from a lesson link while the map was still streaming in its original tab. */
+  const [remoteDraft, setRemoteDraft] = useState(false);
+  /** Set once the address has been read, so the address is not overwritten before that. */
+  const restoredRef = useRef(false);
+  /** Lessons already written to storage, as `${roadmapId}:${lessonKey}`, so each is written once. */
+  const savedLessons = useRef(new Map<string, Lesson>());
+  /** Mirrors `lessons` for the "Generate all" workers, which run across many renders. */
+  const lessonsRef = useRef(lessons);
+  useEffect(() => {
+    lessonsRef.current = lessons;
+  }, [lessons]);
+  /** Progress of "Generate all"; null when it is not running. */
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+  const bulkAbortRef = useRef<AbortController | null>(null);
+
+  const refreshProviders = useCallback(() => {
+    return trpc.providers.query().then((list) => {
+      setProviders(list);
+      setProviderId((current) => {
+        const chosen = list.find((p) => p.id === current);
+        if (chosen?.configured) return current;
+        return list.find((p) => p.configured)?.id ?? current;
+      });
+    });
+  }, []);
+
   // Find out which providers this server can actually use.
   useEffect(() => {
     let cancelled = false;
-    trpc.providers.query()
-      .then((list) => {
+    refreshProviders()
+      .then(() => {
         if (cancelled) return;
-        setProviders(list);
-        setProviderId((current) => {
-          const chosen = list.find((p) => p.id === current);
-          if (chosen?.configured) return current;
-          return list.find((p) => p.configured)?.id ?? current;
-        });
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshProviders]);
 
   /** Generate or revise the roadmap, showing stages as they stream in. `fallback` is restored on failure. */
   const generate = useCallback(async (body: GenerateBody, fallback: MindMap | null) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    // Lessons being written in bulk were planned against the old map.
+    bulkAbortRef.current?.abort();
+    bulkAbortRef.current = null;
+    setBulk(null);
+    const previousId = roadmapIdRef.current;
+    const id = newRoadmapId();
+    ownedIds.current.add(id);
+    if (body.instruction) instructions.current.set(id, body.instruction);
+    setRoadmapId(id);
+    setRemoteDraft(false);
     setLoading(true);
     setError(null);
     setMapDraft(false);
     try {
       await ensureAnonymousSession();
-      if (controller.signal.aborted) return false;
+      if (controller.signal.aborted) return null;
       const res = await fetch("/api/mindmap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -91,6 +154,7 @@ export default function Home() {
       });
       await ensureOk(res);
       let finished = false;
+      let finalMap: MindMap | null = null;
       await readNdjson(res, (event) => {
         if (controller.signal.aborted) return;
         if (event.type === "partial") {
@@ -98,36 +162,39 @@ export default function Home() {
           setMapDraft(true);
         } else if (event.type === "done") {
           finished = true;
-          setMap(event.mindMap as MindMap);
+          finalMap = event.mindMap as MindMap;
+          setMap(finalMap);
           setMapDraft(false);
           setMeta({ provider: String(event.provider), model: String(event.model), ms: Number(event.ms) });
         } else if (event.type === "error") {
           throw new Error(String(event.error));
         }
       });
-      if (!finished) throw new Error("The roadmap never finished.");
-      return true;
+      if (!finished || !finalMap) throw new Error("The roadmap never finished.");
+      return finalMap;
     } catch (err) {
-      if (controller.signal.aborted) return false;
+      if (controller.signal.aborted) return null;
       // A lesson may be open on a block that already streamed in. For a fresh map, keep what
       // arrived. For a failed revision the old map comes back, so close the lesson instead of
       // leaving it pointed at a block that may no longer exist.
       if (fallback) {
         setMap(fallback);
         setSelected(null);
+        setRoadmapId(previousId);
       } else {
         setMap((current) => (selectedRef.current && current?.stages.length ? current : null));
+        if (!selectedRef.current) setRoadmapId(null);
       }
       setMapDraft(false);
       setError(err instanceof Error ? err.message : "Something went wrong.");
-      return false;
+      return null;
     } finally {
       if (abortRef.current === controller) setLoading(false);
     }
   }, []);
 
   const loadLesson = useCallback(
-    async (ref: NodeRef, currentMap: MindMap, currentTopic: string, provider: ProviderId) => {
+    async (ref: NodeRef, currentMap: MindMap, currentTopic: string, provider: ProviderId, signal?: AbortSignal) => {
       const at = nodeAt(currentMap, ref);
       if (!at) return;
       const key = lessonKey(at.node);
@@ -140,6 +207,7 @@ export default function Home() {
       try {
         const res = await fetch("/api/lesson", {
           method: "POST",
+          signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             topic: currentTopic,
@@ -159,6 +227,7 @@ export default function Home() {
                 ...draft,
                 title: o.title || at.node.name,
                 summary: o.summary || at.node.description,
+                tldr: o.tldr,
                 sections: o.sections.map((sec, i) => ({
                   heading: sec.heading,
                   body: draft.sections[i]?.body ?? "",
@@ -195,6 +264,16 @@ export default function Home() {
         });
         if (!finished) throw new Error("The lesson never finished.");
       } catch (err) {
+        if (signal?.aborted) {
+          // Stopped on purpose: forget the half-written lesson so opening the block starts it again.
+          setLessons((s) => {
+            if (s[key]?.status === "ready") return s;
+            const next = { ...s };
+            delete next[key];
+            return next;
+          });
+          return;
+        }
         const message = err instanceof Error ? err.message : "Something went wrong.";
         const partial = draft.sections.length > 0 ? draft : undefined;
         setLessons((s) => ({ ...s, [key]: { status: "error", message, draft: partial } }));
@@ -203,16 +282,166 @@ export default function Home() {
     [],
   );
 
+  /** Rebuild the page from a lesson link (`?r=<id>&lesson=<name>`) opened in a new tab. */
+  // Only read on the home page, where the list is shown.
+  const history = useMemo(
+    () => (query === null && savedVersion >= 0 ? listRoadmaps() : []),
+    [query, savedVersion],
+  );
+
+  const restoreFromAddress = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("r");
+    if (!id) return;
+    const saved = loadRoadmap(id);
+    if (!saved) {
+      setError("That roadmap isn't saved in this browser. Start it again below.");
+      return;
+    }
+    setQuery(saved.topic);
+    setMap(saved.map);
+    setRoadmapId(id);
+    setProviderId(saved.provider);
+    setRemoteDraft(!saved.complete);
+    for (const [key, lesson] of Object.entries(saved.lessons)) savedLessons.current.set(`${id}:${key}`, lesson);
+    setLessons(
+      Object.fromEntries(
+        Object.entries(saved.lessons).map(([key, lesson]) => [key, { status: "ready", lesson } as LessonState]),
+      ),
+    );
+    const key = params.get("lesson");
+    const ref = key ? findRef(saved.map, key) : null;
+    if (key && ref) {
+      setSelected(ref);
+      if (!saved.lessons[key]) void loadLesson(ref, saved.map, saved.topic, saved.provider);
+    }
+  }, [loadLesson]);
+
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    // Reading the address and localStorage has to wait until after mount: the server render has neither.
+    restoreFromAddress();
+  }, [restoreFromAddress]);
+
+  // Keep the address pointing at what is on screen, so it can be reloaded or shared across tabs.
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    const at = map && selected ? nodeAt(map, selected) : null;
+    const url = roadmapId && map ? roadmapUrl(roadmapId, at ? lessonKey(at.node) : undefined) : "/";
+    if (url !== window.location.pathname + window.location.search) window.history.replaceState(null, "", url);
+  }, [roadmapId, map, selected]);
+
+  // Save what lesson links opened in new tabs need to rebuild the page. The tab that
+  // generated a map saves it, including while it streams; any tab saves finished lessons.
+  useEffect(() => {
+    if (!roadmapId || !query || !map || !ownedIds.current.has(roadmapId)) return;
+    saveMap(roadmapId, {
+      topic: query,
+      provider: providerId,
+      map,
+      complete: !loading,
+      instruction: instructions.current.get(roadmapId),
+    });
+  }, [roadmapId, query, map, loading, providerId]);
+
+  useEffect(() => {
+    if (!roadmapId) return;
+    for (const [key, state] of Object.entries(lessons)) {
+      if (state.status !== "ready") continue;
+      const tag = `${roadmapId}:${key}`;
+      if (savedLessons.current.get(tag) === state.lesson) continue;
+      savedLessons.current.set(tag, state.lesson);
+      saveLesson(roadmapId, key, state.lesson);
+    }
+  }, [roadmapId, lessons]);
+
+  // Opened mid-stream from another tab: follow that tab's map until it finishes.
+  useEffect(() => {
+    if (!remoteDraft || !roadmapId) return;
+    const key = roadmapStorageKey(roadmapId);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== key) return;
+      const saved = loadMap(roadmapId);
+      if (!saved) return;
+      setMap(saved.map);
+      if (saved.complete) setRemoteDraft(false);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [remoteDraft, roadmapId]);
+
+  /** Address of a block's lesson, for opening it in a new tab. */
+  function lessonHref(ref: NodeRef): string | undefined {
+    if (!roadmapId || !map) return undefined;
+    const at = nodeAt(map, ref);
+    return at ? roadmapUrl(roadmapId, lessonKey(at.node)) : undefined;
+  }
+
+  /** Write every lesson that is not written yet, a few at a time, in roadmap order. */
+  async function generateAll(currentMap = map, currentTopic = query, provider = providerId) {
+    if (!currentMap || !currentTopic || bulkAbortRef.current) return;
+    const id = roadmapIdRef.current;
+    const needsLesson = (ref: NodeRef) => {
+      const at = nodeAt(currentMap, ref);
+      const state = at ? lessonsRef.current[lessonKey(at.node)] : undefined;
+      return !!at && (!state || state.status === "error");
+    };
+    const queue = allRefs(currentMap).filter(needsLesson);
+    if (queue.length === 0) return;
+
+    const controller = new AbortController();
+    bulkAbortRef.current = controller;
+    const total = queue.length;
+    let done = 0;
+    setBulk({ done, total });
+
+    const worker = async () => {
+      for (let ref = queue.shift(); ref && !controller.signal.aborted; ref = queue.shift()) {
+        // Skip blocks opened by hand or written by another tab since the queue was built.
+        if (needsLesson(ref)) {
+          const at = nodeAt(currentMap, ref)!;
+          const key = lessonKey(at.node);
+          const saved = id ? loadSavedLesson(id, key) : null;
+          if (saved && id) {
+            savedLessons.current.set(`${id}:${key}`, saved);
+            setLessons((s) => ({ ...s, [key]: { status: "ready", lesson: saved } }));
+          } else {
+            await loadLesson(ref, currentMap, currentTopic, provider, controller.signal);
+          }
+        }
+        if (controller.signal.aborted) return;
+        done += 1;
+        setBulk({ done, total });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(BULK_CONCURRENCY, total) }, worker));
+    if (bulkAbortRef.current === controller) {
+      bulkAbortRef.current = null;
+      setBulk(null);
+    }
+  }
+
+  function stopGenerateAll() {
+    bulkAbortRef.current?.abort();
+    bulkAbortRef.current = null;
+    setBulk(null);
+  }
+
   function startTopic(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return;
+    stopGenerateAll();
     setQuery(trimmed);
     setMap(null);
     setMeta(null);
     setModification("");
     setSelected(null);
     setLessons({});
-    void generate({ topic: trimmed, provider: providerId }, null);
+    const provider = providerId;
+    void generate({ topic: trimmed, provider }, null).then((done) => {
+      if (done && readSettings().autoGenerateLessons) void generateAll(done, trimmed, provider);
+    });
   }
 
   function onSubmitTopic(e: FormEvent) {
@@ -222,8 +451,8 @@ export default function Home() {
 
   async function onSubmitModification(e: FormEvent) {
     e.preventDefault();
-    if (!query || !map || !modification.trim() || loading) return;
-    const ok = await generate(
+    if (!query || !map || !modification.trim() || loading || remoteDraft) return;
+    const done = await generate(
       {
         topic: query,
         provider: providerId,
@@ -232,7 +461,10 @@ export default function Home() {
       },
       map,
     );
-    if (ok) setModification("");
+    if (!done) return;
+    setModification("");
+    // Lessons are kept by block name, so only blocks the revision added get written.
+    if (readSettings().autoGenerateLessons) void generateAll(done, query, providerId);
   }
 
   /** Open a block's lesson, generating it the first time. */
@@ -242,8 +474,18 @@ export default function Home() {
     if (!at) return;
     setSelected(ref);
     setError(null);
-    const existing = lessons[lessonKey(at.node)];
-    if (!existing || existing.status === "error") void loadLesson(ref, map, query, providerId);
+    const key = lessonKey(at.node);
+    const existing = lessons[key];
+    if (!existing || existing.status === "error") {
+      // Another tab may already have written this lesson for the same map.
+      const saved = roadmapId ? loadSavedLesson(roadmapId, key) : null;
+      if (saved && roadmapId) {
+        savedLessons.current.set(`${roadmapId}:${key}`, saved);
+        setLessons((s) => ({ ...s, [key]: { status: "ready", lesson: saved } }));
+      } else {
+        void loadLesson(ref, map, query, providerId);
+      }
+    }
     window.scrollTo({ top: 0 });
   }
 
@@ -262,6 +504,7 @@ export default function Home() {
 
   function reset() {
     abortRef.current?.abort();
+    stopGenerateAll();
     setQuery(null);
     setMap(null);
     setMeta(null);
@@ -272,13 +515,18 @@ export default function Home() {
     setSelected(null);
     setLessons({});
     setMapDraft(false);
+    setRoadmapId(null);
+    setRemoteDraft(false);
   }
 
   const providerLabel = providers.find((p) => p.id === meta?.provider)?.label ?? meta?.provider;
 
   if (query === null) {
     return (
-      <main className="flex flex-1 flex-col items-center px-4 pt-[10vh] sm:px-8">
+      <main className="relative flex flex-1 flex-col items-center px-4 pt-[10vh] sm:px-8">
+        <Link href="/settings" className="absolute right-4 top-4 text-sm text-neutral-500 hover:text-neutral-900 sm:right-8">
+          Settings
+        </Link>
         <h1 className="text-3xl font-normal tracking-tight sm:text-4xl">StructuredLearning.ai</h1>
 
         <form onSubmit={onSubmitTopic} className="mt-[12vh] w-full max-w-3xl">
@@ -307,13 +555,53 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} />
+            <ChatGPTConnect onConnected={() => void refreshProviders().then(() => setProviderId("chatgpt"))} onDisconnected={() => void refreshProviders()} />
+          </div>
         </div>
 
         {error && <p className="mt-6 text-sm text-red-600">{error}</p>}
+
+        {history.length > 0 && (
+          <section className="mt-16 w-full max-w-3xl pb-16" aria-labelledby="history-heading">
+            <h2 id="history-heading" className="px-2 text-sm font-medium text-neutral-500">
+              Your roadmaps
+            </h2>
+            <ul className="mt-2 divide-y divide-neutral-100">
+              {history.map((h) => (
+                <li key={h.id} className="history-item">
+                  <a href={roadmapUrl(h.id)} className="history-link">
+                    <span className="block truncate text-[15px] text-neutral-900">{h.title}</span>
+                    <span className="block truncate text-sm text-neutral-500">
+                      {h.instruction ? <>Revised: &ldquo;{h.instruction}&rdquo;</> : <>&ldquo;{h.topic}&rdquo;</>}
+                    </span>
+                  </a>
+                  <span className="shrink-0 text-right text-xs text-neutral-400">
+                    {h.lessonsWritten} of {h.blocks} lessons
+                    <br />
+                    {timeAgo(h.savedAt)}
+                  </span>
+                  <button
+                    type="button"
+                    className="history-remove"
+                    onClick={() => deleteRoadmap(h.id)}
+                    aria-label={`Remove ${h.title}`}
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
     );
   }
+
+  const isReady = (node: MapNode) => lessons[lessonKey(node)]?.status === "ready";
+  const unwritten = map ? allRefs(map).filter((ref) => !isReady(nodeAt(map, ref)!.node)).length : 0;
 
   const selectedAt = map && selected ? nodeAt(map, selected) : null;
   const lessonState: LessonState = selectedAt
@@ -322,7 +610,7 @@ export default function Home() {
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-10 sm:px-8">
-      <header className="flex items-center justify-between py-4">
+      <header className="flex flex-wrap items-center justify-between gap-2 py-4">
         <button
           type="button"
           onClick={reset}
@@ -330,7 +618,13 @@ export default function Home() {
         >
           StructuredLearning.ai
         </button>
-        <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} disabled={loading} />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Link href="/settings" className="mr-2 text-sm text-neutral-500 hover:text-neutral-900">
+            Settings
+          </Link>
+          <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} disabled={loading} />
+          <ChatGPTConnect onConnected={() => void refreshProviders().then(() => setProviderId("chatgpt"))} onDisconnected={() => void refreshProviders()} />
+        </div>
       </header>
 
       {map && selected && selectedAt ? (
@@ -345,7 +639,9 @@ export default function Home() {
             onBack={closeLesson}
             onRetry={() => void loadLesson(selected, map, query, providerId)}
             onLessonChange={updateLesson}
-            mapStreaming={loading && mapDraft}
+            mapStreaming={(loading && mapDraft) || remoteDraft}
+            lessonHref={lessonHref}
+            isReady={isReady}
           />
         </div>
       ) : (
@@ -354,14 +650,25 @@ export default function Home() {
             {map?.topic || query}
           </h1>
 
-          <div className="mt-12">
-            {map && !loading ? <Roadmap map={map} onSelect={openLesson} /> : null}
-            {map && loading && mapDraft ? (
-              <Roadmap map={map} pending={Math.max(1, 5 - map.stages.length)} onSelect={openLesson} streaming />
+          <RoadmapIntro map={map} writing={loading || remoteDraft} />
+
+          <div className="mt-10">
+            {map && !loading && !remoteDraft ? (
+              <Roadmap map={map} onSelect={openLesson} hrefFor={lessonHref} isReady={isReady} />
+            ) : null}
+            {map && ((loading && mapDraft) || (!loading && remoteDraft)) ? (
+              <Roadmap
+                map={map}
+                pending={Math.max(1, 5 - map.stages.length)}
+                onSelect={openLesson}
+                hrefFor={lessonHref}
+                isReady={isReady}
+                streaming
+              />
             ) : null}
             {map && loading && !mapDraft ? (
               <div className="opacity-50 transition-opacity">
-                <Roadmap map={map} />
+                <Roadmap map={map} isReady={isReady} />
               </div>
             ) : null}
             {!map && loading ? <RoadmapSkeleton /> : null}
@@ -379,9 +686,12 @@ export default function Home() {
             ) : null}
           </div>
 
-          {map && !mapDraft && (
+          {map && <RoadmapLegend />}
+
+          {map && !mapDraft && !remoteDraft && (
             <p className="mt-4 text-center text-sm text-neutral-500">
-              {map.summary}
+              {/* The outcome at the top says the same thing, better. */}
+              {asList(map.outcome).length === 0 && map.summary}
               {meta && !loading && (
                 <span className="text-neutral-400">
                   {" "}· {providerLabel} · {meta.model} · {(meta.ms / 1000).toFixed(1)}s
@@ -389,6 +699,25 @@ export default function Home() {
               )}
               {!loading && <span className="block mt-1 text-neutral-400">Click a block to open its lesson.</span>}
             </p>
+          )}
+
+          {map && !loading && !remoteDraft && (bulk || unwritten > 0) && (
+            <div className="mt-4 flex items-center justify-center gap-3 text-sm text-neutral-600">
+              {bulk ? (
+                <>
+                  <span aria-live="polite">
+                    Writing lessons: {bulk.done} of {bulk.total} done
+                  </span>
+                  <button type="button" className="bulk-button" onClick={stopGenerateAll}>
+                    Stop
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="bulk-button" onClick={() => void generateAll()}>
+                  Generate all {unwritten} lessons
+                </button>
+              )}
+            </div>
           )}
 
           {map && error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
@@ -404,7 +733,7 @@ export default function Home() {
             />
             <button
               type="submit"
-              disabled={!map || loading || !modification.trim()}
+              disabled={!map || loading || remoteDraft || !modification.trim()}
               aria-label="Apply modifications"
               className="absolute right-2.5 top-1/2 flex h-[52px] w-[52px] -translate-y-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:h-[60px] sm:w-[60px]"
             >
@@ -421,5 +750,52 @@ export default function Home() {
         </div>
       )}
     </main>
+  );
+}
+
+/** Every block in a map, in roadmap order: each stage's core block, then its supporting blocks. */
+function allRefs(map: MindMap): NodeRef[] {
+  return map.stages.flatMap((stage, i) => [
+    { stage: i, kind: "core" as const, index: 0 },
+    ...stage.supporting.map((_, index) => ({ stage: i, kind: "supporting" as const, index })),
+  ]);
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 d ago", then a date. */
+function timeAgo(ms: number): string {
+  const minutes = Math.round((Date.now() - ms) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days} d ago`;
+  return new Date(ms).toLocaleDateString();
+}
+
+/** "What you need to know" and "What you will know at the end", under the roadmap's title. */
+function RoadmapIntro({ map, writing }: { map: MindMap | null; writing: boolean }) {
+  // Roadmaps saved before these lists existed have neither; early ones stored a sentence.
+  const start = asList(map?.startingPoint);
+  const end = asList(map?.outcome);
+  if (!writing && start.length === 0 && end.length === 0) return null;
+  const line = (label: string, items: string[], className: string) => (
+    <div className={`intro-card ${className}`}>
+      <p className="intro-label">{label}</p>
+      {items.length > 0 ? (
+        <RichText text={items.map((item) => `- ${item}`).join("\n")} className="intro-list mt-1.5" />
+      ) : (
+        <div className="mt-2.5 space-y-2" aria-busy="true">
+          <div className="skeleton-line w-full" />
+          <div className="skeleton-line w-2/3" />
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <div className="intro">
+      {line("What you need to know", start, "intro-start")}
+      {line("What you will know at the end", end, "intro-end")}
+    </div>
   );
 }

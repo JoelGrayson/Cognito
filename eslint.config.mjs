@@ -8,10 +8,12 @@ const eslintConfig = defineConfig([
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
-    ".next/**",
+    "**/.next/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent worktrees nested under the project; they have their own checkouts.
+    ".claude/**",
   ]),
   // Phase 0 boundary: persistence goes through lib/repo, identity through lib/session.
   {
@@ -32,6 +34,7 @@ const eslintConfig = defineConfig([
     files: [
       "lib/auth.ts", "lib/auth-client.ts", "lib/user-data.ts", "app/api/auth/**",
       "app/legacy/**", "app/api/mindmap/**", "app/api/lesson/**", "app/api/quiz/**",
+      "lib/chatgpt/**", "components/ChatGPTConnect.tsx",
     ],
     rules: { "no-restricted-imports": "off" },
   },
