@@ -55,6 +55,12 @@ export function strokesFromEditor(editor: Editor): StrokePayload | null {
  * complete LaTeX parser. Extend it when you see what Mathpix actually emits on your
  * handwriting; that's data you don't have yet.
  */
+/** Mathpix wraps a multi-line reading in an aligned/array environment. That is never
+ *  a single step, so callers should discard it rather than compare against it. */
+export function isMultiLineReading(latex: string): boolean {
+  return /\\begin\{(aligned|array|gathered|cases|matrix)/.test(latex) || latex.includes("\\\\");
+}
+
 export function latexToMathjs(latex: string): string {
   const FUNCS = "sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan|sinh|cosh|tanh|log|ln|exp|max|min";
 

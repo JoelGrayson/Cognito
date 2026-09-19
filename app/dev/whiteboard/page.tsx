@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Tldraw, type Editor } from "tldraw";
 import "tldraw/tldraw.css";
-import { latexToMathjs } from "@/lib/whiteboard/ink";
+import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
@@ -122,6 +122,12 @@ export default function SpikePage() {
       }
 
       const raw = data.latex || data.text || "";
+      if (isMultiLineReading(raw)) {
+        // Several lines got read as one. Don't record it, and above all don't let it
+        // become the "previous step" the next line is checked against.
+        setError("Read several lines at once — press Reset and write one line at a time.");
+        return;
+      }
       const parsed = latexToMathjs(raw);
 
       // The previous STEP is the newest reading from an earlier line -- not simply
@@ -239,6 +245,13 @@ export default function SpikePage() {
               editor.setCurrentTool("draw");
               // Auto-commit: starting a new line commits the previous one. No timer,
               // so you can pause mid-line to think without anything firing.
+              // Start from a clean canvas. Ink that survives a reload gets replayed
+              // into the recorder as one batch of "added" strokes, which merges every
+              // previous line into a single commit -- observed as an 11-stroke read
+              // coming back as a \begin{aligned} block that then fails to parse.
+              const existing = editor.getCurrentPageShapes().map((sh) => sh.id);
+              if (existing.length > 0) editor.deleteShapes(existing);
+
               annotatorRef.current = createAnnotator(editor);
               // React dev-mode mounts twice. Without this, two store listeners end up
               // registered and every line is submitted twice.
