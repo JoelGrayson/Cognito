@@ -39,8 +39,9 @@ Guidelines:
   - History, a movement, a lineage of thinkers, a biography, anything where later work answers earlier work: order by time. Mark "requires" where a stage only makes sense once the learner knows what it answers, such as a reply to an argument or a fix for a problem raised earlier. Never put a response and the thing it responds to in the same any-order group.
   - A system whose parts do not depend on each other (an engine, a refinery, a language's libraries): group the independent parts with "any-order".
   - Anything else: the easiest load-bearing ideas first, then what builds on them.
+- order: which rule decides the order. "chronological" whenever later work answers earlier work, even loosely. "difficulty", "parts", or "mixed" otherwise.
 - plan: 2-3 plain sentences telling the learner how the map is ordered and why: its shape (by time, by parts, by difficulty), what comes first and why, and what an any-order group means here.
-- why: for each stage, one plain line of at most 15 words saying why it comes at this point, shown above that stage. For the first stage say why to start there; later ones say what it adds or answers, e.g. "Parmenides argues change is impossible, which forces everyone after him to respond."
+- why: for each stage, one plain line of at most 15 words saying why it comes at this point, shown above that stage. In a chronological map, start it with the date or era when it is known, e.g. "c. 585 BCE: he predicts an eclipse and looks for one basic stuff." For the first stage say why to start there; later ones say what it adds or answers, e.g. "Parmenides argues change is impossible, which forces everyone after him to respond."
 - Size the map to the topic, and put only the topic itself in it:
   - A single concept, law, formula or construct (Ohm's law, the Pythagorean theorem, a for loop) is ONE stage with ONE block and no supporting blocks.
   - A narrow skill gets 2-4 stages; a broad field gets 5-8.
