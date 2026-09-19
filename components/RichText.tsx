@@ -4,9 +4,15 @@ type Block =
   | { kind: "p"; text: string }
   | { kind: "h"; text: string }
   | { kind: "ul"; items: string[] }
-  | { kind: "ol"; items: string[] };
+  | { kind: "ol"; items: string[] }
+  | { kind: "code"; text: string };
 
-/** Paragraphs, bullet / numbered lists and stray headings; nothing fancier. */
+/** Everything after a list marker, or the line itself. */
+function withoutMarker(line: string): string {
+  return line.replace(/^(?:[-*\u2022]|\d+[.)])\s+/, "");
+}
+
+/** Paragraphs, bullet / numbered lists, code blocks and stray headings; nothing fancier. */
 function parseBlocks(text: string): Block[] {
   const blocks: Block[] = [];
   let para: string[] = [];
@@ -21,8 +27,36 @@ function parseBlocks(text: string): Block[] {
     else blocks.push({ kind, items: [item] });
   };
 
-  for (const raw of text.replace(/\r\n/g, "\n").split("\n")) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  for (let n = 0; n < lines.length; n++) {
+    const raw = lines[n];
     const line = raw.trim();
+
+    // A fenced code block. While streaming, an unclosed fence runs to the end.
+    if (line.startsWith("```")) {
+      flush();
+      const code: string[] = [];
+      for (n += 1; n < lines.length && !lines[n].trim().startsWith("```"); n++) code.push(lines[n]);
+      blocks.push({ kind: "code", text: dedent(code).join("\n") });
+      continue;
+    }
+
+    // Multi-line code a model wrapped in single backticks, often after a bullet:
+    // "- `fn main() {" ... "}`". An opening backtick with no closing one on the
+    // same line starts it; the next line holding a backtick ends it.
+    const opened = withoutMarker(line);
+    if (opened.startsWith("`") && !opened.startsWith("```") && (opened.match(/`/g) ?? []).length % 2 === 1) {
+      let end = n + 1;
+      while (end < lines.length && !lines[end].includes("`")) end++;
+      if (end < lines.length) {
+        flush();
+        const code = [opened.slice(1), ...lines.slice(n + 1, end), lines[end].replace(/`\s*$/, "")];
+        blocks.push({ kind: "code", text: dedent(code.filter((l, i) => l.trim() || (i > 0 && i < code.length - 1))).join("\n") });
+        n = end;
+        continue;
+      }
+    }
+
     if (!line) {
       flush();
       continue;
@@ -47,6 +81,13 @@ function parseBlocks(text: string): Block[] {
   }
   flush();
   return blocks;
+}
+
+/** Drop the indentation every non-blank line shares. */
+function dedent(lines: string[]): string[] {
+  const indents = lines.filter((l) => l.trim()).map((l) => /^\s*/.exec(l)![0].length);
+  const common = indents.length ? Math.min(...indents) : 0;
+  return lines.map((l) => l.slice(common));
 }
 
 /** **bold** and `code` inside a line. */
@@ -90,6 +131,12 @@ export function RichText({ text, className }: { text: string; className?: string
                   <li key={j}>{inline(item)}</li>
                 ))}
               </ol>
+            );
+          case "code":
+            return (
+              <pre key={i}>
+                <code>{block.text}</code>
+              </pre>
             );
         }
       })}

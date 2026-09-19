@@ -15,6 +15,7 @@ import { PROVIDERS, listProviders } from "@/lib/providers";
 import {
   ChatMessageSchema,
   LessonSchema,
+  MindMapInputSchema,
   MindMapSchema,
   NodeSchema,
   PhaseSchema,
@@ -52,7 +53,7 @@ export const appRouter = router({
       z.object({
         topic: z.string().trim().min(1, "Tell me what you want to learn.").max(500, "Keep the topic under 500 characters."),
         ...providerInput,
-        current: MindMapSchema.optional(),
+        current: MindMapInputSchema.optional(),
         instruction: z.string().trim().max(2000, "Keep the modification under 2000 characters.").optional(),
       }),
     )
@@ -87,7 +88,7 @@ export const appRouter = router({
         topic: z.string().trim().min(1).max(500),
         node: NodeSchema,
         phase: PhaseSchema,
-        map: MindMapSchema,
+        map: MindMapInputSchema,
         ...providerInput,
       }),
     )

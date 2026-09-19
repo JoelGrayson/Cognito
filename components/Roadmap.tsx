@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { nodeAt, sameRef, type NodeRef } from "@/lib/roadmap";
-import type { MapNode, MindMap, Phase } from "@/lib/schema";
+import type { MapNode, MindMap, Phase, StageLink } from "@/lib/schema";
 
 interface CardProps {
   node: MapNode;
@@ -82,6 +82,28 @@ function ArrowRow() {
   );
 }
 
+/** Space between stages with no hard dependency: top to bottom is just the suggested order. */
+function GapRow() {
+  return <div className="gap-row" aria-hidden="true" />;
+}
+
+type Stage = MindMap["stages"][number];
+
+/** Roadmaps saved before stage links existed have none; they read as a suggested order. */
+function linkOf(stage: Stage): StageLink {
+  return stage.link ?? "recommended";
+}
+
+/** Consecutive stages joined by "any-order" form one group that can be taken in any order. */
+function groupStages(stages: Stage[]): { start: number; end: number }[] {
+  const groups: { start: number; end: number }[] = [];
+  stages.forEach((stage, i) => {
+    if (i > 0 && linkOf(stage) === "any-order") groups[groups.length - 1].end = i;
+    else groups.push({ start: i, end: i });
+  });
+  return groups;
+}
+
 /** A placeholder stage; `wide` adds the two supporting slots. */
 function SkeletonRow({ wide }: { wide: boolean }) {
   return (
@@ -150,22 +172,38 @@ export function Roadmap({
     );
   };
   const count = map.stages.length;
+  const row = (i: number) => (
+    <div className="stage-row">
+      <div className="slot">{slot({ stage: i, kind: "supporting", index: 0 })}</div>
+      <div className="slot slot-core">{slot({ stage: i, kind: "core", index: 0 })}</div>
+      <div className="slot">{slot({ stage: i, kind: "supporting", index: 1 })}</div>
+    </div>
+  );
 
   return (
     <div className={compact ? "panel roadmap-compact p-2" : "panel px-6 py-10 sm:px-10 md:px-16"}>
-      {map.stages.map((_, i) => (
-        <Fragment key={i}>
-          {i > 0 && <ArrowRow />}
-          <div className="stage-row">
-            <div className="slot">{slot({ stage: i, kind: "supporting", index: 0 })}</div>
-            <div className="slot slot-core">{slot({ stage: i, kind: "core", index: 0 })}</div>
-            <div className="slot">{slot({ stage: i, kind: "supporting", index: 1 })}</div>
-          </div>
+      {groupStages(map.stages).map(({ start, end }, g) => (
+        <Fragment key={start}>
+          {/* Arrows only for true prerequisites; otherwise top to bottom is a suggested order. */}
+          {g > 0 && (linkOf(map.stages[start]) === "requires" ? <ArrowRow /> : <GapRow />)}
+          {end > start ? (
+            <div className="order-group" role="group" aria-label="These can be learned in any order">
+              {!compact && <span className="order-group-label">Any order</span>}
+              {Array.from({ length: end - start + 1 }, (_, k) => start + k).map((i) => (
+                <Fragment key={i}>
+                  {i > start && <div className="group-gap" aria-hidden="true" />}
+                  {row(i)}
+                </Fragment>
+              ))}
+            </div>
+          ) : (
+            row(start)
+          )}
         </Fragment>
       ))}
       {Array.from({ length: pending }).map((_, j) => (
         <Fragment key={`pending-${j}`}>
-          {count + j > 0 && <ArrowRow />}
+          {count + j > 0 && <GapRow />}
           <SkeletonRow wide={(count + j) % 3 !== 1} />
         </Fragment>
       ))}
@@ -179,7 +217,7 @@ export function RoadmapSkeleton({ rows = 5 }: { rows?: number }) {
     <div className="panel px-6 py-10 sm:px-10 md:px-16" aria-busy="true" aria-label="Generating roadmap">
       {Array.from({ length: rows }).map((_, i) => (
         <Fragment key={i}>
-          {i > 0 && <ArrowRow />}
+          {i > 0 && <GapRow />}
           <SkeletonRow wide={i % 3 !== 1} />
         </Fragment>
       ))}
@@ -187,7 +225,7 @@ export function RoadmapSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
-/** Explains the map's colours and borders. Swatches reuse the card styles, so they always match. */
+/** Explains the map's colours, borders and structure. Swatches reuse the map's own styles, so they always match. */
 export function RoadmapLegend() {
   const phases: { phase: Phase; label: string }[] = [
     { phase: "prerequisite", label: "Prerequisite" },
@@ -195,21 +233,37 @@ export function RoadmapLegend() {
     { phase: "advanced", label: "Advanced" },
   ];
   return (
-    <ul className="legend" aria-label="Map legend">
-      {phases.map(({ phase, label }) => (
-        <li key={phase}>
-          <span className="card legend-swatch" data-phase={phase} data-ready="true" aria-hidden="true" />
-          {label}
+    <div className="legend" aria-label="Map legend">
+      <ul>
+        {phases.map(({ phase, label }) => (
+          <li key={phase}>
+            <span className="card legend-swatch" data-phase={phase} data-ready="true" aria-hidden="true" />
+            {label}
+          </li>
+        ))}
+        <li>
+          <span className="card legend-swatch legend-swatch-plain" data-ready="true" aria-hidden="true" />
+          Lesson written
         </li>
-      ))}
-      <li>
-        <span className="card legend-swatch legend-swatch-plain" data-ready="true" aria-hidden="true" />
-        Lesson written
-      </li>
-      <li>
-        <span className="card legend-swatch legend-swatch-plain" aria-hidden="true" />
-        Not written yet
-      </li>
-    </ul>
+        <li>
+          <span className="card legend-swatch legend-swatch-plain" aria-hidden="true" />
+          Not written yet
+        </li>
+      </ul>
+      <ul>
+        <li>
+          <svg className="legend-arrow" viewBox="0 0 12 22" aria-hidden="true">
+            <line x1="6" y1="1" x2="6" y2="17" stroke="var(--arrow)" strokeWidth="1.5" />
+            <path d="M2 13 L6 19 L10 13" fill="none" stroke="var(--arrow)" strokeWidth="1.5" strokeLinejoin="round" />
+          </svg>
+          Must come first
+        </li>
+        <li>
+          <span className="legend-group" aria-hidden="true" />
+          Any order
+        </li>
+        <li>No arrow: suggested order, top to bottom</li>
+      </ul>
+    </div>
   );
 }

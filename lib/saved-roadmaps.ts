@@ -16,6 +16,8 @@ export interface SavedMap {
   map: MindMap;
   /** False while the generating tab is still streaming the map in. */
   complete: boolean;
+  /** For a revised map: the change the learner asked for. */
+  instruction?: string;
   savedAt: number;
 }
 
@@ -27,7 +29,35 @@ export interface SavedRoadmap extends SavedMap {
 const MAP_PREFIX = "sl:roadmap:";
 const LESSON_PREFIX = "sl:lesson:";
 /** Roadmaps kept per browser; older ones and their lessons are dropped. */
-const KEEP = 15;
+const KEEP = 30;
+
+/* Change notifications, so the home page's list can follow this tab's writes
+   and, through `storage` events, other tabs'. */
+const listeners = new Set<() => void>();
+let version = 0;
+
+function changed(): void {
+  version += 1;
+  for (const listener of listeners) listener();
+}
+
+/** For useSyncExternalStore: call `listener` whenever saved roadmaps change. */
+export function subscribeRoadmaps(listener: () => void): () => void {
+  listeners.add(listener);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === null || e.key.startsWith(MAP_PREFIX) || e.key.startsWith(LESSON_PREFIX)) changed();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** Bumped on every change; a cheap snapshot for useSyncExternalStore. */
+export function roadmapsVersion(): number {
+  return version;
+}
 
 /** Storage key of a map, for matching `storage` events. */
 export function roadmapStorageKey(id: string): string {
@@ -82,6 +112,69 @@ export function loadRoadmap(id: string): SavedRoadmap | null {
   return { ...saved, lessons };
 }
 
+/** One saved roadmap, as the home page lists it. */
+export interface RoadmapSummary {
+  id: string;
+  /** What the learner typed. */
+  topic: string;
+  /** The map's own cleaned-up title. */
+  title: string;
+  instruction?: string;
+  blocks: number;
+  lessonsWritten: number;
+  savedAt: number;
+}
+
+/** Finished roadmaps saved in this browser, newest first. */
+export function listRoadmaps(): RoadmapSummary[] {
+  const found: RoadmapSummary[] = [];
+  const lessonCounts = new Map<string, number>();
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(LESSON_PREFIX)) continue;
+      const id = key.slice(LESSON_PREFIX.length).split(":")[0];
+      lessonCounts.set(id, (lessonCounts.get(id) ?? 0) + 1);
+    }
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(MAP_PREFIX)) continue;
+      const id = key.slice(MAP_PREFIX.length);
+      const saved = loadMap(id);
+      if (!saved?.complete || saved.map.stages.length === 0) continue;
+      found.push({
+        id,
+        topic: saved.topic,
+        title: saved.map.topic || saved.topic,
+        instruction: saved.instruction,
+        blocks: saved.map.stages.reduce((n, s) => n + 1 + s.supporting.length, 0),
+        lessonsWritten: lessonCounts.get(id) ?? 0,
+        savedAt: saved.savedAt,
+      });
+    }
+  } catch {
+    // storage unavailable
+  }
+  return found.sort((a, b) => b.savedAt - a.savedAt);
+}
+
+/** Forget a roadmap and its lessons. */
+export function deleteRoadmap(id: string): void {
+  try {
+    localStorage.removeItem(MAP_PREFIX + id);
+    const prefix = lessonPrefix(id);
+    const lessonKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) lessonKeys.push(key);
+    }
+    for (const key of lessonKeys) localStorage.removeItem(key);
+  } catch {
+    // storage unavailable
+  }
+  changed();
+}
+
 /** A finished lesson another tab may already have written. */
 export function loadLesson(id: string, key: string): Lesson | null {
   try {
@@ -102,11 +195,13 @@ export function saveMap(id: string, entry: Omit<SavedMap, "savedAt">): void {
   }
   if (isNew) prune(KEEP - 1);
   write(MAP_PREFIX + id, JSON.stringify({ ...entry, savedAt: Date.now() }));
+  changed();
 }
 
 /** Save one finished lesson. Any tab may call this. */
 export function saveLesson(id: string, key: string, lesson: Lesson): void {
   write(lessonPrefix(id) + key, JSON.stringify(lesson));
+  changed();
 }
 
 function write(key: string, value: string): void {
