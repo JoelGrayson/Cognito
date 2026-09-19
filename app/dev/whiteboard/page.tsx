@@ -112,7 +112,7 @@ export default function SpikePage() {
       const res = await fetch("/api/whiteboard/strokes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, debug: { lineId, reason, strokes: strokes.length } }),
       });
       const data = await res.json();
       if (!res.ok) {
