@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #8a8a8a;
+  --pill: #d9d9d9;
+  --pill-placeholder: #8c8c8c;
+  --panel: #f8f8f6;
+  --arrow: #9a9a9a;
+  --accent: #4f6ff2;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+/* Pill-shaped text input, as in the mockups. */
+.pill {
+  width: 100%;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--pill);
+  color: var(--fg);
+  outline: none;
+  transition: background-color 120ms ease;
+}
+.pill::placeholder {
+  color: var(--pill-placeholder);
+}
+.pill:focus {
+  background: #d1d1d1;
+}
+
+/* Roadmap panel and cards. */
+.panel {
+  background: var(--panel);
+  border-radius: 6px;
+}
+
+.stage-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+.arrow-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+  height: 64px;
+}
+.arrow-row > svg {
+  grid-column: 2;
+  justify-self: center;
+  height: 100%;
+}
+
+.card {
+  --card-bg: #efeeea;
+  --card-border: #bdbbb3;
+  --card-fg: #3d3d3d;
+  --card-sub: #6f6f6f;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-height: 82px;
+  padding: 12px 16px;
+  border: 1.5px solid var(--card-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--card-fg);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+.card[data-phase="core"] {
+  --card-bg: #ecebfb;
+  --card-border: #b7b3ee;
+  --card-fg: #4841b3;
+  --card-sub: #6b64cf;
+}
+.card[data-phase="advanced"] {
+  --card-bg: #e5f2ec;
+  --card-border: #a8d0be;
+  --card-fg: #2e6a51;
+  --card-sub: #4a8a6c;
+}
+.card-name {
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.3;
+}
+.card-sub {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--card-sub);
+}
+
+.skeleton {
+  min-height: 82px;
+  border-radius: 10px;
+  background: #e9e9e6;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  border: 2.5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Stack on phones: core node first, then supporting nodes. */
+@media (max-width: 640px) {
+  .stage-row,
+  .arrow-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .arrow-row {
+    height: 44px;
+  }
+  .arrow-row > svg {
+    grid-column: 1;
+  }
+  .slot:empty {
+    display: none;
+  }
+  .slot-core {
+    order: -1;
+  }
+}
