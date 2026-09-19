@@ -74,11 +74,14 @@ export function newRoadmapId(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 }
 
+/** Where the roadmap app lives; the site root is now the landing page. */
+export const ROADMAP_PATH = "/legacy";
+
 /** Address of a roadmap, or of one block's lesson in it. */
 export function roadmapUrl(id: string, lesson?: string): string {
   const params = new URLSearchParams({ r: id });
   if (lesson) params.set("lesson", lesson);
-  return `/?${params}`;
+  return `${ROADMAP_PATH}?${params}`;
 }
 
 export function loadMap(id: string): SavedMap | null {

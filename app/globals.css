@@ -1218,3 +1218,108 @@ a.card:focus-visible {
   font-size: 12px;
   color: #9a9994;
 }
+
+/* ---------- Coding exercise ---------- */
+.code-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 12px;
+  padding: 18px 20px;
+  background: var(--panel);
+}
+.code-lang {
+  border-radius: 9999px;
+  padding: 2px 10px;
+  background: #eeeeea;
+  color: #555;
+  font-size: 12px;
+  font-weight: 500;
+}
+.code-editor {
+  overflow: hidden;
+  border: 1px solid #e3e2dd;
+  border-radius: 10px;
+}
+.code-editor-loading {
+  font-size: 14px;
+  color: #9a9994;
+}
+.code-skeleton {
+  height: 240px;
+  border-radius: 10px;
+}
+.code-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d4d3ce;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  background: #fff;
+  color: #333;
+  font-size: 14px;
+  transition: background-color 120ms ease;
+}
+.code-btn:hover:not(:disabled) {
+  background: #f1f0ec;
+}
+.code-btn:disabled {
+  opacity: 0.5;
+}
+.code-btn-primary {
+  border-color: #111318;
+  background: #111318;
+  color: #fff;
+}
+.code-btn-primary:hover:not(:disabled) {
+  background: #2a2e37;
+}
+.code-btn kbd {
+  font-family: inherit;
+  font-size: 12px;
+  opacity: 0.6;
+}
+.code-results {
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--panel);
+}
+.code-results [data-ok="true"] {
+  color: #15803d;
+}
+.code-test[data-pass="true"] > span:first-child {
+  color: #15803d;
+}
+.code-test[data-pass="false"] > span:first-child {
+  color: #dc2626;
+}
+.code-console {
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #111318;
+  color: #e8e8ea;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.code-review {
+  border-left: 3px solid #d4d3ce;
+  border-radius: 6px;
+  padding: 10px 14px;
+  background: #fafaf8;
+}
+.code-review[data-verdict="correct"] {
+  border-color: #16a34a;
+}
+.code-review[data-verdict="almost"] {
+  border-color: #ea580c;
+}
+.code-review[data-verdict="incorrect"] {
+  border-color: #dc2626;
+}

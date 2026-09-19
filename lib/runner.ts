@@ -1,8 +1,9 @@
 /* Runs a learner's code in the browser, away from the page:
    - JavaScript (and TypeScript, once transpiled) in a module Web Worker built from a Blob.
    - Python in a Pyodide Web Worker, kept alive between runs because loading takes seconds.
-   Tests are boolean expressions evaluated after the code, each on its own, so one
-   failing test does not hide the others. Runaway code is stopped by terminating the worker. */
+   A test is a boolean expression, or a few statements ending in one (models write both),
+   evaluated after the code, each on its own so one failing test does not hide the others.
+   Runaway code is stopped by terminating the worker. */
 
 export const PYODIDE_VERSION = "314.0.7";
 export const RUNNABLE = new Set(["javascript", "typescript", "python"]);
@@ -33,7 +34,8 @@ export function runJavaScript(code: string, tests: TestCase[]): Promise<RunResul
   const checks = tests
     .map((t) => {
       const name = JSON.stringify(t.name);
-      return `try { __results.push({ name: ${name}, pass: !!(${t.expression}) }); } catch (e) { __results.push({ name: ${name}, pass: false, error: String(e && e.message || e) }); }`;
+      // Direct eval sees the module's top-level bindings and returns the value of the last statement.
+      return `try { __results.push({ name: ${name}, pass: !!eval(${JSON.stringify(t.expression)}) }); } catch (e) { __results.push({ name: ${name}, pass: false, error: String(e && e.message || e) }); }`;
     })
     .join("\n");
   const program = `
@@ -77,9 +79,32 @@ self.postMessage({ output: __out, error: null, results: __results });
 
 /* ---------- Python (Pyodide) ---------- */
 
+/** Runs one test on a copy of the learner's namespace: statements first, then the final expression. */
+const PY_TEST_HELPER = `
+import ast
+def run_test(src, ns):
+    scope = dict(ns)
+    tree = ast.parse(src, mode="exec")
+    if not tree.body:
+        return False
+    last = tree.body[-1]
+    if isinstance(last, ast.Expr):
+        exec(compile(ast.Module(body=tree.body[:-1], type_ignores=[]), "<test>", "exec"), scope)
+        return bool(eval(compile(ast.Expression(last.value), "<test>", "eval"), scope))
+    exec(compile(tree, "<test>", "exec"), scope)
+    return True
+`;
+
+// A module worker: Pyodide 314's classic pyodide.js no longer loads through importScripts.
+// No top-level await: the message handler must exist before Pyodide finishes loading,
+// or runs requested during loading are dropped.
 const PY_WORKER = `
-importScripts("https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/pyodide.js");
-const ready = loadPyodide();
+const ready = import("https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/pyodide.mjs").then((m) => m.loadPyodide());
+const runTest = ready.then((py) => {
+  const helper = py.globals.get("dict")();
+  py.runPython(${JSON.stringify(PY_TEST_HELPER)}, { globals: helper });
+  return helper.get("run_test");
+});
 ready.then(() => self.postMessage({ type: "ready" }));
 const lastLines = (msg) => String(msg).trim().split("\\n").filter(Boolean).slice(-3).join("\\n");
 self.onmessage = async (e) => {
@@ -92,11 +117,11 @@ self.onmessage = async (e) => {
   const results = [];
   let error = null;
   try {
-    await py.loadPackagesFromImports(code);
+    await py.loadPackagesFromImports(code, { messageCallback: () => {} });
     await py.runPythonAsync(code, { globals: ns });
     for (const t of tests) {
       try {
-        results.push({ name: t.name, pass: !!py.runPython("bool(" + t.expression + ")", { globals: ns }) });
+        results.push({ name: t.name, pass: !!(await runTest)(t.expression, ns) });
       } catch (err) {
         results.push({ name: t.name, pass: false, error: lastLines(err.message) });
       }
@@ -117,7 +142,7 @@ const readyListeners = new Set<() => void>();
 function pythonWorker(): Worker {
   if (pyWorker) return pyWorker;
   const url = URL.createObjectURL(new Blob([PY_WORKER], { type: "text/javascript" }));
-  pyWorker = new Worker(url);
+  pyWorker = new Worker(url, { type: "module" });
   pyReady = false;
   pyWorker.addEventListener("message", (e: MessageEvent<{ type: string }>) => {
     if (e.data.type !== "ready") return;
