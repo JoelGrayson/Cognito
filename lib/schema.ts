@@ -354,3 +354,57 @@ export const TutorTurnSchema = z.object({
 export type BoardColor = z.infer<typeof BoardColorSchema>;
 export type BoardAction = z.infer<typeof BoardActionSchema>;
 export type TutorTurn = z.infer<typeof TutorTurnSchema>;
+
+/* ---------- Code exercises ---------- */
+
+export const CODE_LANGUAGES = [
+  "python",
+  "javascript",
+  "typescript",
+  "rust",
+  "go",
+  "java",
+  "c",
+  "cpp",
+  "csharp",
+  "sql",
+  "shell",
+  "ruby",
+  "kotlin",
+  "swift",
+  "php",
+] as const;
+
+export const ExerciseSchema = z.object({
+  title: z.string().describe("Short exercise title, 2-6 words"),
+  language: z.enum(CODE_LANGUAGES).describe("The language the lesson uses; python when the lesson is not about a specific language"),
+  task: z
+    .string()
+    .describe("What to do: 2-5 '- ' bullets naming the exact functions or variables to write, with inputs and expected outputs. Fact-dense, no filler"),
+  starterCode: z
+    .string()
+    .describe("5-25 lines that already run: signatures, TODO comments and any setup, with the core logic missing"),
+  solution: z.string().describe("A complete, idiomatic solution that passes every test"),
+  tests: z
+    .array(
+      z.object({
+        name: z.string().describe("What the test checks, e.g. 'handles an empty list'"),
+        expression: z
+          .string()
+          .describe("One boolean expression in the exercise language, evaluated after the code runs, e.g. add(2, 3) == 5. No statements, prints or asserts"),
+      }),
+    )
+    .describe("3-6 tests covering the normal case and edge cases"),
+});
+
+export const CodeReviewSchema = z.object({
+  verdict: z.enum(["correct", "almost", "incorrect"]),
+  feedback: z
+    .string()
+    .describe("2-4 '- ' bullets: what works, what is wrong and why, citing specific lines or values. No filler"),
+  hint: z.string().describe("One next step that nudges toward the fix without giving the full answer; empty if correct"),
+});
+
+export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
+export type Exercise = z.infer<typeof ExerciseSchema>;
+export type CodeReview = z.infer<typeof CodeReviewSchema>;
