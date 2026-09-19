@@ -33,16 +33,40 @@ async function decryptToken(value: string | null): Promise<string | undefined> {
   return value ? symmetricDecrypt({ key: secret(), data: value }) : undefined;
 }
 
+async function decryptIdToken(value: string | null): Promise<string | undefined> {
+  if (!value) return undefined;
+  try {
+    return await symmetricDecrypt({ key: secret(), data: value });
+  } catch {
+    return value;
+  }
+}
+
 export async function saveChatGPTTokens(accountRowId: string, tokens: ChatGPTTokens): Promise<void> {
+  const values = {
+    accessToken: await encryptToken(tokens.accessToken),
+    refreshToken: await encryptToken(tokens.refreshToken),
+    accessTokenExpiresAt: tokens.expiresAt ? new Date(tokens.expiresAt) : null,
+  };
+  if (tokens.idToken !== undefined) {
+    Object.assign(values, { idToken: await encryptToken(tokens.idToken) });
+  }
   await getDb()
     .update(account)
-    .set({
-      accessToken: await encryptToken(tokens.accessToken),
-      refreshToken: await encryptToken(tokens.refreshToken),
-      idToken: tokens.idToken ?? null,
-      accessTokenExpiresAt: tokens.expiresAt ? new Date(tokens.expiresAt) : null,
-    })
+    .set(values)
     .where(eq(account.id, accountRowId));
+}
+
+export function hasUsableCredentials(row: {
+  accessToken: string | null;
+  refreshToken: string | null;
+  accessTokenExpiresAt: Date | null;
+}): boolean {
+  return Boolean(row.refreshToken) || (
+    Boolean(row.accessToken) &&
+    row.accessTokenExpiresAt != null &&
+    row.accessTokenExpiresAt.getTime() > Date.now()
+  );
 }
 
 export async function loadChatGPTAccount(userId: string): Promise<{
@@ -50,22 +74,28 @@ export async function loadChatGPTAccount(userId: string): Promise<{
   accountId: string;
   tokens: ChatGPTTokens | undefined;
   user: ChatGPTUser | undefined;
+  credentials: {
+    accessToken: string | null;
+    refreshToken: string | null;
+    accessTokenExpiresAt: Date | null;
+  };
 } | undefined> {
   const [row] = await getDb()
     .select()
     .from(account)
     .where(and(eq(account.userId, userId), eq(account.providerId, "chatgpt")))
-    .orderBy(desc(account.updatedAt))
+    .orderBy(desc(account.updatedAt), desc(account.id))
     .limit(1);
   if (!row) return undefined;
 
   const accessToken = await decryptToken(row.accessToken);
   const refreshToken = await decryptToken(row.refreshToken);
+  const idToken = await decryptIdToken(row.idToken);
   const tokens = accessToken
     ? {
         accessToken,
         ...(refreshToken ? { refreshToken } : {}),
-        ...(row.idToken ? { idToken: row.idToken } : {}),
+        ...(idToken ? { idToken } : {}),
         ...(row.accessTokenExpiresAt ? { expiresAt: row.accessTokenExpiresAt.getTime() } : {}),
         accountId: row.accountId,
       }
@@ -74,7 +104,12 @@ export async function loadChatGPTAccount(userId: string): Promise<{
     rowId: row.id,
     accountId: row.accountId,
     tokens,
-    user: row.idToken ? parseUser(row.idToken) : undefined,
+    user: idToken ? parseUser(idToken) : undefined,
+    credentials: {
+      accessToken: accessToken ?? null,
+      refreshToken: refreshToken ?? null,
+      accessTokenExpiresAt: row.accessTokenExpiresAt,
+    },
   };
 }
 

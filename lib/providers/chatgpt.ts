@@ -7,7 +7,7 @@ import {
   listCodexModels,
 } from "@opencoredev/loginwithchatgpt-core";
 import { toJsonSchema } from "@/lib/schema";
-import { getChatGPTAuth, chatgptConfig, loadChatGPTAccount } from "@/lib/chatgpt/tokens";
+import { getChatGPTAuth, chatgptConfig, hasUsableCredentials, loadChatGPTAccount } from "@/lib/chatgpt/tokens";
 import { extractJson } from "./openai-compatible";
 import {
   ProviderError,
@@ -32,7 +32,7 @@ function mapEffort(effort: StructuredRequest<unknown>["effort"]): ReasoningEffor
 
 async function info(ctx?: ProviderContext): Promise<ProviderInfo> {
   const loaded = ctx?.userId ? await loadChatGPTAccount(ctx.userId) : undefined;
-  const configured = Boolean(loaded?.tokens?.refreshToken);
+  const configured = Boolean(loaded && hasUsableCredentials(loaded.credentials));
   return {
     id: "chatgpt",
     label: "ChatGPT",
