@@ -7,9 +7,9 @@ Click any block to open its lesson: a written explanation with a worked example,
 ## Run it
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env.local   # then fill in the keys you have
-npm run dev
+pnpm dev
 ```
 
 Open http://localhost:3000.
@@ -17,7 +17,7 @@ Open http://localhost:3000.
 ## Database
 
 Drizzle is configured for Supabase Postgres. Set `DATABASE_URL` in `.env.local`,
-review the generated SQL in `drizzle/`, then run `npm run db:migrate`.
+review the generated SQL in `drizzle/`, then run `pnpm db:migrate`.
 See [the database guide](db/README.md) for the schema, connection options,
 migration workflow, and remaining application integration work.
 
@@ -25,7 +25,8 @@ migration workflow, and remaining application integration work.
 
 Better Auth uses the existing Drizzle tables with its anonymous plugin. Starting
 a topic creates a guest session if one does not already exist; subsequent
-requests reuse the session cookie. `/api/mindmap` requires a valid session.
+requests reuse the session cookie. The `mindMap` tRPC procedure requires a
+valid session.
 
 Set these server-only variables in `.env.local`:
 
@@ -78,5 +79,6 @@ LM Studio, vLLM and llama.cpp work too: set `LOCAL_BASE_URL` to their OpenAI-com
 - `app/api/mindmap/route.ts` takes `{ topic, provider, current?, instruction? }` and streams a roadmap that matches `lib/schema.ts`.
 - `app/api/lesson/route.ts` writes a lesson in two phases: a short plan (title, section headings with one-line intents, takeaways), then every section body in parallel from that plan. Resource links and the video are looked up at the same time; links that don't resolve are dropped (`lib/links.ts`) and the video comes from the model's search query (`lib/youtube.ts`).
 - `app/api/lesson/chat/route.ts` is the tutor: it streams a reply and, when asked to change the lesson, returns the full rewritten lesson. `app/api/quiz/route.ts` writes a 5-question multiple-choice quiz.
+- `server/router.ts` is a typed tRPC API over the same providers; `app/api/trpc/[trpc]/route.ts` exposes it and `lib/trpc.ts` is the browser client. The UI uses it for the provider list. Its `mindMap`, `lesson`, `tutor` and `quiz` procedures return whole responses for callers that do not need streaming.
 - `lib/providers/` holds one adapter per provider, each exposing one `structured()` call that returns JSON matching a Zod schema, streaming the raw text when a callback is given. Reasoning models run at minimal effort: on gpt-5 that cuts the wait for the first token from ~35s to ~2s with no visible drop in quality. Claude uses the Anthropic SDK with structured outputs. OpenAI, Grok and local models all speak the OpenAI chat-completions protocol, so they share one adapter that asks for a JSON schema response and degrades to looser formats for older local servers.
 - `lib/prompt.ts` holds the prompts: curriculum designer, lesson writer, tutor and quiz writer.

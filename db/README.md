@@ -12,18 +12,18 @@ migrations; Zod schemas in `types/learning.ts` own the JSON contract.
    for migrations and Studio. Runtime uses `DATABASE_URL`; tooling prefers
    `DIRECT_DATABASE_URL`. Runtime disables prepared statements for compatibility
    with Supabase's transaction pooler.
-3. Review `drizzle/*.sql`, then run `npm run db:migrate` to apply committed
+3. Review `drizzle/*.sql`, then run `pnpm db:migrate` to apply committed
    migrations. Only the team's schema owner should change the shared database.
 
 Commands:
 
-- `npm run db:generate` generates a migration after schema edits; no DB required.
-- `npm run db:check` checks the migration history for collisions.
-- `npm run db:migrate` applies pending committed migrations.
-- `npm run db:push` interactively previews and applies schema changes directly.
+- `pnpm db:generate` generates a migration after schema edits; no DB required.
+- `pnpm db:check` checks the migration history for collisions.
+- `pnpm db:migrate` applies pending committed migrations.
+- `pnpm db:push` interactively previews and applies schema changes directly.
   Review every diff; another branch may not contain a teammate's tables. Prefer
   migrations and do not mix push and migrate on the same database.
-- `npm run db:studio` opens the database browser.
+- `pnpm db:studio` opens the database browser.
 
 Import `getDb` from `@/db` in server code and call it when a connection is needed.
 It creates a reusable Postgres.js pool lazily so builds do not need credentials.

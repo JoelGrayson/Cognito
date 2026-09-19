@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Project context for AI coding agents and teammates. Keep this file short; details live in `docs/`.
 
@@ -16,13 +16,15 @@ Phase 1 adds: Supabase Postgres (as plain Postgres), Drizzle ORM, Better Auth (a
 
 ## Commands
 
+Use pnpm for dependency management and scripts. Do not use npm, npx, or yarn.
+
 ```bash
-npm run dev
-npm run build
-npm run lint
-npm test                                                # vitest
-npx tsx --env-file=.env.local scripts/eval-graph.ts     # prompt eval: validation pass rate, latency
-npx drizzle-kit push                                    # Phase 1, schema owner only, read the diff first
+pnpm dev
+pnpm build
+pnpm lint
+pnpm test                                                # vitest
+pnpm exec tsx --env-file=.env.local scripts/eval-graph.ts # prompt eval: validation pass rate, latency
+pnpm exec drizzle-kit push                                # Phase 1, schema owner only, read the diff first
 ```
 
 ## Environment
@@ -100,6 +102,6 @@ If code and docs disagree, stop and ask rather than picking one.
 ## Working style
 
 - Small PRs, merge often. Schema changes get their own PR.
-- Before finishing a task: `npm run lint && npm test && npm run build`.
+- Before finishing a task: `pnpm lint && pnpm test && pnpm build`.
 - Prefer editing existing modules over adding parallel ones. Reuse `lib/graph` and `lib/ai` helpers.
 - Use `MOCK_AI=true` for UI work; verify prompt changes with `scripts/eval-graph.ts` against the real API.
