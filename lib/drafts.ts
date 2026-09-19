@@ -58,6 +58,7 @@ export interface QuestionDraft {
 
 const PHASES = new Set<Phase>(["prerequisite", "core", "advanced"]);
 const LINKS = new Set<StageLink>(["requires", "any-order", "recommended"]);
+const ORDERS = new Set<MindMap["order"]>(["chronological", "difficulty", "parts", "mixed"]);
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -90,12 +91,14 @@ export function partialMindMap(raw: unknown): MindMap | null {
       const supporting = Array.isArray(s.supporting)
         ? s.supporting.map(node).filter((n): n is MapNode => n !== null)
         : [];
-      stages.push({ link, phase, core, supporting });
+      stages.push({ link, why: str(s.why), phase, core, supporting });
     }
   }
   return {
     topic: str(raw.topic),
     summary: str(raw.summary),
+    order: ORDERS.has(raw.order as MindMap["order"]) ? (raw.order as MindMap["order"]) : "mixed",
+    plan: str(raw.plan),
     startingPoint: strings(raw.startingPoint),
     outcome: strings(raw.outcome),
     stages,
@@ -142,4 +145,21 @@ export function partialQuiz(raw: unknown): QuestionDraft[] | null {
 export function questionFromDraft(q: QuestionDraft): QuizQuestion | null {
   if (q.answer === undefined || q.explanation === undefined || q.choices.length < 2) return null;
   return { prompt: q.prompt, choices: q.choices, answer: q.answer, explanation: q.explanation };
+}
+
+/** An explainer script as it streams: scenes appear one by one. */
+export interface ExplainerPlanDraft {
+  title: string;
+  scenes: { narration: string; bullet: string; visual: string }[];
+}
+
+export function partialPlan(raw: unknown): ExplainerPlanDraft | null {
+  if (!isRecord(raw)) return null;
+  const scenes = Array.isArray(raw.scenes)
+    ? raw.scenes
+        .filter(isRecord)
+        .filter((s) => typeof s.narration === "string" && s.narration)
+        .map((s) => ({ narration: s.narration as string, bullet: str(s.bullet), visual: str(s.visual) }))
+    : [];
+  return { title: str(raw.title), scenes };
 }

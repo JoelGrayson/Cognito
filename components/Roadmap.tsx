@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useEffect, useState, type DragEvent } from "react";
 import { nodeAt, sameRef, type NodeRef } from "@/lib/roadmap";
 import type { MapNode, MindMap, Phase, StageLink } from "@/lib/schema";
 
@@ -133,6 +133,21 @@ interface RoadmapProps {
   hrefFor?: (ref: NodeRef) => string | undefined;
   /** Whether a block's lesson is fully written. */
   isReady?: (node: MapNode) => boolean;
+  /** Editing, when given: rename, delete and drag blocks around. */
+  onEdit?: (ref: NodeRef) => void;
+  onDelete?: (ref: NodeRef) => void;
+  onMove?: (from: NodeRef, to: NodeRef) => void;
+}
+
+const REF_TYPE = "application/x-roadmap-block";
+
+function parseRef(e: DragEvent): NodeRef | null {
+  try {
+    const raw = e.dataTransfer.getData(REF_TYPE);
+    return raw ? (JSON.parse(raw) as NodeRef) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The block most recently added to a map, which is the one still being written while streaming. */
@@ -154,13 +169,33 @@ export function Roadmap({
   streaming = false,
   hrefFor,
   isReady,
+  onEdit,
+  onDelete,
+  onMove,
 }: RoadmapProps) {
+  const editable = Boolean(onEdit || onDelete || onMove) && !compact;
+  const [menu, setMenu] = useState<NodeRef | null>(null);
+  const [dragging, setDragging] = useState<NodeRef | null>(null);
+  const [over, setOver] = useState<NodeRef | null>(null);
+
+  // A click anywhere else closes the block menu.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [menu]);
+
   const tail = streaming ? tailOf(map) : null;
   const slot = (ref: NodeRef) => {
     const at = nodeAt(map, ref);
     if (!at) return null;
     const clickable = onSelect && !sameRef(tail, ref);
-    return (
+    const card = (
       <Card
         node={at.node}
         phase={at.phase}
@@ -170,14 +205,108 @@ export function Roadmap({
         ready={isReady?.(at.node)}
       />
     );
+    if (!editable) return card;
+    const open = sameRef(menu, ref);
+    return (
+      <div
+        className="card-wrap"
+        draggable={Boolean(onMove)}
+        data-dragging={sameRef(dragging, ref) ? "true" : undefined}
+        onDragStart={(e) => {
+          e.dataTransfer.setData(REF_TYPE, JSON.stringify(ref));
+          e.dataTransfer.effectAllowed = "move";
+          setDragging(ref);
+        }}
+        onDragEnd={() => {
+          setDragging(null);
+          setOver(null);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenu(open ? null : ref);
+        }}
+      >
+        {card}
+        <button
+          type="button"
+          className="card-menu"
+          aria-label={`Actions for ${at.node.name}`}
+          aria-expanded={open}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            setMenu(open ? null : ref);
+          }}
+        >
+          …
+        </button>
+        {open && (
+          <div className="card-actions" role="menu" onPointerDown={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenu(null);
+                onEdit?.(ref);
+              }}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="card-action-danger"
+              onClick={() => {
+                setMenu(null);
+                onDelete?.(ref);
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
+
+  /** Drop targets: every slot, including the empty ones. */
+  const dropProps = (ref: NodeRef) =>
+    onMove && editable
+      ? {
+          "data-over": sameRef(over, ref) && !sameRef(dragging, ref) ? "true" : undefined,
+          onDragOver: (e: DragEvent) => {
+            if (!e.dataTransfer.types.includes(REF_TYPE)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move" as const;
+            setOver(ref);
+          },
+          onDragLeave: () => setOver((current) => (sameRef(current, ref) ? null : current)),
+          onDrop: (e: DragEvent) => {
+            e.preventDefault();
+            const from = parseRef(e);
+            setOver(null);
+            setDragging(null);
+            if (from) onMove(from, ref);
+          },
+        }
+      : {};
   const count = map.stages.length;
   const row = (i: number) => (
-    <div className="stage-row">
-      <div className="slot">{slot({ stage: i, kind: "supporting", index: 0 })}</div>
-      <div className="slot slot-core">{slot({ stage: i, kind: "core", index: 0 })}</div>
-      <div className="slot">{slot({ stage: i, kind: "supporting", index: 1 })}</div>
-    </div>
+    <Fragment>
+      {/* Why this stage comes here; the mini map has no room for it. */}
+      {!compact && map.stages[i].why && <p className="stage-why">{map.stages[i].why}</p>}
+      <div className="stage-row">
+        <div className="slot" {...dropProps({ stage: i, kind: "supporting", index: 0 })}>
+          {slot({ stage: i, kind: "supporting", index: 0 })}
+        </div>
+        <div className="slot slot-core" {...dropProps({ stage: i, kind: "core", index: 0 })}>
+          {slot({ stage: i, kind: "core", index: 0 })}
+        </div>
+        <div className="slot" {...dropProps({ stage: i, kind: "supporting", index: 1 })}>
+          {slot({ stage: i, kind: "supporting", index: 1 })}
+        </div>
+      </div>
+    </Fragment>
   );
 
   return (
