@@ -72,12 +72,18 @@ export function latexToMathjs(latex: string): string {
       .replace(/\\left|\\right/g, "")
       // Mathpix wraps bare operators and stray symbols in \text{...}; unwrap, keep contents.
       .replace(/\\(?:text|mathrm|mathit|operatorname)\s*\{([^{}]*)\}/g, "$1")
-      .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "($1)/($2)")
+      // Same nesting problem as \sqrt below: \frac{x^{2}}{2} has braces in the numerator.
+      .replace(
+        /\\frac\s*\{((?:[^{}]|\{[^{}]*\})*)\}\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g,
+        "($1)/($2)",
+      )
       .replace(/\\cdot|\\times/g, "*")
       .replace(/\\div/g, "/")
       .replace(/\\leq/g, "<=")
       .replace(/\\geq/g, ">=")
-      .replace(/\\sqrt\s*\{([^{}]+)\}/g, "sqrt($1)")
+      // One level of nesting matters: \sqrt{x^{2}} has braces INSIDE the braces, and
+      // a [^{}]+ body silently fails to match, stranding the backslash as "\sqrtx".
+      .replace(/\\sqrt\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g, "sqrt($1)")
       // LaTeX puts the exponent on the FUNCTION NAME: \sin^{2}(x) means (sin(x))^2.
       // Must run before the generic ^{...} rewrite, or it becomes sin^(2)(x) and dies.
       .replace(
