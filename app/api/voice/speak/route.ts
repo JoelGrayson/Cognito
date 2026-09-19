@@ -10,7 +10,15 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 30;
 
-const MODEL = "eleven_flash_v2_5";
+/** turbo_v2_5, not flash_v2_5. Measured on this account: turbo is both better
+ *  sounding AND marginally faster (371ms vs 469ms). Flash trades quality for an
+ *  inference-time win that the network hop eats anyway. */
+const MODEL = "eleven_turbo_v2_5";
+
+/** 44.1kHz/128kbps, the best the free tier allows (192 needs Creator). The original
+ *  22kHz/32kbps was the single biggest cause of the voice sounding robotic --
+ *  four times the bitrate for no extra latency. */
+const OUTPUT_FORMAT = "mp3_44100_128";
 /** A calm, unhurried default. The voice has to be able to say nothing comfortably.
  *
  *  "Sarah", one of the built-in default voices. NOT a library voice: free accounts
@@ -21,9 +29,17 @@ const DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
 /** Other free-tier-safe defaults, for swapping the tutor's voice. */
 export const VOICES = {
   sarah: "EXAVITQu4vr4xnSDxMaL",
-  george: "JBFqnCBsd6RMkjVDRZzb",
+  laura: "FGY2WhTYpPnrIDTdsKH5",
   jessica: "cgSgspJ2msm6clMCkdW9",
   matilda: "XrExE9yKIg1WjnnlVkGX",
+  alice: "Xb7hH8MSUJpSbSDYk0k2",
+  lily: "pFZP5JQG7iQjIQuC4Bku",
+  george: "JBFqnCBsd6RMkjVDRZzb",
+  charlie: "IKne3meq5aSn9XLyUdCD",
+  callum: "N2lVS1w4EtoT3dr4eOWO",
+  will: "bIHbv24MWmeRgasZH58o",
+  chris: "iP95p4xoKVk53GoZ742B",
+  daniel: "onwK4e9ZLuTAKqWW03F9",
 } as const;
 
 export async function POST(request: Request) {
@@ -54,7 +70,7 @@ export async function POST(request: Request) {
   let res: Response;
   try {
     res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voice}/stream?output_format=mp3_22050_32`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voice}/stream?output_format=${OUTPUT_FORMAT}`,
       {
         method: "POST",
         headers: { "xi-api-key": key, "Content-Type": "application/json" },
@@ -63,7 +79,15 @@ export async function POST(request: Request) {
           model_id: MODEL,
           // Slightly raised stability: a tutor that sounds erratic undercuts the
           // impression of deliberate restraint.
-          voice_settings: { stability: 0.55, similarity_boost: 0.75, speed: 1.0 },
+          voice_settings: {
+            // Lower stability = more expressive delivery. A tutor reading a warning
+            // in a flat monotone is exactly the robotic effect we're avoiding.
+            stability: 0.4,
+            similarity_boost: 0.8,
+            style: 0.15,
+            use_speaker_boost: true,
+            speed: 0.98,
+          },
         }),
       },
     );

@@ -22,6 +22,22 @@ import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
 import { createSpeaker, SPOKEN, ASK_WHY, type Speaker } from "@/lib/whiteboard/voice";
+
+/** Free-tier-safe voices, verified against this account. Library voices return 402. */
+const VOICE_OPTIONS = [
+  ["EXAVITQu4vr4xnSDxMaL", "Sarah"],
+  ["FGY2WhTYpPnrIDTdsKH5", "Laura"],
+  ["cgSgspJ2msm6clMCkdW9", "Jessica"],
+  ["XrExE9yKIg1WjnnlVkGX", "Matilda"],
+  ["Xb7hH8MSUJpSbSDYk0k2", "Alice"],
+  ["pFZP5JQG7iQjIQuC4Bku", "Lily"],
+  ["JBFqnCBsd6RMkjVDRZzb", "George"],
+  ["IKne3meq5aSn9XLyUdCD", "Charlie"],
+  ["N2lVS1w4EtoT3dr4eOWO", "Callum"],
+  ["bIHbv24MWmeRgasZH58o", "Will"],
+  ["iP95p4xoKVk53GoZ742B", "Chris"],
+  ["onwK4e9ZLuTAKqWW03F9", "Daniel"],
+] as const;
 import type { HintLevel } from "@/lib/whiteboard/policy";
 import {
   recordStrokes,
@@ -86,6 +102,11 @@ export default function SpikePage() {
     voiceOnRef.current = voiceOn;
   }, [voiceOn]);
   const [said, setSaid] = useState<string | null>(null);
+  const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
+  const voiceIdRef = useRef(voiceId);
+  useEffect(() => {
+    voiceIdRef.current = voiceId;
+  }, [voiceId]);
   const annotatorRef = useRef<Annotator | null>(null);
   /** lineId -> where that line sits on the canvas. This is what lets marks be placed
    *  without anyone computing coordinates. */
@@ -165,7 +186,7 @@ export default function SpikePage() {
             const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
             const utterance = `${line} ${why}`;
             setSaid(utterance);
-            speakerRef.current?.say(utterance).catch((e) => {
+            speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
               setError(e instanceof Error ? e.message : "Voice failed.");
             });
           }
@@ -243,6 +264,23 @@ export default function SpikePage() {
           <input type="checkbox" checked={voiceOn} onChange={(e) => setVoiceOn(e.target.checked)} />
           voice
         </label>
+        <select
+          value={voiceId}
+          onChange={(e) => {
+            setVoiceId(e.target.value);
+            // Speak on change so the voice can be auditioned without writing anything.
+            speakerRef.current
+              ?.say("Something in there doesn't hold up. Want to take another look?", e.target.value)
+              .catch(() => {});
+          }}
+          className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-[11px] text-neutral-200"
+        >
+          {VOICE_OPTIONS.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+        </select>
         <span className="font-mono text-[10px] text-neutral-600">
           idle {idleMs}ms
         </span>

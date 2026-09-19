@@ -14,7 +14,7 @@
 
 export interface Speaker {
   /** Say something. Cancels whatever is currently playing. */
-  say(text: string): Promise<void>;
+  say(text: string, voiceId?: string): Promise<void>;
   /** Stop mid-sentence. This is barge-in: the learner always outranks the tutor. */
   stop(): void;
   readonly speaking: boolean;
@@ -38,12 +38,12 @@ export function createSpeaker(): Speaker {
       return speaking;
     },
     stop,
-    async say(text: string) {
+    async say(text: string, voiceId?: string) {
       stop(); // never let two utterances overlap
       const res = await fetch("/api/voice/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, voiceId }),
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => ({ error: "speak failed" }));
