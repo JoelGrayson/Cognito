@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { authClient } from "@/lib/auth-client";
 
 interface ChatGPTUser {
   accountId: string;
@@ -16,19 +17,6 @@ interface Props {
 
 type Status = { linked: boolean; user?: ChatGPTUser };
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const method = init?.method ?? "GET";
-  const response = await fetch(`/api/auth${path}`, {
-    ...init,
-    body: method === "POST" && init?.body === undefined ? "{}" : init?.body,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  const body = (await response.json()) as T & { message?: string; error?: string };
-  if (!response.ok) throw new Error(body.message ?? body.error ?? "ChatGPT request failed.");
-  return body;
-}
-
 export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
   const [status, setStatus] = useState<Status | null>(null);
   const [open, setOpen] = useState(false);
@@ -40,7 +28,9 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
 
   const refresh = useCallback(async () => {
     try {
-      setStatus(await call<Status>("/chatgpt/status"));
+      const result = await authClient.$fetch<Status>("/chatgpt/status");
+      if (result.error) throw new Error(result.error.message ?? "ChatGPT request failed.");
+      setStatus(result.data);
     } catch {
       setStatus(null);
     }
@@ -66,10 +56,12 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
   const poll = useCallback((current: { handle: string; interval: number }) => {
     const run = async () => {
       try {
-        const result = await call<{ status: "pending" | "authenticated" | "expired" }>(
+        const response = await authClient.$fetch<{ status: "pending" | "authenticated" | "expired" }>(
           "/sign-in/chatgpt/poll",
-          { method: "POST", body: JSON.stringify({ handle: current.handle }) },
+          { method: "POST", body: { handle: current.handle } },
         );
+        if (response.error) throw new Error(response.error.message ?? "ChatGPT request failed.");
+        const result = response.data;
         if (result.status === "authenticated") {
           await refresh();
           close();
@@ -94,12 +86,14 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
     setPhase("starting");
     setError(null);
     try {
-      const result = await call<{
+      const response = await authClient.$fetch<{
         handle: string;
         userCode: string;
         verificationUrl: string;
         interval: number;
-      }>("/sign-in/chatgpt/start", { method: "POST" });
+      }>("/sign-in/chatgpt/start", { method: "POST", body: {} });
+      if (response.error) throw new Error(response.error.message ?? "ChatGPT request failed.");
+      const result = response.data;
       setDevice(result);
       setPhase("polling");
       poll(result);
@@ -111,7 +105,8 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
 
   async function disconnect() {
     try {
-      await call("/chatgpt/unlink", { method: "POST" });
+      const result = await authClient.$fetch("/chatgpt/unlink", { method: "POST", body: {} });
+      if (result.error) throw new Error(result.error.message ?? "ChatGPT request failed.");
       await refresh();
       onDisconnected?.();
     } catch (err) {

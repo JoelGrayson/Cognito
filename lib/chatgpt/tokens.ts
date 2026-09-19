@@ -13,7 +13,7 @@ import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
 import { eq, and } from "drizzle-orm";
 import { getDb } from "@/db";
 import { account } from "@/db/schema";
-import { ProviderError } from "@/lib/providers";
+import { ProviderError } from "@/lib/providers/types";
 
 export const chatgptConfig = resolveConfig({});
 

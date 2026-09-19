@@ -1,7 +1,7 @@
 import { anthropicProvider } from "./anthropic";
 import { chatgptProvider } from "./chatgpt";
 import { createOpenAICompatibleProvider } from "./openai-compatible";
-import type { Provider, ProviderId, ProviderInfo } from "./types";
+import type { Provider, ProviderContext, ProviderId, ProviderInfo } from "./types";
 
 export type { Provider, ProviderContext, ProviderId, ProviderInfo } from "./types";
 export { ProviderError } from "./types";
@@ -57,6 +57,6 @@ export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && value in PROVIDERS;
 }
 
-export async function listProviders(ctx?: import("./types").ProviderContext): Promise<ProviderInfo[]> {
+export async function listProviders(ctx?: ProviderContext): Promise<ProviderInfo[]> {
   return Promise.all(PROVIDER_ORDER.map((id) => PROVIDERS[id].info(ctx)));
 }
