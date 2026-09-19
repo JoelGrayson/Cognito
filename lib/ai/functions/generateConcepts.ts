@@ -1,6 +1,5 @@
-import { ConceptsResponse } from "@/lib/onboarding/schemas";
 import { FAST_MODEL } from "../models";
-import { callForcedTool, type ToolClient } from "../tools";
+import { callForcedTool, setConceptsTool, type ToolClient } from "../tools";
 
 const SYSTEM = `You help a self-learner describe where they are starting from.
 Given what they want to learn, list the concepts they might already know, to be rated "never heard", "heard of" or "can explain".
@@ -17,11 +16,7 @@ export async function generateConcepts(goal: string, client?: ToolClient): Promi
     model: FAST_MODEL,
     system: SYSTEM,
     prompt: `The learner wants to learn: ${goal}`,
-    tool: {
-      name: "set_concepts",
-      description: "Return the concepts the learner can rate their familiarity with.",
-      schema: ConceptsResponse,
-    },
+    tool: setConceptsTool,
     maxTokens: 400,
     client,
   });
