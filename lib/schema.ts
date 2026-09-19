@@ -14,6 +14,9 @@ export const NodeSchema = z.object({
 export const StageLinkSchema = z.enum(["requires", "any-order", "recommended"]);
 
 export const StageSchema = z.object({
+  why: z
+    .string()
+    .describe("One plain line, at most 15 words, shown above this stage: why it comes at this point in the roadmap"),
   phase: PhaseSchema.describe(
     "prerequisite = background needed before the topic itself; core = the topic proper; advanced = deeper or applied material that builds on the core",
   ),
@@ -40,6 +43,11 @@ export const MindMapSchema = z.object({
     .array(z.string())
     .describe(
       "What you will know at the end: 3-4 specific, testable tasks the learner will be able to do, each naming a concrete thing to build, calculate, write or explain",
+    ),
+  plan: z
+    .string()
+    .describe(
+      "How this roadmap is ordered and why, in 2-3 plain sentences a learner reads before starting: the shape (by time, by difficulty, by parts of a system), what comes first and why, and what the any-order groups are for",
     ),
   stages: z
     .array(StageSchema)
@@ -72,14 +80,17 @@ export const MindMapInputSchema = z.preprocess((value) => {
   if (!Array.isArray(stages)) return value;
   return {
     ...value,
-    // Added later: the intro lists at the top of the map. Early versions were one sentence.
+    // Added later: the plan note and the intro lists at the top of the map.
+    plan: typeof (value as { plan?: unknown }).plan === "string" ? (value as { plan: string }).plan : "",
     startingPoint: asList((value as { startingPoint?: unknown }).startingPoint),
     outcome: asList((value as { outcome?: unknown }).outcome),
     nextSteps: Array.isArray((value as { nextSteps?: unknown }).nextSteps)
       ? (value as { nextSteps: unknown[] }).nextSteps
       : [],
     stages: stages.map((s) =>
-      typeof s === "object" && s !== null && !("link" in s) ? { ...s, link: "recommended" } : s,
+      typeof s === "object" && s !== null
+        ? { link: "recommended", why: "", ...(s as Record<string, unknown>) }
+        : s,
     ),
   };
 }, MindMapSchema);
@@ -408,3 +419,39 @@ export const CodeReviewSchema = z.object({
 export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
 export type Exercise = z.infer<typeof ExerciseSchema>;
 export type CodeReview = z.infer<typeof CodeReviewSchema>;
+
+/** The roadmap assistant's reply, with the revised roadmap when it changed one. */
+export const MapChatReplySchema = z.object({
+  reply: z
+    .string()
+    .describe("Answer to the learner: fact-dense, a few '- ' bullets or short sentences. Say briefly what you changed when you changed the map"),
+  updatedMap: MindMapSchema.nullable().describe("The complete revised roadmap when the learner asked to change it; otherwise null"),
+});
+
+/* ---------- Explainer: a narrated, drawn walkthrough of a topic ---------- */
+
+export const ExplainerPlanSchema = z.object({
+  title: z.string().describe("Punchy title, 2-6 words"),
+  scenes: z
+    .array(
+      z.object({
+        narration: z
+          .string()
+          .describe("What the voice says over this scene: 1-2 spoken sentences, 15-35 words, plain speech, no markdown"),
+        bullet: z
+          .string()
+          .describe("The same point as one written line for the article version: fact-dense, under 20 words"),
+        visual: z
+          .string()
+          .describe("What the board should show: the diagram, graph, labelled sketch or photo, in one line"),
+      }),
+    )
+    .describe("8-14 scenes that tell the topic start to finish, each one idea"),
+});
+
+export const SceneBoardSchema = z.object({
+  actions: z.array(BoardActionSchema).describe("3-8 whiteboard actions drawing this scene, in drawing order"),
+});
+
+export type ExplainerPlan = z.infer<typeof ExplainerPlanSchema>;
+export type ExplainerScene = ExplainerPlan["scenes"][number];

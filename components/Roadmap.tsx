@@ -173,11 +173,15 @@ export function Roadmap({
   };
   const count = map.stages.length;
   const row = (i: number) => (
-    <div className="stage-row">
-      <div className="slot">{slot({ stage: i, kind: "supporting", index: 0 })}</div>
-      <div className="slot slot-core">{slot({ stage: i, kind: "core", index: 0 })}</div>
-      <div className="slot">{slot({ stage: i, kind: "supporting", index: 1 })}</div>
-    </div>
+    <Fragment>
+      {/* Why this stage comes here; the mini map has no room for it. */}
+      {!compact && map.stages[i].why && <p className="stage-why">{map.stages[i].why}</p>}
+      <div className="stage-row">
+        <div className="slot">{slot({ stage: i, kind: "supporting", index: 0 })}</div>
+        <div className="slot slot-core">{slot({ stage: i, kind: "core", index: 0 })}</div>
+        <div className="slot">{slot({ stage: i, kind: "supporting", index: 1 })}</div>
+      </div>
+    </Fragment>
   );
 
   return (
