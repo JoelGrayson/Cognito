@@ -1,4 +1,4 @@
-import type { Lesson, MapNode, MindMap, Phase, QuizQuestion, Resource, Video } from "@/lib/schema";
+import type { Lesson, MapNode, MindMap, Phase, StageLink, QuizQuestion, Resource, Video } from "@/lib/schema";
 
 /* Shapes of things while they are still streaming in, plus the sanitisers
    that turn a half-parsed JSON object into one of them. Client-safe. */
@@ -7,6 +7,8 @@ import type { Lesson, MapNode, MindMap, Phase, QuizQuestion, Resource, Video } f
 export interface LessonDraft {
   title: string;
   summary: string;
+  /** Empty until the plan has written it. */
+  tldr: string;
   sections: { heading: string; body: string; done: boolean }[];
   keyTakeaways: string[];
   videoQuery: string;
@@ -20,6 +22,7 @@ export function emptyDraft(node: MapNode): LessonDraft {
   return {
     title: node.name,
     summary: node.description,
+    tldr: "",
     sections: [],
     keyTakeaways: [],
     videoQuery: "",
@@ -31,6 +34,7 @@ export function emptyDraft(node: MapNode): LessonDraft {
 export function draftFromLesson(lesson: Lesson): LessonDraft {
   return {
     ...lesson,
+    tldr: lesson.tldr ?? "",
     sections: lesson.sections.map((s) => ({ ...s, done: true })),
   };
 }
@@ -39,6 +43,7 @@ export function draftFromLesson(lesson: Lesson): LessonDraft {
 export interface OutlineDraft {
   title: string;
   summary: string;
+  tldr: string;
   sections: { heading: string }[];
   keyTakeaways: string[];
 }
@@ -52,6 +57,7 @@ export interface QuestionDraft {
 }
 
 const PHASES = new Set<Phase>(["prerequisite", "core", "advanced"]);
+const LINKS = new Set<StageLink>(["requires", "any-order", "recommended"]);
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -80,13 +86,20 @@ export function partialMindMap(raw: unknown): MindMap | null {
       const core = node(s.core);
       if (!core) continue;
       const phase = PHASES.has(s.phase as Phase) ? (s.phase as Phase) : "core";
+      const link = LINKS.has(s.link as StageLink) ? (s.link as StageLink) : "recommended";
       const supporting = Array.isArray(s.supporting)
         ? s.supporting.map(node).filter((n): n is MapNode => n !== null)
         : [];
-      stages.push({ phase, core, supporting });
+      stages.push({ link, phase, core, supporting });
     }
   }
-  return { topic: str(raw.topic), summary: str(raw.summary), stages };
+  return {
+    topic: str(raw.topic),
+    summary: str(raw.summary),
+    startingPoint: strings(raw.startingPoint),
+    outcome: strings(raw.outcome),
+    stages,
+  };
 }
 
 export function partialOutline(raw: unknown): OutlineDraft | null {
@@ -99,6 +112,7 @@ export function partialOutline(raw: unknown): OutlineDraft | null {
   return {
     title: str(raw.title),
     summary: str(raw.summary),
+    tldr: str(raw.tldr),
     sections,
     keyTakeaways: strings(raw.keyTakeaways),
   };
