@@ -25,7 +25,8 @@ migration workflow, and remaining application integration work.
 
 Better Auth uses the existing Drizzle tables with its anonymous plugin. Starting
 a topic creates a guest session if one does not already exist; subsequent
-requests reuse the session cookie. `/api/mindmap` requires a valid session.
+requests reuse the session cookie. The `mindMap` tRPC procedure requires a
+valid session.
 
 Set these server-only variables in `.env.local`:
 
@@ -74,8 +75,8 @@ LM Studio, vLLM and llama.cpp work too: set `LOCAL_BASE_URL` to their OpenAI-com
 ## How it works
 
 - `app/page.tsx` is the UI: the landing input, the roadmap view with the modifications box, and the lesson view (`components/Lesson.tsx`) that opens when a block is clicked. Lessons are cached per block for the session.
-- `app/api/mindmap/route.ts` takes `{ topic, provider, current?, instruction? }` and returns a roadmap that matches `lib/schema.ts`.
-- `app/api/lesson/route.ts` writes a lesson for one block, then drops resource links that don't resolve (`lib/links.ts`) and finds a video for the model's search query (`lib/youtube.ts`).
-- `app/api/lesson/chat/route.ts` is the tutor: it returns a reply and, when asked to change the lesson, the full rewritten lesson. `app/api/quiz/route.ts` writes a 5-question multiple-choice quiz.
+- `server/router.ts` defines the typed tRPC API. Its `mindMap`, `lesson`, `tutor`, and `quiz` procedures validate input with Zod and return inferred response types to the browser client.
+- `app/api/trpc/[trpc]/route.ts` exposes the router through tRPC's fetch adapter, while `lib/trpc.ts` creates the typed client used by the UI.
+- The `lesson` procedure drops resource links that don't resolve (`lib/links.ts`) and finds a video for the model's search query (`lib/youtube.ts`). The `tutor` procedure can return a rewritten lesson, and `quiz` writes a 5-question multiple-choice quiz.
 - `lib/providers/` holds one adapter per provider, each exposing one `structured()` call that returns JSON matching a Zod schema. Claude uses the Anthropic SDK with structured outputs. OpenAI, Grok and local models all speak the OpenAI chat-completions protocol, so they share one adapter that asks for a JSON schema response and degrades to looser formats for older local servers.
 - `lib/prompt.ts` holds the prompts: curriculum designer, lesson writer, tutor and quiz writer.

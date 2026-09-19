@@ -8,6 +8,7 @@ import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
 import type { Lesson, MindMap } from "@/lib/schema";
+import { trpc } from "@/lib/trpc";
 
 interface Meta {
   provider: string;
@@ -46,9 +47,8 @@ export default function Home() {
   // Find out which providers this server can actually use.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/providers")
-      .then((r) => r.json())
-      .then((list: ProviderInfo[]) => {
+    trpc.providers.query()
+      .then((list) => {
         if (cancelled) return;
         setProviders(list);
         setProviderId((current) => {
@@ -72,14 +72,7 @@ export default function Home() {
     try {
       await ensureAnonymousSession();
       if (controller.signal.aborted) return false;
-      const res = await fetch("/api/mindmap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+      const data = await trpc.mindMap.mutate(body, { signal: controller.signal });
       setMap(data.mindMap);
       setMeta({ provider: data.provider, model: data.model, ms: data.ms });
       return true;
@@ -99,19 +92,13 @@ export default function Home() {
       const key = lessonKey(at.node);
       setLessons((s) => ({ ...s, [key]: { status: "loading" } }));
       try {
-        const res = await fetch("/api/lesson", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            topic: currentTopic,
-            node: at.node,
-            phase: at.phase,
-            map: currentMap,
-            provider,
-          }),
+        const data = await trpc.lesson.mutate({
+          topic: currentTopic,
+          node: at.node,
+          phase: at.phase,
+          map: currentMap,
+          provider,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
         setLessons((s) => ({ ...s, [key]: { status: "ready", lesson: data.lesson } }));
       } catch (err) {
         const message = err instanceof Error ? err.message : "Something went wrong.";
