@@ -1,4 +1,12 @@
-import type { ChatMessage, GenerateRequest, LessonContent, MapNode, MindMap, Phase } from "@/lib/schema";
+import type {
+  ChatMessage,
+  GenerateRequest,
+  LessonContent,
+  LessonPlan,
+  MapNode,
+  MindMap,
+  Phase,
+} from "@/lib/schema";
 
 /* ---------- Roadmap ---------- */
 
@@ -32,7 +40,7 @@ export function userPrompt(req: GenerateRequest): string {
   return `I want to learn: ${topic}`;
 }
 
-/* ---------- Lesson ---------- */
+/* ---------- Lesson: plan first, then sections in parallel ---------- */
 
 export interface LessonRequest {
   /** The roadmap's topic. */
@@ -43,27 +51,62 @@ export interface LessonRequest {
   map: MindMap;
 }
 
-export const LESSON_SYSTEM_PROMPT = `You are an expert teacher writing one lesson inside a larger learning roadmap. The learner has clicked a single block of the roadmap; teach exactly that block, at the depth its position in the roadmap implies.
+export const PLAN_SYSTEM_PROMPT = `You are an expert teacher planning one lesson inside a larger learning roadmap. The learner has clicked a single block of the roadmap. Plan a lesson that teaches exactly that block, at the depth its position in the roadmap implies. The sections will be written afterwards, one at a time, from your plan alone.
 
 Guidelines:
-- Teach, don't list. Explain the ideas, why they matter and how they connect. Work through at least one concrete example (a calculation, a code snippet, a worked scenario) wherever the subject allows.
+- 3-6 sections in teaching order: motivate, explain the core ideas, work a concrete example, connect to what comes next. Each section's intent is one sentence saying exactly what it must cover, precise enough that a writer who sees only the plan will not overlap the neighbouring sections.
 - Assume the learner knows the earlier stages of the roadmap and nothing from later ones.
-- 3-6 sections, each 1-3 short paragraphs. Section bodies may use **bold** for key terms, \`code\` for code or symbols, and lines starting with "- " for bullet lists. No headings inside bodies.
-- Resources: 3-5 real, well-known pages: official documentation, Wikipedia, university course notes, textbook sites, standards bodies. Give full https URLs and only ones you are confident exist. Never invent a URL.
-- videoQuery: the search you would type into YouTube to find a good explanatory video for this lesson.
+- Key takeaways: 3-5 one-sentence statements the learner should be able to make afterwards.
 - Write in the same language the roadmap is written in.`;
 
-export function lessonPrompt(req: LessonRequest): string {
+export function planPrompt(req: LessonRequest): string {
   return [
     `Roadmap topic: ${req.topic}`,
     `Roadmap, in learning order:`,
     outline(req.map),
     ``,
-    `Write the lesson for this block:`,
+    `Plan the lesson for this block:`,
     `Name: ${req.node.name}`,
     `Key concepts: ${req.node.subtitle}`,
     `Description: ${req.node.description}`,
     `Phase: ${req.phase}`,
+  ].join("\n");
+}
+
+export const EXTRAS_SYSTEM_PROMPT = `You pick further reading and a video for one lesson inside a learning roadmap.
+
+Guidelines:
+- Resources: 3-5 real, well-known pages: official documentation, Wikipedia, university course notes, textbook sites, standards bodies. Give full https URLs and only ones you are confident exist. Never invent a URL.
+- videoQuery: the search you would type into YouTube to find a good explanatory video for this lesson.
+- Write in the same language the roadmap is written in.`;
+
+export function extrasPrompt(req: LessonRequest): string {
+  return [
+    `Roadmap topic: ${req.topic}`,
+    `The lesson is about this block: ${req.node.name} (${req.node.subtitle}). ${req.node.description} Phase: ${req.phase}.`,
+  ].join("\n");
+}
+
+export const SECTION_SYSTEM_PROMPT = `You are an expert teacher writing one section of a lesson. The other sections are being written separately from the same plan, so cover exactly what your section is for and do not repeat what the others cover. Do not introduce or summarise the whole lesson.
+
+Guidelines:
+- Teach, don't list. Explain the ideas and why they matter. Include a concrete example (a calculation, a code snippet, a worked scenario) when the section's intent calls for it.
+- 1-3 short paragraphs separated by blank lines, about 120-220 words; a worked example may run to 300.
+- You may use **bold** for key terms, \`code\` for code or symbols, and lines starting with "- " for bullet lists. No headings and no section title.
+- Assume the learner knows the earlier stages of the roadmap and nothing from later ones.
+- Write in the same language as the plan.`;
+
+export function sectionPrompt(req: LessonRequest & { outline: LessonPlan; index: number }): string {
+  const section = req.outline.sections[req.index];
+  return [
+    `Roadmap topic: ${req.topic}`,
+    `Block being taught: ${req.node.name} (${req.node.subtitle}). ${req.node.description} Phase: ${req.phase}.`,
+    `Lesson: ${req.outline.title}`,
+    `Summary: ${req.outline.summary}`,
+    `Plan:`,
+    ...req.outline.sections.map((s, i) => `${i + 1}. ${s.heading}: ${s.intent}`),
+    ``,
+    `Write section ${req.index + 1}, "${section.heading}": ${section.intent}`,
   ].join("\n");
 }
 

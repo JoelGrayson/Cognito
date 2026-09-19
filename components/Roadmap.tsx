@@ -47,6 +47,27 @@ function Arrow() {
   );
 }
 
+function ArrowRow() {
+  return (
+    <div className="arrow-row">
+      <Arrow />
+    </div>
+  );
+}
+
+/** A placeholder stage; `wide` adds the two supporting slots. */
+function SkeletonRow({ wide }: { wide: boolean }) {
+  return (
+    <div className="stage-row">
+      <div className="slot">{wide && <div className="skeleton" />}</div>
+      <div className="slot slot-core">
+        <div className="skeleton" />
+      </div>
+      <div className="slot">{wide && <div className="skeleton" />}</div>
+    </div>
+  );
+}
+
 interface RoadmapProps {
   map: MindMap;
   /** When given, blocks become buttons. */
@@ -55,36 +76,55 @@ interface RoadmapProps {
   selected?: NodeRef | null;
   /** Thumbnail-sized rendering for the lesson view's mini map. */
   compact?: boolean;
+  /** Placeholder rows to show after the stages while more are streaming in. */
+  pending?: number;
+  /** The map is still arriving: the last block may be half-written, so it stays inert. */
+  streaming?: boolean;
 }
 
-export function Roadmap({ map, onSelect, selected, compact }: RoadmapProps) {
+/** The block most recently added to a map, which is the one still being written while streaming. */
+function tailOf(map: MindMap): NodeRef | null {
+  const stage = map.stages.length - 1;
+  if (stage < 0) return null;
+  const supporting = map.stages[stage].supporting.length;
+  return supporting > 0
+    ? { stage, kind: "supporting", index: supporting - 1 }
+    : { stage, kind: "core", index: 0 };
+}
+
+export function Roadmap({ map, onSelect, selected, compact, pending = 0, streaming = false }: RoadmapProps) {
+  const tail = streaming ? tailOf(map) : null;
   const slot = (ref: NodeRef) => {
     const at = nodeAt(map, ref);
     if (!at) return null;
+    const clickable = onSelect && !sameRef(tail, ref);
     return (
       <Card
         node={at.node}
         phase={at.phase}
         selected={sameRef(selected, ref)}
-        onClick={onSelect ? () => onSelect(ref) : undefined}
+        onClick={clickable ? () => onSelect(ref) : undefined}
       />
     );
   };
+  const count = map.stages.length;
 
   return (
     <div className={compact ? "panel roadmap-compact p-2" : "panel px-6 py-10 sm:px-10 md:px-16"}>
       {map.stages.map((_, i) => (
         <Fragment key={i}>
-          {i > 0 && (
-            <div className="arrow-row">
-              <Arrow />
-            </div>
-          )}
+          {i > 0 && <ArrowRow />}
           <div className="stage-row">
             <div className="slot">{slot({ stage: i, kind: "supporting", index: 0 })}</div>
             <div className="slot slot-core">{slot({ stage: i, kind: "core", index: 0 })}</div>
             <div className="slot">{slot({ stage: i, kind: "supporting", index: 1 })}</div>
           </div>
+        </Fragment>
+      ))}
+      {Array.from({ length: pending }).map((_, j) => (
+        <Fragment key={`pending-${j}`}>
+          {count + j > 0 && <ArrowRow />}
+          <SkeletonRow wide={(count + j) % 3 !== 1} />
         </Fragment>
       ))}
     </div>
@@ -97,18 +137,8 @@ export function RoadmapSkeleton({ rows = 5 }: { rows?: number }) {
     <div className="panel px-6 py-10 sm:px-10 md:px-16" aria-busy="true" aria-label="Generating roadmap">
       {Array.from({ length: rows }).map((_, i) => (
         <Fragment key={i}>
-          {i > 0 && (
-            <div className="arrow-row">
-              <Arrow />
-            </div>
-          )}
-          <div className="stage-row">
-            <div className="slot">{i % 3 !== 1 && <div className="skeleton" />}</div>
-            <div className="slot slot-core">
-              <div className="skeleton" />
-            </div>
-            <div className="slot">{i % 3 !== 1 && <div className="skeleton" />}</div>
-          </div>
+          {i > 0 && <ArrowRow />}
+          <SkeletonRow wide={i % 3 !== 1} />
         </Fragment>
       ))}
     </div>

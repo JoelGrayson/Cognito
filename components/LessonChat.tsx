@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ensureOk, readNdjson } from "@/lib/ndjson";
 import type { ProviderId } from "@/lib/providers/types";
 import type { ChatMessage, Lesson } from "@/lib/schema";
 import { RichText } from "./RichText";
@@ -16,6 +17,8 @@ interface Props {
 interface Entry extends ChatMessage {
   /** A status line ("Lesson updated."), not part of the conversation. */
   note?: boolean;
+  /** Still being written. */
+  streaming?: boolean;
 }
 
 const SUGGESTIONS = ["Explain this more simply", "Add a worked example", "Why does this matter?"];
@@ -31,7 +34,7 @@ export function LessonChat({ topic, lesson, providerId, onLessonChange }: Props)
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages, sending]);
+  }, [messages]);
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -42,23 +45,47 @@ export function LessonChat({ topic, lesson, providerId, onLessonChange }: Props)
       .filter((m) => !m.note)
       .map((m) => ({ role: m.role, content: m.content }));
     const history = [...prior, userMessage].slice(-40);
-    setMessages((m) => [...m, { role: "user", content }]);
+    setMessages((m) => [...m, userMessage, { role: "assistant", content: "", streaming: true }]);
     setInput("");
     setSending(true);
     setError(null);
+    const patchLast = (patch: Partial<Entry>) =>
+      setMessages((m) => {
+        const copy = m.slice();
+        const i = copy.length - 1;
+        if (i >= 0) copy[i] = { ...copy[i], ...patch };
+        return copy;
+      });
     try {
       const res = await fetch("/api/lesson/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic, lesson, messages: history, provider: providerId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-      const additions: Entry[] = [{ role: "assistant", content: data.reply }];
-      if (data.lesson) additions.push({ role: "assistant", content: "Lesson updated.", note: true });
-      setMessages((m) => [...m, ...additions]);
-      if (data.lesson) onLessonChange(data.lesson);
+      await ensureOk(res);
+      let finished = false;
+      await readNdjson(res, (event) => {
+        if (event.type === "reply") {
+          patchLast({ content: String(event.reply) });
+        } else if (event.type === "done") {
+          finished = true;
+          patchLast({ content: String(event.reply), streaming: false });
+          if (event.lesson) {
+            setMessages((m) => [...m, { role: "assistant", content: "Lesson updated.", note: true }]);
+            onLessonChange(event.lesson as Lesson);
+          }
+        } else if (event.type === "error") {
+          throw new Error(String(event.error));
+        }
+      });
+      if (!finished) throw new Error("The tutor never finished.");
     } catch (err) {
+      // Drop an empty placeholder bubble; keep whatever partial text arrived.
+      setMessages((m) =>
+        m.filter((entry) => !(entry.streaming && !entry.content)).map((entry) =>
+          entry.streaming ? { ...entry, streaming: false } : entry,
+        ),
+      );
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setSending(false);
@@ -68,7 +95,7 @@ export function LessonChat({ topic, lesson, providerId, onLessonChange }: Props)
   return (
     <div className="chat-panel">
       <div ref={listRef} className="chat-messages">
-        {messages.length === 0 && !sending && (
+        {messages.length === 0 && (
           <div className="chat-empty">
             <p>Ask anything about this lesson, or tell me to change it.</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -85,18 +112,18 @@ export function LessonChat({ topic, lesson, providerId, onLessonChange }: Props)
             <p key={i} className="chat-note">
               {m.content}
             </p>
+          ) : m.streaming && !m.content ? (
+            <div key={i} className="chat-bubble assistant chat-typing" aria-label="Tutor is thinking">
+              <span />
+              <span />
+              <span />
+            </div>
           ) : (
             <div key={i} className={`chat-bubble ${m.role}`}>
               <RichText text={m.content} />
+              {m.streaming && <span className="stream-cursor" aria-hidden="true" />}
             </div>
           ),
-        )}
-        {sending && (
-          <div className="chat-bubble assistant chat-typing" aria-label="Tutor is thinking">
-            <span />
-            <span />
-            <span />
-          </div>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>

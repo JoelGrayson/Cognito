@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { LessonView, type LessonState } from "@/components/Lesson";
 import { ProviderSelect } from "@/components/ProviderSelect";
 import { Roadmap, RoadmapSkeleton } from "@/components/Roadmap";
+import { emptyDraft, type LessonDraft, type OutlineDraft } from "@/lib/drafts";
+import { ensureOk, readNdjson } from "@/lib/ndjson";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
-import type { Lesson, MindMap } from "@/lib/schema";
+import type { Lesson, MindMap, Resource, Video } from "@/lib/schema";
 
 interface Meta {
   provider: string;
@@ -33,6 +35,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modification, setModification] = useState("");
+  /** True while `map` is a partial roadmap still streaming in. */
+  const [mapDraft, setMapDraft] = useState(false);
 
   /** The block whose lesson is open. Null means the roadmap view. */
   const [selected, setSelected] = useState<NodeRef | null>(null);
@@ -42,6 +46,11 @@ export default function Home() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [providerId, setProviderId] = useState<ProviderId>("anthropic");
   const abortRef = useRef<AbortController | null>(null);
+  /** Mirrors `selected` for callbacks that must not re-create on every selection. */
+  const selectedRef = useRef<NodeRef | null>(null);
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
 
   // Find out which providers this server can actually use.
   useEffect(() => {
@@ -63,12 +72,14 @@ export default function Home() {
     };
   }, []);
 
-  const generate = useCallback(async (body: GenerateBody) => {
+  /** Generate or revise the roadmap, showing stages as they stream in. `fallback` is restored on failure. */
+  const generate = useCallback(async (body: GenerateBody, fallback: MindMap | null) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
     setError(null);
+    setMapDraft(false);
     try {
       await ensureAnonymousSession();
       if (controller.signal.aborted) return false;
@@ -78,13 +89,36 @@ export default function Home() {
         body: JSON.stringify(body),
         signal: controller.signal,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-      setMap(data.mindMap);
-      setMeta({ provider: data.provider, model: data.model, ms: data.ms });
+      await ensureOk(res);
+      let finished = false;
+      await readNdjson(res, (event) => {
+        if (controller.signal.aborted) return;
+        if (event.type === "partial") {
+          setMap(event.mindMap as MindMap);
+          setMapDraft(true);
+        } else if (event.type === "done") {
+          finished = true;
+          setMap(event.mindMap as MindMap);
+          setMapDraft(false);
+          setMeta({ provider: String(event.provider), model: String(event.model), ms: Number(event.ms) });
+        } else if (event.type === "error") {
+          throw new Error(String(event.error));
+        }
+      });
+      if (!finished) throw new Error("The roadmap never finished.");
       return true;
     } catch (err) {
       if (controller.signal.aborted) return false;
+      // A lesson may be open on a block that already streamed in. For a fresh map, keep what
+      // arrived. For a failed revision the old map comes back, so close the lesson instead of
+      // leaving it pointed at a block that may no longer exist.
+      if (fallback) {
+        setMap(fallback);
+        setSelected(null);
+      } else {
+        setMap((current) => (selectedRef.current && current?.stages.length ? current : null));
+      }
+      setMapDraft(false);
       setError(err instanceof Error ? err.message : "Something went wrong.");
       return false;
     } finally {
@@ -97,6 +131,11 @@ export default function Home() {
       const at = nodeAt(currentMap, ref);
       if (!at) return;
       const key = lessonKey(at.node);
+      let draft = emptyDraft(at.node);
+      const show = (next: LessonDraft) => {
+        draft = next;
+        setLessons((s) => ({ ...s, [key]: { status: "streaming", draft: next } }));
+      };
       setLessons((s) => ({ ...s, [key]: { status: "loading" } }));
       try {
         const res = await fetch("/api/lesson", {
@@ -110,12 +149,55 @@ export default function Home() {
             provider,
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-        setLessons((s) => ({ ...s, [key]: { status: "ready", lesson: data.lesson } }));
+        await ensureOk(res);
+        let finished = false;
+        await readNdjson(res, (event) => {
+          switch (event.type) {
+            case "outline": {
+              const o = event.outline as OutlineDraft;
+              show({
+                ...draft,
+                title: o.title || at.node.name,
+                summary: o.summary || at.node.description,
+                sections: o.sections.map((sec, i) => ({
+                  heading: sec.heading,
+                  body: draft.sections[i]?.body ?? "",
+                  done: draft.sections[i]?.done ?? false,
+                })),
+                keyTakeaways: o.keyTakeaways,
+              });
+              break;
+            }
+            case "section": {
+              const index = Number(event.index);
+              const sections = draft.sections.slice();
+              sections[index] = {
+                heading: sections[index]?.heading ?? "",
+                body: String(event.body),
+                done: Boolean(event.done),
+              };
+              show({ ...draft, sections });
+              break;
+            }
+            case "resources":
+              show({ ...draft, resources: event.resources as Resource[] });
+              break;
+            case "video":
+              show({ ...draft, video: event.video as Video });
+              break;
+            case "done":
+              finished = true;
+              setLessons((s) => ({ ...s, [key]: { status: "ready", lesson: event.lesson as Lesson } }));
+              break;
+            case "error":
+              throw new Error(String(event.error));
+          }
+        });
+        if (!finished) throw new Error("The lesson never finished.");
       } catch (err) {
         const message = err instanceof Error ? err.message : "Something went wrong.";
-        setLessons((s) => ({ ...s, [key]: { status: "error", message } }));
+        const partial = draft.sections.length > 0 ? draft : undefined;
+        setLessons((s) => ({ ...s, [key]: { status: "error", message, draft: partial } }));
       }
     },
     [],
@@ -130,7 +212,7 @@ export default function Home() {
     setModification("");
     setSelected(null);
     setLessons({});
-    void generate({ topic: trimmed, provider: providerId });
+    void generate({ topic: trimmed, provider: providerId }, null);
   }
 
   function onSubmitTopic(e: FormEvent) {
@@ -141,12 +223,15 @@ export default function Home() {
   async function onSubmitModification(e: FormEvent) {
     e.preventDefault();
     if (!query || !map || !modification.trim() || loading) return;
-    const ok = await generate({
-      topic: query,
-      provider: providerId,
-      current: map,
-      instruction: modification.trim(),
-    });
+    const ok = await generate(
+      {
+        topic: query,
+        provider: providerId,
+        current: map,
+        instruction: modification.trim(),
+      },
+      map,
+    );
     if (ok) setModification("");
   }
 
@@ -186,6 +271,7 @@ export default function Home() {
     setModification("");
     setSelected(null);
     setLessons({});
+    setMapDraft(false);
   }
 
   const providerLabel = providers.find((p) => p.id === meta?.provider)?.label ?? meta?.provider;
@@ -259,17 +345,21 @@ export default function Home() {
             onBack={closeLesson}
             onRetry={() => void loadLesson(selected, map, query, providerId)}
             onLessonChange={updateLesson}
+            mapStreaming={loading && mapDraft}
           />
         </div>
       ) : (
         <div className="mx-auto w-full max-w-4xl">
           <h1 className="mt-6 text-center text-4xl font-medium tracking-tight sm:text-5xl">
-            {map?.topic ?? query}
+            {map?.topic || query}
           </h1>
 
           <div className="mt-12">
             {map && !loading ? <Roadmap map={map} onSelect={openLesson} /> : null}
-            {map && loading ? (
+            {map && loading && mapDraft ? (
+              <Roadmap map={map} pending={Math.max(1, 5 - map.stages.length)} onSelect={openLesson} streaming />
+            ) : null}
+            {map && loading && !mapDraft ? (
               <div className="opacity-50 transition-opacity">
                 <Roadmap map={map} />
               </div>
@@ -289,10 +379,10 @@ export default function Home() {
             ) : null}
           </div>
 
-          {map && (
+          {map && !mapDraft && (
             <p className="mt-4 text-center text-sm text-neutral-500">
               {map.summary}
-              {meta && (
+              {meta && !loading && (
                 <span className="text-neutral-400">
                   {" "}· {providerLabel} · {meta.model} · {(meta.ms / 1000).toFixed(1)}s
                 </span>
@@ -309,7 +399,6 @@ export default function Home() {
               placeholder="Enter modifications"
               value={modification}
               onChange={(e) => setModification(e.target.value)}
-              disabled={!map}
               autoComplete="off"
               aria-label="Enter modifications"
             />
