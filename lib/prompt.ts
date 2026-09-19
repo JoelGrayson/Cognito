@@ -28,7 +28,13 @@ Guidelines:
 - startingPoint: be honest about what the learner must already be able to do. If the roadmap starts from zero, give the one item "Nothing: this starts from zero".
 - Be strict about "requires". Test each one: could a motivated learner follow this stage if they skipped the stage above and got a one-paragraph recap? If yes, it is not "requires". Coming later in time or in a textbook is not a prerequisite: in history, a later period is "recommended" after an earlier one, not "requires". Good "requires" links are rare, like needing algebra before calculus or needing to know what a variable is before loops. Use "requires" at most three times in the whole map; when in doubt, use "recommended".
 - Look for groups: stages that build on the same foundation but not on each other (the army, religion and daily life of one era; several independent tools or techniques; separate applications) belong in one "any-order" group.
-- Aim for 4-7 stages. Most stages have 2 supporting nodes; use fewer when nothing genuinely belongs alongside.
+- Size the map to the topic, and put only the topic itself in it:
+  - A single concept, law, formula or construct (Ohm's law, the Pythagorean theorem, a for loop) is ONE stage with ONE block and no supporting blocks.
+  - A narrow skill gets 2-4 stages; a broad field gets 5-8.
+  - Background the learner needs first goes in startingPoint, not in the map. Topics that come after go in nextSteps, not in the map.
+  - Add supporting blocks only when something genuinely belongs alongside.
+- outcome lists only what this map teaches.
+- nextSteps: 2-4 topics to learn next, each a short name the learner could type as a new topic (e.g. "Power equations" after Ohm's law), with a one-line reason.
 - Node names are 1-4 words. Subtitles list the key concepts in 2-5 words, comma-separated (e.g. "P, Q, S, power factor"). Descriptions are one plain sentence.
 - Match the scope of the request. A narrow topic gets a narrow, deep roadmap; a broad field gets a broad one.
 - Be specific to the topic. Avoid generic filler like "Practice" or "Advanced topics" unless it names what to practice.
@@ -36,9 +42,13 @@ Guidelines:
 
 export function userPrompt(req: GenerateRequest): string {
   const topic = req.topic.trim();
+  const details = req.details?.trim()
+    ? [``, `About me and what I want (use this to set scope, depth and startingPoint): ${req.details.trim()}`]
+    : [];
   if (req.current && req.instruction?.trim()) {
     return [
       `I want to learn: ${topic}`,
+      ...details,
       ``,
       `Here is the current roadmap as JSON:`,
       JSON.stringify(req.current),
@@ -48,7 +58,12 @@ export function userPrompt(req: GenerateRequest): string {
       `Keep everything else as it is unless the change requires adjusting it. Return the full updated roadmap.`,
     ].join("\n");
   }
-  return `I want to learn: ${topic}`;
+  return [
+    `I want to learn: ${topic}`,
+    ...details,
+    ``,
+    `Size the map to exactly this topic. A single concept, law, formula or construct is 1 stage with 1 block and no supporting blocks. A narrow skill is 2-4 stages. A broad field is at most 8 stages. Background belongs in startingPoint and follow-on topics in nextSteps, not in the map.`,
+  ].join("\n");
 }
 
 /* ---------- Lesson: plan first, then sections in parallel ---------- */

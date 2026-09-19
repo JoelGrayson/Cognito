@@ -99,6 +99,12 @@ export function partialMindMap(raw: unknown): MindMap | null {
     startingPoint: strings(raw.startingPoint),
     outcome: strings(raw.outcome),
     stages,
+    nextSteps: Array.isArray(raw.nextSteps)
+      ? raw.nextSteps
+          .filter(isRecord)
+          .filter((n) => typeof n.topic === "string" && n.topic)
+          .map((n) => ({ topic: n.topic as string, why: str(n.why) }))
+      : [],
   };
 }
 

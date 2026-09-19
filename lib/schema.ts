@@ -43,8 +43,18 @@ export const MindMapSchema = z.object({
     ),
   stages: z
     .array(StageSchema)
-    .describe("4-7 stages in learning order, top to bottom"),
+    .describe("Stages in learning order, top to bottom: 1 for a single concept, up to about 8 for a broad field"),
+  nextSteps: z
+    .array(
+      z.object({
+        topic: z.string().describe("A short topic name the learner could type next, e.g. 'Power equations'"),
+        why: z.string().describe("One short line on what it adds"),
+      }),
+    )
+    .describe("2-4 topics to learn after this roadmap; none of them are blocks in this map"),
 });
+
+export type NextStep = z.infer<typeof MindMapSchema>["nextSteps"][number];
 
 export type Phase = z.infer<typeof PhaseSchema>;
 export type MapNode = z.infer<typeof NodeSchema>;
@@ -65,6 +75,9 @@ export const MindMapInputSchema = z.preprocess((value) => {
     // Added later: the intro lists at the top of the map. Early versions were one sentence.
     startingPoint: asList((value as { startingPoint?: unknown }).startingPoint),
     outcome: asList((value as { outcome?: unknown }).outcome),
+    nextSteps: Array.isArray((value as { nextSteps?: unknown }).nextSteps)
+      ? (value as { nextSteps: unknown[] }).nextSteps
+      : [],
     stages: stages.map((s) =>
       typeof s === "object" && s !== null && !("link" in s) ? { ...s, link: "recommended" } : s,
     ),
@@ -80,6 +93,8 @@ export function asList(value: unknown): string[] {
 /** What the client sends to generate or revise a map. */
 export interface GenerateRequest {
   topic: string;
+  /** What the learner added about their goal and what they already know. */
+  details?: string;
   /** When revising: the map as it currently stands. */
   current?: MindMap;
   /** When revising: what to change. */
