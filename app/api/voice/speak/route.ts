@@ -64,7 +64,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Utterance too long; keep it under 600 chars." }, { status: 400 });
   }
 
-  const voice = typeof voiceId === "string" && voiceId ? voiceId : DEFAULT_VOICE;
+  // Allowlist, not passthrough: any id reaching ElevenLabs bills the server
+  // account, so an unknown one must not be forwarded to probe paid voices.
+  const allowed = new Set<string>(Object.values(VOICES));
+  const voice =
+    typeof voiceId === "string" && allowed.has(voiceId) ? voiceId : DEFAULT_VOICE;
   const started = Date.now();
 
   let res: Response;

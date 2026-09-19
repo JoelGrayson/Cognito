@@ -28,7 +28,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Clip too long." }, { status: 413 });
   }
 
-  const contentType = request.headers.get("content-type") ?? "audio/webm";
+  // The caller controls this header and the bytes behind it; forwarding an
+  // arbitrary type would send non-audio to the vendor on our credential.
+  const AUDIO_TYPES = ["audio/webm", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav"];
+  const declared = (request.headers.get("content-type") ?? "").split(";")[0].trim();
+  const contentType = AUDIO_TYPES.includes(declared) ? declared : "audio/webm";
   const form = new FormData();
   form.append("model_id", "scribe_v1");
   form.append("file", new Blob([audio], { type: contentType }), "clip.webm");
