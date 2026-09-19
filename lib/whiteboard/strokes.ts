@@ -69,6 +69,12 @@ export interface EndpointConfig {
    *  lines -- observed live as "x > -3" committing as 1 stroke then "1>-3".
    *  One stroke is not a line. Wait until there's a line to compare against. */
   minLineWidthForBreak: number;
+  /** An idle commit needs at least this many strokes. A single stroke is never a
+   *  finished step -- it is the first diagonal of an "x" or the stem of a "4", and
+   *  committing it produces a garbage reading AND strands the rest of the character
+   *  on the next line. Line-break commits are exempt: if the learner has moved on,
+   *  whatever they wrote is what they wrote. */
+  minStrokesForIdleCommit: number;
   /** Fallback only, for the final line: commit after the pen is idle this long.
    *  Tuned DOWN from a cautious 2500ms because the commit is provisional -- firing
    *  early costs one wasted read and a briefly-wrong line in the panel, both of which
@@ -82,6 +88,7 @@ export const DEFAULT_ENDPOINT_CONFIG: EndpointConfig = {
   carriageReturnRatio: 0.35,
   minLineHeight: 12,
   minLineWidthForBreak: 40,
+  minStrokesForIdleCommit: 2,
   finalLineIdleMs: 1200,
 };
 
@@ -198,7 +205,7 @@ export function recordStrokes(
   const armIdle = () => {
     cancelIdle();
     idleTimer = setTimeout(() => {
-      if (line.length === 0) return;
+      if (line.length < cfg.minStrokesForIdleCommit) return;
       idleFiredFor = lineId;
       onCommit({ strokes: [...line], lineId, reason: "idle" });
     }, cfg.finalLineIdleMs);

@@ -77,8 +77,10 @@ export async function POST(request: Request) {
   });
 
   // Logged so accuracy can be reviewed from the terminal, not just the browser.
+  const dbg = (body as { debug?: { lineId?: number; reason?: string } })?.debug;
   console.log(
-    `[spike] ${ms}ms  strokes=${strokes.x.length}  conf=${data?.confidence?.toFixed?.(2) ?? "?"}  read="${data?.latex_styled ?? data?.text ?? ""}"`,
+    `[wb] ${ms}ms strokes=${strokes.x.length} conf=${data?.confidence?.toFixed?.(2) ?? "?"}` +
+      ` line=${dbg?.lineId ?? "?"} via=${dbg?.reason ?? "?"} read="${data?.latex_styled ?? data?.text ?? ""}"`,
   );
 
   return NextResponse.json({
