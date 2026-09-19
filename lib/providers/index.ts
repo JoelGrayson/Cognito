@@ -51,7 +51,8 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
   local: localProvider,
 };
 
-export const PROVIDER_ORDER: ProviderId[] = ["anthropic", "openai", "chatgpt", "xai", "local"];
+/** Dropdown order. The first configured one is the default. */
+export const PROVIDER_ORDER: ProviderId[] = ["openai", "chatgpt", "xai", "anthropic", "local"];
 
 export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && value in PROVIDERS;

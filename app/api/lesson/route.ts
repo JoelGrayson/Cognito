@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { apiHandler, providerFrom, readJson } from "@/lib/api";
 import { writeLesson } from "@/lib/lesson";
-import { MindMapSchema, NodeSchema, PhaseSchema } from "@/lib/schema";
+import { MindMapInputSchema, NodeSchema, PhaseSchema } from "@/lib/schema";
 import { ndjson } from "@/lib/stream";
 import { getAuth } from "@/lib/auth";
 
@@ -11,7 +11,7 @@ const BodySchema = z.object({
   topic: z.string().trim().min(1).max(500),
   node: NodeSchema,
   phase: PhaseSchema,
-  map: MindMapSchema,
+  map: MindMapInputSchema,
   provider: z.string(),
   model: z.string().optional(),
 });

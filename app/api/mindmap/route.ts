@@ -4,7 +4,7 @@ import { apiHandler, BadRequest, providerFrom, readJson } from "@/lib/api";
 import { partialMindMap } from "@/lib/drafts";
 import { parsePartialJson } from "@/lib/partial-json";
 import { SYSTEM_PROMPT, userPrompt } from "@/lib/prompt";
-import { MindMapSchema, type GenerateRequest } from "@/lib/schema";
+import { MindMapInputSchema, MindMapSchema, type GenerateRequest } from "@/lib/schema";
 import { ndjson, throttle } from "@/lib/stream";
 import { getAuth } from "@/lib/auth";
 
@@ -42,7 +42,7 @@ export const POST = apiHandler(async (request) => {
     const instruction = body.instruction?.trim();
     if (!instruction) throw new BadRequest("Tell me what to change.");
     if (instruction.length > 2000) throw new BadRequest("Keep the modification under 2000 characters.");
-    const current = MindMapSchema.safeParse(body.current);
+    const current = MindMapInputSchema.safeParse(body.current);
     if (!current.success) throw new BadRequest("The current roadmap is malformed.");
     req.current = current.data;
     req.instruction = instruction;

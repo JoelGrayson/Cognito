@@ -10,6 +10,9 @@ export const NodeSchema = z.object({
   description: z.string().describe("One sentence on what this covers and why"),
 });
 
+/** How a stage relates to the stage (or any-order group) directly above it. */
+export const StageLinkSchema = z.enum(["requires", "any-order", "recommended"]);
+
 export const StageSchema = z.object({
   phase: PhaseSchema.describe(
     "prerequisite = background needed before the topic itself; core = the topic proper; advanced = deeper or applied material that builds on the core",
@@ -18,6 +21,9 @@ export const StageSchema = z.object({
   supporting: z
     .array(NodeSchema)
     .describe("0-2 things learned alongside the core node at this stage"),
+  link: StageLinkSchema.describe(
+    "How this stage relates to the stage directly above it. requires = it cannot be understood without that stage (or that whole any-order group): a true prerequisite; any-order = it and the stage above can be learned in either order, so they share an any-order group; recommended = no hard dependency, the order above is just a sensible default. Use recommended for the first stage.",
+  ),
 });
 
 export const MindMapSchema = z.object({
@@ -25,6 +31,16 @@ export const MindMapSchema = z.object({
   summary: z
     .string()
     .describe("One sentence on what the learner will be able to do"),
+  startingPoint: z
+    .array(z.string())
+    .describe(
+      "What you need to know before starting: 1-3 specific, checkable skills, e.g. 'Write a JavaScript function that loops over an array'. One item 'Nothing: this starts from zero' if none",
+    ),
+  outcome: z
+    .array(z.string())
+    .describe(
+      "What you will know at the end: 3-4 specific, testable tasks the learner will be able to do, each naming a concrete thing to build, calculate, write or explain",
+    ),
   stages: z
     .array(StageSchema)
     .describe("4-7 stages in learning order, top to bottom"),
@@ -34,6 +50,32 @@ export type Phase = z.infer<typeof PhaseSchema>;
 export type MapNode = z.infer<typeof NodeSchema>;
 export type Stage = z.infer<typeof StageSchema>;
 export type MindMap = z.infer<typeof MindMapSchema>;
+export type StageLink = z.infer<typeof StageLinkSchema>;
+
+/**
+ * A roadmap sent by the browser. Roadmaps saved before stage links existed have
+ * none; they are read as a plain recommended order.
+ */
+export const MindMapInputSchema = z.preprocess((value) => {
+  if (typeof value !== "object" || value === null) return value;
+  const stages = (value as { stages?: unknown }).stages;
+  if (!Array.isArray(stages)) return value;
+  return {
+    ...value,
+    // Added later: the intro lists at the top of the map. Early versions were one sentence.
+    startingPoint: asList((value as { startingPoint?: unknown }).startingPoint),
+    outcome: asList((value as { outcome?: unknown }).outcome),
+    stages: stages.map((s) =>
+      typeof s === "object" && s !== null && !("link" in s) ? { ...s, link: "recommended" } : s,
+    ),
+  };
+}, MindMapSchema);
+
+/** A list field that older roadmaps stored as one string, or not at all. */
+export function asList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+  return typeof value === "string" && value.trim() ? [value] : [];
+}
 
 /** What the client sends to generate or revise a map. */
 export interface GenerateRequest {
@@ -61,7 +103,7 @@ export const LessonSectionSchema = z.object({
   body: z
     .string()
     .describe(
-      "1-3 paragraphs of teaching text separated by blank lines. May use **bold** for key terms, `code` for code or symbols, and lines starting with '- ' for bullets. No headings.",
+      "Fact-dense teaching text: mostly '- ' bullets, one new fact each, with a short paragraph only where reasoning needs prose. May use **bold** for key terms, `code` for short code or symbols, and a fenced ``` block on its own lines for any multi-line code. No headings, no filler.",
     ),
 });
 
@@ -72,7 +114,7 @@ export const LessonContentSchema = z.object({
   tldr: z
     .string()
     .describe(
-      "TL;DR: 2-3 plain sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember",
+      "TL;DR: 2-3 dense sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember; no filler",
     ),
   sections: z
     .array(LessonSectionSchema)
@@ -91,7 +133,7 @@ export const LessonPlanSchema = z.object({
   tldr: z
     .string()
     .describe(
-      "TL;DR: 2-3 plain sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember",
+      "TL;DR: 2-3 dense sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember; no filler",
     ),
   sections: z
     .array(
@@ -121,7 +163,7 @@ export const SectionBodySchema = z.object({
   body: z
     .string()
     .describe(
-      "1-3 paragraphs separated by blank lines. May use **bold** for key terms, `code` for code or symbols, and lines starting with '- ' for bullets. No headings.",
+      "Fact-dense teaching text: mostly '- ' bullets, one new fact each, with a short paragraph only where reasoning needs prose. May use **bold** for key terms, `code` for short code or symbols, and a fenced ``` block on its own lines for any multi-line code. No headings, no filler.",
     ),
 });
 
@@ -192,7 +234,9 @@ export const ChatMessageSchema = z.object({
 export const TutorReplySchema = z.object({
   reply: z
     .string()
-    .describe("Answer to the learner in short paragraphs. May use **bold**, `code` and '- ' bullets."),
+    .describe(
+      "Answer to the learner in short paragraphs. May use **bold**, `code`, '- ' bullets and fenced ``` blocks for multi-line code.",
+    ),
   updatedLesson: LessonContentSchema.nullable().describe(
     "The complete revised lesson if the learner asked to change the lesson content; otherwise null",
   ),
@@ -207,3 +251,91 @@ export function toJsonSchema(schema: z.ZodType): Record<string, unknown> {
   delete out.$schema;
   return out;
 }
+
+/* ---------- Video lesson: whiteboard actions and tutor turns ---------- */
+
+export const BoardColorSchema = z
+  .enum(["ink", "blue", "red", "green", "orange", "purple"])
+  .describe("ink for most things; other colours to tell quantities apart, e.g. red for forces");
+
+const id = z.string().describe("Short unique id, e.g. 'f1', so it can be erased later");
+const num = z.number();
+
+/**
+ * One change to the whiteboard. A plain union (anyOf in JSON Schema), because
+ * OpenAI's strict mode rejects the oneOf a discriminated union would produce.
+ */
+export const BoardActionSchema = z.union([
+  z.object({
+    type: z.literal("text"),
+    id,
+    x: num.describe("Left edge"),
+    y: num.describe("Top edge"),
+    text: z.string().describe("A label, equation or short note. Unicode math is fine: v², √, Δ, θ, ω, →, ≈"),
+    size: z.enum(["small", "medium", "large"]),
+    color: BoardColorSchema,
+  }),
+  z.object({
+    type: z.literal("line"),
+    id,
+    x1: num,
+    y1: num,
+    x2: num,
+    y2: num,
+    arrow: z.boolean().describe("Arrowhead at (x2, y2), for vectors and forces"),
+    dashed: z.boolean(),
+    color: BoardColorSchema,
+  }),
+  z.object({ type: z.literal("rect"), id, x: num, y: num, w: num, h: num, fill: z.boolean(), color: BoardColorSchema }),
+  z.object({ type: z.literal("circle"), id, cx: num, cy: num, r: num, fill: z.boolean(), color: BoardColorSchema }),
+  z.object({
+    type: z.literal("path"),
+    id,
+    points: z.array(num).describe("Flat list x1, y1, x2, y2, ... of at least 2 points; use many points for smooth curves"),
+    closed: z.boolean(),
+    color: BoardColorSchema,
+  }),
+  z.object({
+    type: z.literal("plot"),
+    id,
+    x: num,
+    y: num,
+    w: num,
+    h: num,
+    fn: z
+      .string()
+      .describe("y as a function of x, e.g. 'sin(x)', '0.5*9.8*x^2', 'exp(-x)*cos(4*x)'. Supports + - * / ^, sin cos tan sqrt exp log abs, pi and e"),
+    xMin: num,
+    xMax: num,
+    yMin: num,
+    yMax: num,
+    xLabel: z.string(),
+    yLabel: z.string(),
+    color: BoardColorSchema,
+  }),
+  z.object({
+    type: z.literal("image"),
+    id,
+    x: num,
+    y: num,
+    w: num,
+    h: num,
+    query: z.string().describe("Search for a real photo or standard diagram on Wikimedia Commons, e.g. 'inclined plane free body diagram'"),
+  }),
+  z.object({ type: z.literal("erase"), id: z.string().describe("id of an element to remove") }),
+  z.object({ type: z.literal("clear") }),
+]);
+
+export const TutorTurnSchema = z.object({
+  say: z
+    .string()
+    .describe("What you say aloud this turn: 1-3 short spoken sentences, about 60 words at most. Plain speech, no markdown"),
+  actions: z.array(BoardActionSchema).describe("Whiteboard changes to make while you speak, in drawing order; empty if none"),
+  next: z
+    .enum(["answer", "draw", "continue", "end"])
+    .describe("answer = wait for the learner to reply; draw = wait for the learner to draw on the board; continue = keep teaching without waiting; end = the lesson is finished"),
+});
+
+export type BoardColor = z.infer<typeof BoardColorSchema>;
+export type BoardAction = z.infer<typeof BoardActionSchema>;
+export type TutorTurn = z.infer<typeof TutorTurnSchema>;
