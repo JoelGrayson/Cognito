@@ -5,6 +5,7 @@ import { ProviderSelect } from "@/components/ProviderSelect";
 import { Roadmap, RoadmapSkeleton } from "@/components/Roadmap";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import type { MindMap } from "@/lib/schema";
+import { ensureAnonymousSession } from "@/lib/auth-client";
 
 interface Meta {
   provider: string;
@@ -62,6 +63,8 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
+      await ensureAnonymousSession();
+      if (controller.signal.aborted) return false;
       const res = await fetch("/api/mindmap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

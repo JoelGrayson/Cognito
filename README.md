@@ -19,6 +19,35 @@ review the generated SQL in `drizzle/`, then run `npm run db:migrate`.
 See [the database guide](db/README.md) for the schema, connection options,
 migration workflow, and remaining application integration work.
 
+## Authentication
+
+Better Auth uses the existing Drizzle tables with its anonymous plugin. Starting
+a topic creates a guest session if one does not already exist; subsequent
+requests reuse the session cookie. `/api/mindmap` requires a valid session.
+
+Set these server-only variables in `.env.local`:
+
+```dotenv
+BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_SECRET=replace-with-a-random-secret
+```
+
+Generate the secret with `openssl rand -base64 32`. For deployment, set
+`BETTER_AUTH_URL` to the actual HTTPS origin and keep the secret stable across
+instances. Local values have been configured for this workspace. Restart the
+dev server after changing environment variables.
+
+- Server: `getAuth()` from `@/lib/auth`; read a session with
+  `getAuth().api.getSession({ headers: request.headers })` in a route handler.
+  Always derive ownership from `session.user.id`.
+- Client: `authClient` from `@/lib/auth-client` exposes `useSession()`,
+  `signIn.anonymous()`, and `signOut()`. `ensureAnonymousSession()` reuses an
+  existing session and coalesces simultaneous sign-in attempts in a tab.
+- Auth endpoints are mounted at `/api/auth/[...all]` using the Node.js runtime.
+- Account linking transfers plans before deleting the guest identity. Email
+  and OAuth sign-in are not enabled yet. Signing out of a guest account does
+  not provide a way to recover it without a linked authentication method.
+
 ## Swapping the AI provider
 
 The model dropdown lets you pick who generates the roadmap. A provider shows up as available once its credentials are in `.env.local` (or, for local, once the server is reachable).

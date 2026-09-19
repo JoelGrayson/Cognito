@@ -44,19 +44,20 @@ Use the Node.js runtime. Never import the database module into client components
 
 Auth IDs are text, not UUIDs. Better Auth owns their generation. The four auth
 tables use its standard fields plus the anonymous plugin's `isAnonymous` field.
-These tables prepare for the Drizzle adapter; installing/configuring Better Auth
-and its routes is separate work. Use the exported `user`, `session`, `account`,
-and `verification` tables when configuring that adapter.
+Better Auth is configured in `lib/auth.ts` with the Drizzle adapter and anonymous
+plugin. `/api/auth/[...all]` serves its endpoints; `lib/auth-client.ts` provides
+the React client. The existing learning flow creates a session on demand, and
+the generation endpoint verifies the session before calling an AI provider.
 
 Every timestamp uses `timestamptz`. Creation timestamps default in Postgres;
 `updatedAt` also updates automatically on Drizzle writes. Raw SQL writers must
 set `updated_at` themselves. Durations inside JSON are minutes.
 
 Owner and plan foreign keys cascade. Before Better Auth deletes an anonymous
-user during account linking, a future `migrateUserData` transaction must transfer
-their plans and onboarding session to the destination user. If both users have
-an onboarding row, that function must resolve the conflict before deleting the
-old identity. Plan-keyed progress and content then follow without changes.
+user during account linking, `migrateUserData` transfers their plans and
+onboarding session in a transaction. If both users have an onboarding row, the
+destination's existing workshop wins. Plan-keyed progress and content follow
+without changes. Account upgrade providers and UI are not yet enabled.
 
 The graph stays JSONB, as specified. `node_id` is a logical reference into that
 graph, not a SQL foreign key. Saved nodes must never be hard-deleted or have their

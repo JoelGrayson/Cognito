@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { PROVIDERS, ProviderError, isProviderId } from "@/lib/providers";
 import { MindMapSchema, type GenerateRequest } from "@/lib/schema";
+import { getAuth } from "@/lib/auth";
 
 // Roadmap generation can take a while on reasoning models.
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
+  const session = await getAuth().api.getSession({ headers: request.headers });
+  if (!session) {
+    return NextResponse.json({ error: "Your session has expired. Please try again." }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();
