@@ -271,3 +271,66 @@ export function callPrompt(req: {
     .filter((line) => line !== "")
     .join("\n");
 }
+
+/* ---------- Code exercises ---------- */
+
+export const EXERCISE_SYSTEM_PROMPT = `You write one hands-on coding exercise that practises exactly one lesson in a learning roadmap. The learner solves it in a code editor; JavaScript, TypeScript and Python run in their browser, and tests are checked automatically.
+
+Rules:
+- Practise the lesson's core idea directly, at the depth the lesson teaches. For a non-programming lesson (physics, finance, statistics), write a small Python computation of what the lesson teaches, e.g. a function returning the acceleration on an incline.
+- Use the language the lesson is about. Otherwise use Python.
+- The task names the exact functions or variables to write, their inputs and their expected outputs, so the tests can call them.
+- Starter code runs as is but leaves the core logic as TODOs. Keep the learner's work to 5-20 lines.
+- Tests are boolean expressions evaluated after the learner's code runs, in the same language, e.g. add(2, 3) == 5 in Python or add(2, 3) === 5 in JavaScript. Compare floats with a tolerance, e.g. abs(f(1) - 2.5) < 1e-9. No statements, prints or asserts.
+- The solution must pass every test. Double-check each expected value.
+- Python runs in Pyodide: the standard library, numpy and pandas are available; no network or files. JavaScript and TypeScript run in a browser worker: no DOM, no Node APIs, no npm packages.
+- Be fact-dense: no filler in the task.`;
+
+export function exercisePrompt(req: { topic: string; lesson: LessonContent }): string {
+  return [
+    `Roadmap topic: ${req.topic}`,
+    `Lesson: ${req.lesson.title}. ${req.lesson.summary}`,
+    req.lesson.tldr ? `TL;DR: ${req.lesson.tldr}` : "",
+    `Lesson content:`,
+    ...req.lesson.sections.map((s) => `## ${s.heading}\n${s.body.slice(0, 1200)}`),
+    ``,
+    `Write the exercise.`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+export const CODE_REVIEW_SYSTEM_PROMPT = `You review a learner's answer to a coding exercise. You see the task, their code, and, when the language can run in the browser, what running it printed and which tests passed. For languages that did not run, trace the code yourself against the tests.
+
+- verdict: correct if it solves the task (failing only on something the task never asked for is still correct); almost if one small fix remains; incorrect otherwise.
+- feedback: specific and fact-dense, citing lines or values. Mention one improvement to style or idiom only if it matters.
+- hint: the single next step toward a fix, without writing the solution for them.`;
+
+export function codeReviewPrompt(req: {
+  exercise: { title: string; language: string; task: string; tests: { name: string; expression: string }[] };
+  code: string;
+  run: { output: string[]; error: string | null; results: { name: string; pass: boolean; error?: string }[] } | null;
+}): string {
+  const ran = req.run
+    ? [
+        `Output:`,
+        req.run.output.slice(-40).join("\n") || "(nothing printed)",
+        req.run.error ? `Error: ${req.run.error}` : "",
+        `Tests:`,
+        ...req.run.results.map((r) => `- ${r.pass ? "PASS" : "FAIL"} ${r.name}${r.error ? ` (${r.error})` : ""}`),
+      ]
+    : [`(This language does not run in the browser; trace the code yourself.)`, `Tests to check against:`, ...req.exercise.tests.map((t) => `- ${t.name}: ${t.expression}`)];
+  return [
+    `Exercise: ${req.exercise.title} (${req.exercise.language})`,
+    req.exercise.task,
+    ``,
+    `The learner's code:`,
+    "```" + req.exercise.language,
+    req.code.slice(0, 8000),
+    "```",
+    ``,
+    ...ran,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
