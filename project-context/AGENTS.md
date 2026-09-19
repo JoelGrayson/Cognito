@@ -6,7 +6,7 @@ Project context for AI coding agents and teammates. Keep this file short; detail
 
 (Project name TBD) is an AI-powered self-learning platform for the HackMIT education track. Self-learners fail because they don't know what to learn, in what order, or how long it takes, and they can't tell whether they actually understood it. We generate a personalized, editable roadmap (a node/edge graph in the style of roadmap.sh), guide the learner through it, and later add spaced repetition and an avatar "teach-back" to verify understanding.
 
-**Current phase: Phase 0 (no database).** Onboarding is built against in-memory repositories and a stubbed session while teammates finalize database decisions. See `docs/kickoff-plan.md`.
+**Current phase: Phase 1 transition.** `REPO_IMPL=memory|drizzle` selects storage; `drizzle` uses `DATABASE_URL` (Docker Postgres via `docker compose up -d --wait`, then `pnpm db:migrate`). `lib/session.ts` now uses Better Auth anonymous sessions. See `docs/kickoff-plan.md`.
 
 ## Stack
 

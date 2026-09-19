@@ -23,7 +23,7 @@ const eslintConfig = defineConfig([
         patterns: [
           { group: ["@/db", "@/db/*", "**/db", "**/db/*"], message: "Phase 0: persist through lib/repo." },
           { group: ["drizzle-orm", "drizzle-orm/*", "better-auth", "better-auth/*", "@supabase/*"], message: "Phase 0: no database or auth packages." },
-          { group: ["@/lib/auth", "@/lib/auth-client"], message: "Phase 0: identity comes from lib/session." },
+          { group: ["@/lib/auth"], message: "Server identity comes from lib/session; lib/auth-client is for client components." },
         ],
       }],
     },
@@ -35,6 +35,8 @@ const eslintConfig = defineConfig([
       "lib/auth.ts", "lib/auth-client.ts", "lib/user-data.ts", "app/api/auth/**",
       "app/legacy/**", "app/api/mindmap/**", "app/api/lesson/**", "app/api/quiz/**",
       "lib/chatgpt/**", "components/ChatGPTConnect.tsx",
+      // Persistence and identity boundary: the only Phase-0 modules allowed near db/auth.
+      "lib/repo/**", "lib/session.ts",
     ],
     rules: { "no-restricted-imports": "off" },
   },

@@ -6,6 +6,12 @@ export function jsonError(errors: string[], status: number): Response {
 }
 
 export function serverError(err: unknown): Response {
+  // Errors may carry an HTTP status (e.g. UnauthorizedError from lib/session).
+  // Duck-typed so tests that partially mock lib/session cannot break this check.
+  const status = (err as { status?: unknown } | null)?.status;
+  if (typeof status === "number" && status >= 400 && status < 600) {
+    return jsonError([err instanceof Error ? err.message : "Request failed."], status);
+  }
   console.error("[api]", err instanceof Error ? err.message : err);
   return jsonError(["Something went wrong. Please try again."], 500);
 }
