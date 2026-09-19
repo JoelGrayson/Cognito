@@ -39,3 +39,86 @@ export function findRef(map: MindMap, key: string): NodeRef | null {
   }
   return null;
 }
+
+/* ---------- Editing a map by hand ---------- */
+
+function withStages(map: MindMap, stages: MindMap["stages"]): MindMap {
+  return { ...map, stages };
+}
+
+/** Put a block in a slot, including an empty one, which is what a drag onto a gap needs. */
+function setNode(map: MindMap, ref: NodeRef, node: MapNode): MindMap {
+  return withStages(
+    map,
+    map.stages.map((stage, i) => {
+      if (i !== ref.stage) return stage;
+      if (ref.kind === "core") return { ...stage, core: node };
+      const supporting = stage.supporting.slice();
+      if (ref.index < supporting.length) supporting[ref.index] = node;
+      else supporting.push(node);
+      return { ...stage, supporting: supporting.slice(0, 2) };
+    }),
+  );
+}
+
+/** Replace one block's text. */
+export function updateNode(map: MindMap, ref: NodeRef, patch: Partial<MapNode>): MindMap {
+  return withStages(
+    map,
+    map.stages.map((stage, i) => {
+      if (i !== ref.stage) return stage;
+      if (ref.kind === "core") return { ...stage, core: { ...stage.core, ...patch } };
+      return {
+        ...stage,
+        supporting: stage.supporting.map((n, j) => (j === ref.index ? { ...n, ...patch } : n)),
+      };
+    }),
+  );
+}
+
+/**
+ * Remove one block. Removing a stage's core promotes its first supporting block;
+ * a stage with nothing left is dropped, and the stage below it loses any arrow to it.
+ */
+export function removeNode(map: MindMap, ref: NodeRef): MindMap {
+  const stages = map.stages.map((stage, i) => {
+    if (i !== ref.stage) return stage;
+    if (ref.kind === "supporting") {
+      return { ...stage, supporting: stage.supporting.filter((_, j) => j !== ref.index) };
+    }
+    const [promoted, ...rest] = stage.supporting;
+    return promoted ? { ...stage, core: promoted, supporting: rest } : null;
+  });
+  const kept: MindMap["stages"] = [];
+  stages.forEach((stage, i) => {
+    if (stage) {
+      kept.push(stage);
+      return;
+    }
+    // The stage is gone: whatever followed it can no longer require it.
+    const next = stages[i + 1];
+    if (next) stages[i + 1] = { ...next, link: next.link === "requires" ? "recommended" : next.link };
+  });
+  return withStages(map, kept);
+}
+
+/** Move a block to another slot, swapping with whatever is there. */
+export function moveNode(map: MindMap, from: NodeRef, to: NodeRef): MindMap {
+  if (sameRef(from, to)) return map;
+  const moving = nodeAt(map, from)?.node;
+  if (!moving) return map;
+  const target = nodeAt(map, to)?.node ?? null;
+  // A swap is two replacements. Moving into an empty slot puts the block there, then
+  // clears its old home, which may drop a stage that is now empty.
+  if (target) return setNode(setNode(map, to, moving), from, target);
+  return removeNode(setNode(map, to, moving), from);
+}
+
+/** Where a block can be dropped: every slot of every stage. */
+export function slotRefs(map: MindMap): NodeRef[] {
+  return map.stages.flatMap((_, stage) => [
+    { stage, kind: "supporting" as const, index: 0 },
+    { stage, kind: "core" as const, index: 0 },
+    { stage, kind: "supporting" as const, index: 1 },
+  ]);
+}

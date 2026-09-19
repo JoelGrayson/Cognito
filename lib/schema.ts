@@ -44,6 +44,11 @@ export const MindMapSchema = z.object({
     .describe(
       "What you will know at the end: 3-4 specific, testable tasks the learner will be able to do, each naming a concrete thing to build, calculate, write or explain",
     ),
+  order: z
+    .enum(["chronological", "difficulty", "parts", "mixed"])
+    .describe(
+      "What decides the order of the stages: chronological = by time, because later work answers earlier work; difficulty = easiest and most load-bearing first; parts = the parts of one system; mixed = none of these dominates",
+    ),
   plan: z
     .string()
     .describe(
@@ -80,7 +85,10 @@ export const MindMapInputSchema = z.preprocess((value) => {
   if (!Array.isArray(stages)) return value;
   return {
     ...value,
-    // Added later: the plan note and the intro lists at the top of the map.
+    // Added later: the order label, plan note and intro lists at the top of the map.
+    order: ["chronological", "difficulty", "parts"].includes((value as { order?: unknown }).order as string)
+      ? (value as { order: string }).order
+      : "mixed",
     plan: typeof (value as { plan?: unknown }).plan === "string" ? (value as { plan: string }).plan : "",
     startingPoint: asList((value as { startingPoint?: unknown }).startingPoint),
     outcome: asList((value as { outcome?: unknown }).outcome),
