@@ -39,7 +39,7 @@ const VOICE_OPTIONS = [
   ["iP95p4xoKVk53GoZ742B", "Chris"],
   ["onwK4e9ZLuTAKqWW03F9", "Daniel"],
 ] as const;
-import type { HintLevel } from "@/lib/whiteboard/policy";
+import { DEFAULT_CONFIG, type HintLevel } from "@/lib/whiteboard/policy";
 import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
 import {
   recordStrokes,
@@ -104,6 +104,8 @@ export default function SpikePage() {
     voiceOnRef.current = voiceOn;
   }, [voiceOn]);
   const [said, setSaid] = useState<string | null>(null);
+  /** Utterance for a line that was read provisionally and hasn't been spoken yet. */
+  const pendingSpeechRef = useRef<{ lineId: number; text: string } | null>(null);
   const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
   const pttRef = useRef<PushToTalk | null>(null);
   const [listening, setListening] = useState(false);
@@ -153,6 +155,19 @@ export default function SpikePage() {
   }, [rung]);
 
   const submitLine = useCallback(async ({ strokes, lineId, reason }: Commit) => {
+    // "finalized" carries no strokes: a line read on idle has now been settled by a
+    // line break. Nothing new to read - just say what we held back.
+    if (reason === "finalized") {
+      const pending = pendingSpeechRef.current;
+      if (pending?.lineId === lineId) {
+        pendingSpeechRef.current = null;
+        if (voiceOnRef.current) {
+          speakerRef.current?.say(pending.text, voiceIdRef.current).catch(() => {});
+        }
+      }
+      return;
+    }
+
     const payload = toStrokePayload(strokes);
     if (!payload) return;
 
@@ -200,13 +215,22 @@ export default function SpikePage() {
       // finishes the line correctly and the tutor still discusses the broken version.
       if (openRef.current?.lineId === lineId) {
         openRef.current = null;
+        pendingSpeechRef.current = null;
         annotatorRef.current?.clear();
         setSaid(null);
         historyRef.current = [];
       }
 
+      // policy.ts has always carried this rule; the page simply never asked. Below
+      // the recognition floor we assume WE misread rather than that they erred --
+      // accusing someone of a mistake they did not make costs more trust than
+      // missing one costs learning, and it is doubly true out loud.
+      const trusted =
+        typeof data.confidence !== "number" ||
+        data.confidence >= DEFAULT_CONFIG.recognitionConfidenceFloor;
+
       // Draw on the learner's work. Marks are tagged, so redrawing never touches ink.
-      if (verdict) {
+      if (verdict && trusted) {
         // Locate the offending symbol so the higher rungs can point AT it.
         const symbol = locateOperator(strokes, raw);
         const marks = marksFor(verdict, lineId, rungRef.current, symbol);
@@ -234,10 +258,17 @@ export default function SpikePage() {
           // Speak only once the line is FINAL. A mark is glanceable and self-corrects
           // on the next read; a spoken accusation cannot be taken back, and an idle
           // commit is explicitly provisional - the learner may still be writing.
-          if (voiceOnRef.current && reason === "line-break") {
-            speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
-              setError(e instanceof Error ? e.message : "Voice failed.");
-            });
+          if (reason === "line-break") {
+            if (voiceOnRef.current) {
+              speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
+                setError(e instanceof Error ? e.message : "Voice failed.");
+              });
+            }
+          } else {
+            // Provisional: hold the words until the line is settled, so a half-read
+            // line never becomes a spoken accusation - but the step is not silenced
+            // forever either, which is what happened before "finalized" existed.
+            pendingSpeechRef.current = { lineId, text: utterance };
           }
         }
       }
@@ -411,6 +442,7 @@ export default function SpikePage() {
     annotatorRef.current?.clear();
     speakerRef.current?.stop();
     setSaid(null);
+    pendingSpeechRef.current = null;
     setExplanations([]);
     openRef.current = null;
     historyRef.current = [];
