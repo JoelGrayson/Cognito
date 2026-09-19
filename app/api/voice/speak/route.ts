@@ -90,7 +90,9 @@ export async function POST(request: Request) {
             similarity_boost: 0.8,
             style: 0.15,
             use_speaker_boost: true,
-            speed: 0.98,
+            // A tutor interjecting mid-thought should sound brisk, not ponderous.
+            // 0.98 read as slow out loud; ElevenLabs allows up to 1.2.
+            speed: 1.12,
           },
         }),
       },
