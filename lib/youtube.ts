@@ -39,7 +39,7 @@ export async function searchVideos(query: string, limit = 6): Promise<VideoCandi
   return fromFirecrawl.length > 0 ? fromFirecrawl : viaResultsPage(q, limit);
 }
 
-/** Video ids from YouTube watch URLs in web search results. Lengths and view counts are unknown. */
+/** Video ids from YouTube watch URLs in web search results; lengths come from each watch page. */
 async function viaFirecrawl(q: string, limit: number): Promise<VideoCandidate[]> {
   const results = await searchWeb(q, { limit: limit * 2, includeDomains: ["youtube.com", "www.youtube.com"] });
   const found: VideoCandidate[] = [];
@@ -58,7 +58,24 @@ async function viaFirecrawl(q: string, limit: number): Promise<VideoCandidate[]>
     });
     if (found.length >= limit) break;
   }
+  await Promise.all(found.map(async (v) => (v.seconds = await watchPageLength(v.id))));
   return found;
+}
+
+/** The player config on a watch page carries "lengthSeconds"; null when the page cannot be read. */
+async function watchPageLength(id: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=en`, {
+      headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const seconds = Number(/"lengthSeconds":"(\d+)"/.exec(await res.text())?.[1]);
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+  } catch {
+    return null;
+  }
 }
 
 /** "https://www.youtube.com/watch?v=ID&t=1" or "https://youtu.be/ID" -> "ID"; playlists, channels and shorts give null. */

@@ -9,9 +9,9 @@ const MAX_RESOURCES = 5;
 
 /**
  * Further reading for a lesson. With Firecrawl configured, the web is searched
- * and the model chooses among real pages; otherwise (or when the search finds
- * nothing) the model's own suggestions are kept, minus the URLs that do not
- * answer.
+ * and the model chooses among real pages (possibly none); only when there is no
+ * search, or it finds nothing, are the model's own suggestions kept, minus the
+ * URLs that do not answer.
  */
 export async function findResources(
   provider: Provider,
@@ -22,10 +22,7 @@ export async function findResources(
 ): Promise<Resource[]> {
   if (firecrawlConfigured()) {
     const results = await searchWeb(extras.searchQuery, { limit: 10 });
-    if (results.length > 0) {
-      const picked = await chooseResources(provider, about, results, model, providerContext);
-      if (picked.length > 0) return picked;
-    }
+    if (results.length > 0) return chooseResources(provider, about, results, model, providerContext);
   }
   return keepReachable(extras.resources, MAX_RESOURCES);
 }

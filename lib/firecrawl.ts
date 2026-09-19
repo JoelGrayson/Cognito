@@ -26,7 +26,7 @@ export async function searchWeb(query: string, { limit = 8, includeDomains }: We
   const q = query.trim();
   if (!key || !q) return [];
   try {
-    const res = await fetch(`${process.env.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev"}/v2/search`, {
+    const res = await fetch("https://api.firecrawl.dev/v2/search", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ query: q, limit, ...(includeDomains?.length ? { includeDomains } : {}) }),
