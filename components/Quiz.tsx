@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ProviderId } from "@/lib/providers/types";
 import type { Lesson, Quiz } from "@/lib/schema";
+import { trpc } from "@/lib/trpc";
 import { RichText } from "./RichText";
 
 interface Props {
@@ -27,13 +28,7 @@ export function QuizPanel({ lesson, providerId }: Props) {
     setAnswers({});
     setChecked(false);
     try {
-      const res = await fetch("/api/quiz", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lesson, provider: providerId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+      const data = await trpc.quiz.mutate({ lesson, provider: providerId });
       if (!data.quiz?.questions?.length) throw new Error("The quiz came back empty.");
       setState({ status: "ready", quiz: data.quiz });
     } catch (err) {

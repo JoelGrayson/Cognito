@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { ProviderId } from "@/lib/providers/types";
 import type { ChatMessage, Lesson } from "@/lib/schema";
+import { trpc } from "@/lib/trpc";
 import { RichText } from "./RichText";
 
 interface Props {
@@ -47,13 +48,7 @@ export function LessonChat({ topic, lesson, providerId, onLessonChange }: Props)
     setSending(true);
     setError(null);
     try {
-      const res = await fetch("/api/lesson/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, lesson, messages: history, provider: providerId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+      const data = await trpc.tutor.mutate({ topic, lesson, messages: history, provider: providerId });
       const additions: Entry[] = [{ role: "assistant", content: data.reply }];
       if (data.lesson) additions.push({ role: "assistant", content: "Lesson updated.", note: true });
       setMessages((m) => [...m, ...additions]);
