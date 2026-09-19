@@ -21,10 +21,18 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
   const [status, setStatus] = useState<Status | null>(null);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"consent" | "authorize">("consent");
-  const [device, setDevice] = useState<{ handle: string; userCode: string; verificationUrl: string; interval: number }>();
+  const [device, setDevice] = useState<{
+    handle: string;
+    userCode: string;
+    verificationUrl: string;
+    interval: number;
+    expiresAt: number;
+  }>();
   const [phase, setPhase] = useState<"idle" | "starting" | "polling" | "expired">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const generation = useRef(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -39,11 +47,13 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
   useEffect(() => {
     void Promise.resolve().then(refresh);
     return () => {
+      generation.current += 1;
       if (timer.current) clearTimeout(timer.current);
     };
   }, [refresh]);
 
   const close = useCallback(() => {
+    generation.current += 1;
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     setOpen(false);
@@ -51,60 +61,102 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
     setPhase("idle");
     setDevice(undefined);
     setError(null);
+    setRetrying(false);
   }, []);
 
-  const poll = useCallback((current: { handle: string; interval: number }) => {
+  const poll = useCallback((current: { handle: string; interval: number; expiresAt: number }, generationId: number) => {
+    let attempt = 0;
+    const schedule = (seconds: number) => {
+      if (generationId !== generation.current) return;
+      if (Date.now() >= current.expiresAt) {
+        setPhase("expired");
+        return;
+      }
+      timer.current = setTimeout(run, seconds * 1000);
+    };
     const run = async () => {
+      const gen = generation.current;
+      if (gen !== generationId) return;
       try {
         const response = await authClient.$fetch<{ status: "pending" | "authenticated" | "expired" }>(
           "/sign-in/chatgpt/poll",
           { method: "POST", body: { handle: current.handle } },
         );
+        if (gen !== generation.current) return;
         if (response.error) throw new Error(response.error.message ?? "ChatGPT request failed.");
         const result = response.data;
         if (result.status === "authenticated") {
           await refresh();
+          if (gen !== generation.current) return;
+          attempt = 0;
           close();
           onConnected?.();
           return;
         }
         if (result.status === "expired") {
+          if (Date.now() >= current.expiresAt) {
+            setPhase("expired");
+          } else {
+            setError("Code expired.");
+            setRetrying(true);
+            schedule(current.interval);
+          }
+          return;
+        }
+        attempt = 0;
+        setError(null);
+        setRetrying(false);
+        schedule(Math.max(current.interval, 3));
+      } catch (err) {
+        if (gen !== generation.current) return;
+        if (Date.now() >= current.expiresAt) {
           setPhase("expired");
           return;
         }
-        timer.current = setTimeout(run, Math.max(current.interval, 3) * 1000);
-      } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to check ChatGPT sign-in.");
-        setPhase("idle");
+        setRetrying(true);
+        const delay = Math.min(current.interval * 2 ** attempt, 30);
+        attempt += 1;
+        schedule(delay);
       }
     };
-    timer.current = setTimeout(run, Math.max(current.interval, 3) * 1000);
+    schedule(Math.max(current.interval, 3));
   }, [close, onConnected, refresh]);
 
   async function start() {
+    generation.current += 1;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    const generationId = generation.current;
     setStep("authorize");
     setPhase("starting");
     setError(null);
+    setRetrying(false);
     try {
       const response = await authClient.$fetch<{
         handle: string;
         userCode: string;
         verificationUrl: string;
         interval: number;
+        expiresAt: number;
       }>("/sign-in/chatgpt/start", { method: "POST", body: {} });
+      if (generationId !== generation.current) return;
       if (response.error) throw new Error(response.error.message ?? "ChatGPT request failed.");
       const result = response.data;
       setDevice(result);
       setPhase("polling");
-      poll(result);
+      poll(result, generationId);
     } catch (err) {
+      if (generationId !== generation.current) return;
       setError(err instanceof Error ? err.message : "Unable to start ChatGPT sign-in.");
+      setRetrying(false);
       setPhase("idle");
     }
   }
 
   async function disconnect() {
     try {
+      setRetrying(false);
       const result = await authClient.$fetch("/chatgpt/unlink", { method: "POST", body: {} });
       if (result.error) throw new Error(result.error.message ?? "ChatGPT request failed.");
       await refresh();
@@ -170,7 +222,7 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
                     <button type="button" className="mt-3 text-sm underline underline-offset-2" onClick={() => void start()}>Try again</button>
                   </div>
                 )}
-                {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+                {error && <p className={retrying ? "mt-4 text-sm text-neutral-500" : "mt-4 text-sm text-red-600"}>{error}{retrying ? " Retrying…" : ""}</p>}
                 <div className="mt-6 flex justify-end">
                   <button type="button" className="rounded-full px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100" onClick={close}>Cancel</button>
                 </div>

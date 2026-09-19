@@ -11,6 +11,10 @@ import {
 import { APIError, createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { BetterAuthPlugin } from "better-auth";
+import { and, eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { account } from "@/db/schema";
+import { invalidateChatGPTModelCache } from "@/lib/providers/chatgpt";
 import { z } from "zod";
 import {
   chatgptConfig,
@@ -25,6 +29,7 @@ interface DeviceState {
   interval: number;
   expiresAt: number;
   lastPolledAt: number;
+  userId: string | null;
 }
 
 const handleSchema = z.object({ handle: z.string().min(1).max(200) });
@@ -56,6 +61,14 @@ async function saveLinkedAccount(
   accountId: string,
   tokens: ChatGPTTokens,
 ) {
+  const existing = await getDb()
+    .select({ id: account.id })
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, "chatgpt")));
+  for (const row of existing) {
+    await ctx.context.internalAdapter.deleteAccount(row.id);
+  }
+  invalidateChatGPTModelCache(userId);
   const linked = await ctx.context.internalAdapter.linkAccount({
     userId,
     providerId: "chatgpt",
@@ -74,9 +87,10 @@ export function chatgptPlugin(): BetterAuthPlugin {
         metadata: { noStore: true },
       }, async (ctx) => {
         try {
+          const current = await getSessionFromCtx(ctx);
           const device = await requestDeviceCode(chatgptConfig);
           const handle = randomToken();
-          const state: DeviceState = { ...device, lastPolledAt: 0 };
+          const state: DeviceState = { ...device, lastPolledAt: 0, userId: current?.user.id ?? null };
           await ctx.context.internalAdapter.createVerificationValue({
             identifier: identifierFor(handle),
             value: JSON.stringify(state),
@@ -106,6 +120,10 @@ export function chatgptPlugin(): BetterAuthPlugin {
         }
 
         const state = JSON.parse(verification.value) as DeviceState;
+        const current = await getSessionFromCtx(ctx);
+        if ((state.userId !== null && current?.user.id !== state.userId) || (state.userId === null && current)) {
+          return ctx.json({ status: "expired" as const });
+        }
         const now = Date.now();
         if (now - state.lastPolledAt < state.interval * 1000) {
           return ctx.json({ status: "pending" as const });
@@ -131,7 +149,6 @@ export function chatgptPlugin(): BetterAuthPlugin {
             providerId: "chatgpt",
             accountId: chatgptUser.accountId,
           });
-          const current = await getSessionFromCtx(ctx);
           if (existing) {
             if (current && !isAnonymousUser(current.user) && current.user.id !== existing.userId) {
               throw new APIError("CONFLICT", {
@@ -153,15 +170,18 @@ export function chatgptPlugin(): BetterAuthPlugin {
 
           const email = chatgptUser.email ?? `chatgpt-${chatgptUser.accountId}@users.noreply.structuredlearning.ai`;
           const existingUser = await ctx.context.internalAdapter.findUserByEmail(email, { includeAccounts: false });
-          const user = existingUser && !isAnonymousUser(existingUser.user)
-            ? existingUser.user
-            : await ctx.context.internalAdapter.createUser({
-                email,
-                name: chatgptUser.name ?? chatgptUser.email ?? "ChatGPT user",
-                emailVerified: Boolean(chatgptUser.email),
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              }, { method: "chatgpt" });
+          if (existingUser && !isAnonymousUser(existingUser.user)) {
+            throw new APIError("CONFLICT", {
+              message: "An account with this email already exists. Sign in to it first, then connect ChatGPT.",
+            });
+          }
+          const user = await ctx.context.internalAdapter.createUser({
+            email,
+            name: chatgptUser.name ?? chatgptUser.email ?? "ChatGPT user",
+            emailVerified: Boolean(chatgptUser.email),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }, { method: "chatgpt" });
           await saveLinkedAccount(ctx, user.id, chatgptUser.accountId, tokens);
           const session = await ctx.context.internalAdapter.createSession(user.id);
           await setSessionCookie(ctx, { session, user });
@@ -187,13 +207,18 @@ export function chatgptPlugin(): BetterAuthPlugin {
       }, async (ctx) => {
         const loaded = await loadChatGPTAccount(ctx.context.session.user.id);
         if (loaded) await ctx.context.internalAdapter.deleteAccount(loaded.rowId);
+        invalidateChatGPTModelCache(ctx.context.session.user.id);
         return ctx.json({ success: true as const });
       }),
     },
     rateLimit: [{
+      pathMatcher: (path) => path === "/sign-in/chatgpt/start",
+      window: 60,
+      max: 5,
+    }, {
       pathMatcher: (path) => path === "/sign-in/chatgpt/poll",
-      window: 10,
-      max: 10,
+      window: 60,
+      max: 60,
     }],
   };
 }

@@ -21,6 +21,10 @@ import {
 const model = () => process.env.CHATGPT_MODEL || DEFAULT_MODEL;
 const modelCache = new Map<string, { expiresAt: number; models: string[] }>();
 
+export function invalidateChatGPTModelCache(userId: string): void {
+  modelCache.delete(userId);
+}
+
 function mapEffort(effort: StructuredRequest<unknown>["effort"]): ReasoningEffort | undefined {
   if (effort === "minimal") return "low";
   return effort;

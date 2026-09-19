@@ -10,7 +10,7 @@ import {
   resolveConfig,
 } from "@opencoredev/loginwithchatgpt-core";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
-import { eq, and } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { account } from "@/db/schema";
 import { ProviderError } from "@/lib/providers/types";
@@ -55,6 +55,7 @@ export async function loadChatGPTAccount(userId: string): Promise<{
     .select()
     .from(account)
     .where(and(eq(account.userId, userId), eq(account.providerId, "chatgpt")))
+    .orderBy(desc(account.updatedAt))
     .limit(1);
   if (!row) return undefined;
 
@@ -77,11 +78,8 @@ export async function loadChatGPTAccount(userId: string): Promise<{
   };
 }
 
-export async function clearChatGPTTokens(accountRowId: string): Promise<void> {
-  await getDb()
-    .update(account)
-    .set({ accessToken: null, refreshToken: null })
-    .where(eq(account.id, accountRowId));
+export async function deleteChatGPTAccount(accountRowId: string): Promise<void> {
+  await getDb().delete(account).where(eq(account.id, accountRowId));
 }
 
 export async function getChatGPTAuth(userId: string): Promise<CodexAuth | undefined> {
@@ -108,7 +106,7 @@ async function loadFreshChatGPTAuth(userId: string): Promise<CodexAuth | undefin
     return { accessToken: tokens.accessToken, accountId };
   } catch (error) {
     if (error instanceof ChatGPTAuthError && error.code === "refresh_token_invalid") {
-      await clearChatGPTTokens(loaded.rowId);
+      await deleteChatGPTAccount(loaded.rowId);
       throw new ProviderError("Your ChatGPT session expired. Reconnect your ChatGPT account.", 401);
     }
     throw error;
