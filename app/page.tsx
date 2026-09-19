@@ -544,7 +544,7 @@ export default function Home() {
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-10 sm:px-8">
-      <header className="flex items-center justify-between py-4">
+      <header className="flex flex-wrap items-center justify-between gap-2 py-4">
         <button
           type="button"
           onClick={reset}
@@ -552,7 +552,7 @@ export default function Home() {
         >
           StructuredLearning.ai
         </button>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} disabled={loading} />
           <ChatGPTConnect onConnected={() => void refreshProviders().then(() => setProviderId("chatgpt"))} onDisconnected={() => void refreshProviders()} />
         </div>
