@@ -11,8 +11,20 @@ import { NextResponse } from "next/server";
 export const maxDuration = 30;
 
 const MODEL = "eleven_flash_v2_5";
-/** A calm, unhurried default. The voice has to be able to say nothing comfortably. */
-const DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM";
+/** A calm, unhurried default. The voice has to be able to say nothing comfortably.
+ *
+ *  "Sarah", one of the built-in default voices. NOT a library voice: free accounts
+ *  get 402 paid_plan_required on those, which reads like a broken key but isn't.
+ *  Verified working on the free tier alongside George, Jessica and Matilda. */
+const DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
+
+/** Other free-tier-safe defaults, for swapping the tutor's voice. */
+export const VOICES = {
+  sarah: "EXAVITQu4vr4xnSDxMaL",
+  george: "JBFqnCBsd6RMkjVDRZzb",
+  jessica: "cgSgspJ2msm6clMCkdW9",
+  matilda: "XrExE9yKIg1WjnnlVkGX",
+} as const;
 
 export async function POST(request: Request) {
   const key = process.env.ELEVENLABS_API_KEY;
