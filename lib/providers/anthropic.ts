@@ -3,6 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import {
   ProviderError,
   type Provider,
+  type ProviderContext,
   type ProviderInfo,
   type StructuredRequest,
   type StructuredResult,
@@ -18,7 +19,8 @@ function configured(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 }
 
-async function info(): Promise<ProviderInfo> {
+async function info(_ctx?: ProviderContext): Promise<ProviderInfo> {
+  void _ctx;
   return {
     id: "anthropic",
     label: "Claude",
@@ -28,7 +30,12 @@ async function info(): Promise<ProviderInfo> {
   };
 }
 
-async function structured<T>(req: StructuredRequest<T>, override?: string): Promise<StructuredResult<T>> {
+async function structured<T>(
+  req: StructuredRequest<T>,
+  override?: string,
+  _ctx?: ProviderContext,
+): Promise<StructuredResult<T>> {
+  void _ctx;
   if (!configured()) {
     throw new ProviderError("Claude is not configured. Set ANTHROPIC_API_KEY in .env.local.", 400);
   }

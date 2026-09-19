@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { LessonView, type LessonState } from "@/components/Lesson";
 import { ProviderSelect } from "@/components/ProviderSelect";
+import { ChatGPTConnect } from "@/components/ChatGPTConnect";
 import { Roadmap, RoadmapLegend, RoadmapSkeleton } from "@/components/Roadmap";
 import { emptyDraft, type LessonDraft, type OutlineDraft } from "@/lib/drafts";
 import { ensureOk, readNdjson } from "@/lib/ndjson";
@@ -100,24 +101,29 @@ export default function Home() {
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const bulkAbortRef = useRef<AbortController | null>(null);
 
+  const refreshProviders = useCallback(() => {
+    return trpc.providers.query().then((list) => {
+      setProviders(list);
+      setProviderId((current) => {
+        const chosen = list.find((p) => p.id === current);
+        if (chosen?.configured) return current;
+        return list.find((p) => p.configured)?.id ?? current;
+      });
+    });
+  }, []);
+
   // Find out which providers this server can actually use.
   useEffect(() => {
     let cancelled = false;
-    trpc.providers.query()
-      .then((list) => {
+    refreshProviders()
+      .then(() => {
         if (cancelled) return;
-        setProviders(list);
-        setProviderId((current) => {
-          const chosen = list.find((p) => p.id === current);
-          if (chosen?.configured) return current;
-          return list.find((p) => p.configured)?.id ?? current;
-        });
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshProviders]);
 
   /** Generate or revise the roadmap, showing stages as they stream in. `fallback` is restored on failure. */
   const generate = useCallback(async (body: GenerateBody, fallback: MindMap | null) => {
@@ -549,7 +555,10 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} />
+            <ChatGPTConnect onConnected={() => void refreshProviders().then(() => setProviderId("chatgpt"))} onDisconnected={() => void refreshProviders()} />
+          </div>
         </div>
 
         {error && <p className="mt-6 text-sm text-red-600">{error}</p>}
@@ -601,7 +610,7 @@ export default function Home() {
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-10 sm:px-8">
-      <header className="flex items-center justify-between py-4">
+      <header className="flex flex-wrap items-center justify-between gap-2 py-4">
         <button
           type="button"
           onClick={reset}
@@ -609,11 +618,12 @@ export default function Home() {
         >
           StructuredLearning.ai
         </button>
-        <div className="flex items-center gap-4">
-          <Link href="/settings" className="text-sm text-neutral-500 hover:text-neutral-900">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Link href="/settings" className="mr-2 text-sm text-neutral-500 hover:text-neutral-900">
             Settings
           </Link>
           <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} disabled={loading} />
+          <ChatGPTConnect onConnected={() => void refreshProviders().then(() => setProviderId("chatgpt"))} onDisconnected={() => void refreshProviders()} />
         </div>
       </header>
 

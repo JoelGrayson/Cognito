@@ -4,6 +4,7 @@ import { toJsonSchema } from "@/lib/schema";
 import {
   ProviderError,
   type Provider,
+  type ProviderContext,
   type ProviderId,
   type ProviderInfo,
   type StructuredRequest,
@@ -75,7 +76,8 @@ export function createOpenAICompatibleProvider(cfg: OpenAICompatibleConfig): Pro
     return cfg.defaultModel;
   }
 
-  async function info(): Promise<ProviderInfo> {
+  async function info(_ctx?: ProviderContext): Promise<ProviderInfo> {
+    void _ctx;
     let ok: boolean;
     if (cfg.probe) {
       ok = await reachable(`${baseURL()}/models`, apiKey());
@@ -91,7 +93,12 @@ export function createOpenAICompatibleProvider(cfg: OpenAICompatibleConfig): Pro
     };
   }
 
-  async function structured<T>(req: StructuredRequest<T>, override?: string): Promise<StructuredResult<T>> {
+  async function structured<T>(
+    req: StructuredRequest<T>,
+    override?: string,
+    _ctx?: ProviderContext,
+  ): Promise<StructuredResult<T>> {
+    void _ctx;
     const key = apiKey();
     if (!key) {
       throw new ProviderError(`${cfg.label} is not configured. ${cfg.hint}.`, 400);
