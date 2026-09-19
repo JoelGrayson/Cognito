@@ -7,9 +7,11 @@ interface CardProps {
   phase: Phase;
   selected?: boolean;
   onClick?: () => void;
+  /** Makes the block a link, so it can also be opened in a new tab. */
+  href?: string;
 }
 
-function Card({ node, phase, selected, onClick }: CardProps) {
+function Card({ node, phase, selected, onClick, href }: CardProps) {
   const inner = (
     <>
       <div className="card-name">{node.name}</div>
@@ -21,6 +23,26 @@ function Card({ node, phase, selected, onClick }: CardProps) {
       <div className="card" data-phase={phase} title={node.description}>
         {inner}
       </div>
+    );
+  }
+  if (href) {
+    return (
+      <a
+        href={href}
+        className="card"
+        data-phase={phase}
+        data-selected={selected ? "true" : undefined}
+        aria-current={selected ? "true" : undefined}
+        title={node.description}
+        onClick={(e) => {
+          // Leave new-tab and new-window gestures to the browser. Middle click never fires click.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          onClick();
+        }}
+      >
+        {inner}
+      </a>
     );
   }
   return (
@@ -80,6 +102,8 @@ interface RoadmapProps {
   pending?: number;
   /** The map is still arriving: the last block may be half-written, so it stays inert. */
   streaming?: boolean;
+  /** Address of a block's lesson, so blocks are links that open in a new tab too. */
+  hrefFor?: (ref: NodeRef) => string | undefined;
 }
 
 /** The block most recently added to a map, which is the one still being written while streaming. */
@@ -92,7 +116,7 @@ function tailOf(map: MindMap): NodeRef | null {
     : { stage, kind: "core", index: 0 };
 }
 
-export function Roadmap({ map, onSelect, selected, compact, pending = 0, streaming = false }: RoadmapProps) {
+export function Roadmap({ map, onSelect, selected, compact, pending = 0, streaming = false, hrefFor }: RoadmapProps) {
   const tail = streaming ? tailOf(map) : null;
   const slot = (ref: NodeRef) => {
     const at = nodeAt(map, ref);
@@ -104,6 +128,7 @@ export function Roadmap({ map, onSelect, selected, compact, pending = 0, streami
         phase={at.phase}
         selected={sameRef(selected, ref)}
         onClick={clickable ? () => onSelect(ref) : undefined}
+        href={clickable ? hrefFor?.(ref) : undefined}
       />
     );
   };
