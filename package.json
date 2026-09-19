@@ -13,7 +13,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "whiteboard:test": "node --experimental-strip-types lib/whiteboard/checker/numeric.test.ts && node --experimental-strip-types lib/whiteboard/strokes.test.ts && node --experimental-strip-types lib/whiteboard/policy.test.ts && node --experimental-strip-types lib/whiteboard/locate.test.ts && node --experimental-strip-types scripts/corpus.ts",
+    "whiteboard:test": "node --experimental-strip-types lib/whiteboard/checker/numeric.test.ts && node --experimental-strip-types lib/whiteboard/strokes.test.ts && node --experimental-strip-types lib/whiteboard/policy.test.ts && node --experimental-strip-types lib/whiteboard/locate.test.ts && node --experimental-strip-types scripts/corpus.ts && node --experimental-strip-types scripts/scenarios.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
