@@ -47,6 +47,16 @@ Principles:
 - **Compact serialization** for edit turns: send nodes as `id | title | kind | scope | parentId` and edges as `source>target (kind)`, not full JSON. Cuts latency and cost.
 - **Latency targets (to measure, not promises):** concepts under 3s, edit turn under 6s, initial graph under 15s, plan generation (parallel enrichment) under 30s.
 
+## Live voice lessons
+
+`components/VideoCall.tsx` uses `@deepgram/react` for the live call. Deepgram Voice Agent owns turn detection, response generation, streaming speech, and interruption. Its `UserStartedSpeaking` event stops browser playback and clears queued audio through the SDK. Microphone capture keeps browser echo cancellation and automatic gain control enabled, but disables noise suppression to preserve quiet first syllables and short interruptions. Flux's end-of-turn thresholds control when the learner finishes, not how quickly barge-in starts. Muting disables microphone capture, including across reconnects; leaving releases the microphone, camera, and audio player.
+
+Calls require only `DEEPGRAM_API_KEY` with permission to mint temporary tokens. `/api/voice/token` authenticates the app session and issues a short-lived token; the permanent key stays server-side. ChatGPT sign-in and other selected lesson providers do not affect calls. The defaults in `lib/ai/models.ts` are Flux speech recognition, a Deepgram-managed GPT-5.6 Terra tutor (`open_ai`), and Aura 2 Thalia speech output. Terra uses Deepgram's Advanced pricing tier; no separate OpenAI API key is needed. `reasoning_mode: "none"` is required because Terra rejects function tools with reasoning enabled through Deepgram's Chat Completions connection.
+
+`lib/ai/voice-agent.ts` supplies lesson context and the `read_whiteboard` / `update_whiteboard` tools. Tool parameters use JSON Schema generated from the existing board schemas, which validate tool arguments before `applyActions` updates the canvas. Image actions resolve through the authenticated `/api/voice/board` route. User speech and call teardown abort pending image updates. UI tests exercise the actual React adapter with simulated devices; real voice validation should include interruptions, muted speech, and speaker echo on the target hardware.
+
+After the greeting, the call requests one opening worked example automatically; a learner interruption takes priority. The tutor shows examples without asking permission and pauses for specific understanding checks. Its prompt requires spoken math and Unicode board labels, with no LaTeX. `lib/voice-text.ts` also converts stray math markup in tutor captions, chat, and board labels into readable text; it does not alter learner messages or executable plot expressions.
+
 ## Persistence model
 
 Summary (full detail in `data-contract.md`):
