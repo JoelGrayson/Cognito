@@ -127,9 +127,20 @@ export function checkStep(previous: string | null, current: string): Equivalence
 
   const vars = [...new Set([...a.vars, ...b.vars])];
   if (vars.length === 0) vars.push("x");
-  // A changed variable set usually means the recognizer misread a letter. Don't guess.
-  if (a.vars.length && b.vars.length && a.vars.join() !== b.vars.join()) {
-    return { kind: "undetermined", why: `variables differ: {${a.vars}} vs {${b.vars}}` };
+  // A changed variable SET usually means the recognizer misread a letter. Compare as
+  // sets, not as ordered lists: the same variables in a different order is a
+  // rearrangement, which is exactly what a legal step looks like. Comparing joined
+  // strings made "p*q - (f + v*q) = 0" -> "q*(p - v) = f" abstain, because the two
+  // sides mention p, q, f, v in different orders.
+  if (a.vars.length && b.vars.length) {
+    const sameSet =
+      a.vars.length === b.vars.length && a.vars.every((v) => b.vars.includes(v));
+    if (!sameSet) {
+      return {
+        kind: "undetermined",
+        why: `variables differ: {${[...a.vars].sort()}} vs {${[...b.vars].sort()}}`,
+      };
+    }
   }
 
   const allowScaling = a.isRelation;

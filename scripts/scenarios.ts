@@ -108,6 +108,38 @@ export const SCENARIOS: Scenario[] = [
     beat: "sqrt(x^2) is |x|, not x. Caught because the prober samples NEGATIVE values too — a symbolic simplifier would happily agree with the student here.",
   },
 
+  // ---- money: the same engine, stakes people feel ---------------------------
+  {
+    name: "The rate you entered is wrong",
+    write: ["A = 1000(1+0.05)^{10}", "A = 1000(1+0.5)^{10}"],
+    expect: "not-equivalent",
+    beat: "5% typed as 0.5. On a real balance that is the difference between $1,629 and $57,665 - and nothing on the page looks wrong.",
+  },
+  {
+    name: "Forgot to divide the rate by 12",
+    write: ["A = P(1+r/12)^{12t}", "A = P(1+r)^{12t}"],
+    expect: "not-equivalent",
+    beat: "Monthly compounding with an annual rate. Multi-variable, no numbers, still caught.",
+  },
+  {
+    name: "Discounting by subtracting",
+    write: ["PV = 5000/(1+0.08)^{3}", "PV = 5000(1-0.08)^{3}"],
+    expect: "not-equivalent",
+    beat: "Present value. Feels right, is wrong, and costs you real money.",
+  },
+  {
+    name: "Up 10%, down 10%",
+    write: ["x(1.1)(0.9)", "x"],
+    expect: "rescaled",
+    beat: "The one nearly everyone gets wrong: you are down 1%, not even. Verdict says 'rescaled by 0.99' - it names the exact loss.",
+  },
+  {
+    name: "Break-even, rearranged",
+    write: ["p \\cdot q - (f + v \\cdot q) = 0", "q(p - v) = f"],
+    expect: "equivalent",
+    beat: "Four variables, no numbers, correctly rearranged - and it stays silent. (Written with an explicit dot: 'pq' is ambiguous in handwriting, since PV and NPV are single names.)",
+  },
+
   // ---- abstention: the safety property -------------------------------------
   {
     name: "It abstains rather than accuse",
