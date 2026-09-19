@@ -110,6 +110,11 @@ export default function SpikePage() {
    *  race: the idle OCR request is async, so a fast next line can finalize before
    *  the reading even exists. Whichever arrives second speaks. */
   const finalizedRef = useRef<Set<number>>(new Set());
+  /** Every read and every reply is stamped with a generation. Anything that resumes
+   *  after an await checks its stamp before touching shared state - otherwise a
+   *  response that arrives 800ms late redraws a mark the learner has already fixed,
+   *  or speaks about a line they have since rewritten. */
+  const genRef = useRef(0);
   const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
   const pttRef = useRef<PushToTalk | null>(null);
   const [listening, setListening] = useState(false);
@@ -127,10 +132,17 @@ export default function SpikePage() {
     strokes: TimedStroke[];
     raw: string;
     parsedStep: string;
+    /** The exact step the checker judged against. The reply request must use THIS,
+     *  not re-derive it - a low-confidence line is skipped by the checker but was
+     *  still being picked as the model's premise, so the verdict and the explanation
+     *  described different pairs of steps. */
+    premise: string | null;
     /** Hint depth belongs to THIS step. Page-wide depth leaked into later errors:
      *  climb to rung 4 on one mistake, and the next mistake opened at rung 4
      *  unasked - which breaks the invariant that help is only ever requested. */
     rung: HintLevel;
+    /** Which read opened this discussion. */
+    gen: number;
     /** Idle commits are provisional; the learner may still be writing. Don't let a
      *  half-read line become a spoken accusation. */
     provisional: boolean;
@@ -181,6 +193,8 @@ export default function SpikePage() {
     const payload = toStrokePayload(strokes);
     if (!payload) return;
 
+    const gen = ++genRef.current;
+
     // Remember where this line is before anything async happens.
     const lineBounds = strokes.length
       ? strokes.map((s) => s.bounds).reduce(mergeBounds)
@@ -230,6 +244,12 @@ export default function SpikePage() {
       const verdict = previous ? checkStep(previous, parsed) : null;
       const checkMs = previous ? performance.now() - t0 : null;
 
+      // This read is done: whatever finalization was waiting on it is spent, whether
+      // the line turned out wrong, correct, untrusted or unparseable. Leaving the
+      // marker behind let a LATER provisional read of a resumed line consume it and
+      // speak while the learner was still writing.
+      const wasFinalized = finalizedRef.current.delete(lineId);
+
       // A re-read of the same line supersedes whatever we said about it. Without
       // this, a bad provisional read leaves an obsolete accusation open: the learner
       // finishes the line correctly and the tutor still discusses the broken version.
@@ -266,6 +286,8 @@ export default function SpikePage() {
             strokes,
             raw,
             parsedStep: parsed,
+            premise: previous,
+            gen,
             rung: rungRef.current,
             provisional: reason === "idle",
           };
@@ -285,10 +307,9 @@ export default function SpikePage() {
                 setError(e instanceof Error ? e.message : "Voice failed.");
               });
             }
-          } else if (finalizedRef.current.has(lineId)) {
+          } else if (wasFinalized) {
             // Finalization won the race and arrived before this reading existed.
             // Consume it now rather than waiting for an event that already passed.
-            finalizedRef.current.delete(lineId);
             if (voiceOnRef.current) {
               speakerRef.current?.say(utterance, voiceIdRef.current).catch(() => {});
             }
@@ -304,7 +325,7 @@ export default function SpikePage() {
       const next: Reading = {
         lineId,
         bounds: lineBounds,
-        provisional: reason === "idle",
+        provisional: reason === "idle" && !wasFinalized,
         raw,
         parsed,
         ms: data.ms,
@@ -376,8 +397,8 @@ export default function SpikePage() {
             // reverse first: find() walks forwards and would return the OLDEST earlier
             // line, so with three or more steps the model would be shown a different
             // transition than the checker actually judged.
-            previousStep:
-              [...readingsRef.current].reverse().find((x) => x.lineId < open.lineId)?.parsed ?? null,
+            // The premise the checker actually used - see openRef.premise.
+            previousStep: open.premise,
             currentStep: open.parsedStep,
             verdictKind: open.verdict.kind,
             verdictDetail:
@@ -393,6 +414,9 @@ export default function SpikePage() {
         });
         if (r.ok) {
           const d = await r.json();
+          // Discard a reply whose discussion has been superseded - the learner may
+          // have fixed the line while the model was thinking.
+          if (openRef.current !== open) return;
           if (d.reply) {
             line = d.reply;
             fromModel = true;
