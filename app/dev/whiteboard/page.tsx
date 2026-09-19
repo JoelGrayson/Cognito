@@ -21,7 +21,7 @@ import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
-import { createSpeaker, SPOKEN, ASK_WHY, type Speaker } from "@/lib/whiteboard/voice";
+import { createSpeaker, createPushToTalk, SPOKEN, ASK_WHY, type Speaker, type PushToTalk } from "@/lib/whiteboard/voice";
 
 /** Free-tier-safe voices, verified against this account. Library voices return 402. */
 const VOICE_OPTIONS = [
@@ -103,6 +103,11 @@ export default function SpikePage() {
   }, [voiceOn]);
   const [said, setSaid] = useState<string | null>(null);
   const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
+  const pttRef = useRef<PushToTalk | null>(null);
+  const [listening, setListening] = useState(false);
+  /** What the learner said, newest last. This is the artifact that matters: the
+   *  point of asking "why" is that they articulate it, not that we grade it. */
+  const [explanations, setExplanations] = useState<{ text: string; ms: number }[]>([]);
   const voiceIdRef = useRef(voiceId);
   useEffect(() => {
     voiceIdRef.current = voiceId;
@@ -220,6 +225,56 @@ export default function SpikePage() {
     }
   }, []);
 
+  const beginTalking = useCallback(async () => {
+    if (pttRef.current?.recording) return;
+    // The learner always outranks the tutor: talking cuts it off mid-sentence.
+    speakerRef.current?.stop();
+    pttRef.current ??= createPushToTalk();
+    try {
+      await pttRef.current.start();
+      setListening(true);
+    } catch {
+      setError("Couldn't reach the microphone — check the browser permission.");
+    }
+  }, []);
+
+  const endTalking = useCallback(async () => {
+    const ptt = pttRef.current;
+    if (!ptt?.recording) return;
+    setListening(false);
+    try {
+      const { transcript, ms } = await ptt.stopAndTranscribe();
+      if (transcript) setExplanations((e) => [...e, { text: transcript, ms }]);
+    } catch {
+      setError("Transcription failed.");
+    }
+  }, []);
+
+  // Hold SPACE to talk. A key rather than a button because the learner's hand is
+  // already on a pen -- reaching for a target on screen breaks the thought.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      const el = e.target as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      e.preventDefault();
+      void beginTalking();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      e.preventDefault();
+      void endTalking();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [beginTalking, endTalking]);
+
+  useEffect(() => () => pttRef.current?.dispose(), []);
+
   const reset = () => {
     setReadings([]);
     setError(null);
@@ -227,6 +282,7 @@ export default function SpikePage() {
     annotatorRef.current?.clear();
     speakerRef.current?.stop();
     setSaid(null);
+    setExplanations([]);
     boundsRef.current.clear();
     const editor = editorRef.current;
     if (editor) {
@@ -286,6 +342,24 @@ export default function SpikePage() {
         </span>
         <div className="ml-auto flex gap-2">
           {busy && <span className="text-xs text-neutral-400">reading…</span>}
+          <button
+            onMouseDown={beginTalking}
+            onMouseUp={endTalking}
+            onMouseLeave={endTalking}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              void beginTalking();
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              void endTalking();
+            }}
+            className={`select-none rounded px-4 py-2 text-sm font-medium ${
+              listening ? "bg-red-500 text-white" : "border border-neutral-700 text-neutral-200"
+            }`}
+          >
+            {listening ? "listening…" : "hold to talk"}
+          </button>
           <button onClick={reset} className="rounded border border-neutral-700 px-3 py-2 text-sm">
             Reset
           </button>
@@ -336,6 +410,15 @@ export default function SpikePage() {
         <aside className="max-h-[38dvh] shrink-0 overflow-y-auto border-t border-neutral-800 p-3 lg:max-h-none lg:w-96 lg:border-l lg:border-t-0 lg:p-4">
           {error && (
             <p className="mb-3 rounded border border-red-900 bg-red-950/50 p-2 text-xs text-red-300">{error}</p>
+          )}
+          {explanations.length > 0 && (
+            <div className="mb-3 space-y-1">
+              {explanations.map((x, i) => (
+                <p key={i} className="rounded border border-sky-900 bg-sky-950/40 p-2 text-xs text-sky-200">
+                  you: “{x.text}”
+                </p>
+              ))}
+            </div>
           )}
           {said && (
             <p className="mb-3 rounded border border-neutral-700 bg-neutral-900 p-2 text-xs italic text-neutral-300">
