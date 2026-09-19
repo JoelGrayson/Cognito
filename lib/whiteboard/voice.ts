@@ -82,6 +82,11 @@ export function createPushToTalk(): PushToTalk {
   let recorder: MediaRecorder | null = null;
   let chunks: Blob[] = [];
   let recording = false;
+  /** Is the control still held? Tracked separately from `recording` because the
+   *  first start() waits on the permission prompt: press, see the dialog, release,
+   *  then click Allow, and the release already came and went while `recording` was
+   *  still false - leaving the mic live with no release event left to stop it. */
+  let held = false;
 
   return {
     get recording() {
@@ -90,11 +95,22 @@ export function createPushToTalk(): PushToTalk {
 
     async start() {
       if (recording) return;
+      held = true;
       // Ask for the mic lazily -- on first hold, not on page load. A permission
       // prompt the moment the page opens reads as hostile.
-      stream ??= await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
+      const acquired =
+        stream ??
+        (await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        }));
+
+      // Released while we were waiting on permission: don't start, and don't leave
+      // the freshly granted tracks open.
+      if (!held) {
+        if (!stream) acquired.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      stream = acquired;
       chunks = [];
       recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       recorder.ondataavailable = (e) => {
@@ -105,6 +121,8 @@ export function createPushToTalk(): PushToTalk {
     },
 
     async stopAndTranscribe() {
+      // Cancels a start that is still waiting on the permission prompt.
+      held = false;
       if (!recorder || !recording) return { transcript: "", ms: 0 };
       const done = new Promise<void>((resolve) => {
         recorder!.onstop = () => resolve();
@@ -128,6 +146,7 @@ export function createPushToTalk(): PushToTalk {
     },
 
     dispose() {
+      held = false;
       recorder?.stream.getTracks().forEach((t) => t.stop());
       stream?.getTracks().forEach((t) => t.stop());
       stream = null;
