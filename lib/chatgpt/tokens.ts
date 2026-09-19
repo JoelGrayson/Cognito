@@ -84,7 +84,7 @@ export async function loadChatGPTAccount(userId: string): Promise<{
     .select()
     .from(account)
     .where(and(eq(account.userId, userId), eq(account.providerId, "chatgpt")))
-    .orderBy(desc(account.updatedAt))
+    .orderBy(desc(account.updatedAt), desc(account.id))
     .limit(1);
   if (!row) return undefined;
 
