@@ -121,6 +121,13 @@ export default function SpikePage() {
     strokes: TimedStroke[];
     raw: string;
     parsedStep: string;
+    /** Hint depth belongs to THIS step. Page-wide depth leaked into later errors:
+     *  climb to rung 4 on one mistake, and the next mistake opened at rung 4
+     *  unasked - which breaks the invariant that help is only ever requested. */
+    rung: HintLevel;
+    /** Idle commits are provisional; the learner may still be writing. Don't let a
+     *  half-read line become a spoken accusation. */
+    provisional: boolean;
   } | null>(null);
   const voiceIdRef = useRef(voiceId);
   useEffect(() => {
@@ -188,6 +195,16 @@ export default function SpikePage() {
       const verdict = previous ? checkStep(previous, parsed) : null;
       const checkMs = previous ? performance.now() - t0 : null;
 
+      // A re-read of the same line supersedes whatever we said about it. Without
+      // this, a bad provisional read leaves an obsolete accusation open: the learner
+      // finishes the line correctly and the tutor still discusses the broken version.
+      if (openRef.current?.lineId === lineId) {
+        openRef.current = null;
+        annotatorRef.current?.clear();
+        setSaid(null);
+        historyRef.current = [];
+      }
+
       // Draw on the learner's work. Marks are tagged, so redrawing never touches ink.
       if (verdict) {
         // Locate the offending symbol so the higher rungs can point AT it.
@@ -196,17 +213,28 @@ export default function SpikePage() {
         if (marks.length > 0) {
           annotatorRef.current?.draw(marks, (id) => boundsRef.current.get(id));
 
-          // Say it out loud. The words withhold exactly as much as the marks do --
-          // rung 1 says something is wrong without saying where. A page that never
-          // speaks is just a page; it's the voice that makes the silence mean
-          // something. Then ask WHY rather than explaining.
-          if (voiceOnRef.current) {
-            const line = SPOKEN[rungRef.current] ?? SPOKEN[1];
-            const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
-            const utterance = `${line} ${why}`;
-            openRef.current = { verdict, lineId, strokes, raw, parsedStep: parsed };
-            historyRef.current = [{ who: "tutor", text: utterance }];
-            setSaid(utterance);
+          // Open the discussion regardless of whether we speak: push-to-talk needs a
+          // step to talk ABOUT, and it must work with the voice toggle off.
+          openRef.current = {
+            verdict,
+            lineId,
+            strokes,
+            raw,
+            parsedStep: parsed,
+            rung: rungRef.current,
+            provisional: reason === "idle",
+          };
+
+          const line = SPOKEN[rungRef.current] ?? SPOKEN[1];
+          const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
+          const utterance = `${line} ${why}`;
+          historyRef.current = [{ who: "tutor", text: utterance }];
+          setSaid(utterance);
+
+          // Speak only once the line is FINAL. A mark is glanceable and self-corrects
+          // on the next read; a spoken accusation cannot be taken back, and an idle
+          // commit is explicitly provisional - the learner may still be writing.
+          if (voiceOnRef.current && reason === "line-break") {
             speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
               setError(e instanceof Error ? e.message : "Voice failed.");
             });
@@ -286,7 +314,11 @@ export default function SpikePage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            previousStep: readingsRef.current.find((x) => x.lineId < open.lineId)?.parsed ?? null,
+            // reverse first: find() walks forwards and would return the OLDEST earlier
+            // line, so with three or more steps the model would be shown a different
+            // transition than the checker actually judged.
+            previousStep:
+              [...readingsRef.current].reverse().find((x) => x.lineId < open.lineId)?.parsed ?? null,
             currentStep: open.parsedStep,
             verdictKind: open.verdict.kind,
             verdictDetail:
@@ -295,7 +327,7 @@ export default function SpikePage() {
                 : open.verdict.kind === "rescaled"
                   ? String(open.verdict.by.toFixed(2))
                   : "",
-            rung: rungRef.current,
+            rung: open.rung,
             said: transcript,
             history: historyRef.current.slice(-6),
           }),
@@ -317,9 +349,8 @@ export default function SpikePage() {
       if (outcome.kind === "found-it") {
         openRef.current = null; // they did the work; get out of the way
       } else {
-        const next = Math.min(rungRef.current + 1, 5) as HintLevel;
-        setRung(next);
-        rungRef.current = next;
+        const next = Math.min(open.rung + 1, 5) as HintLevel;
+        open.rung = next;
         annotatorRef.current?.clear();
         const symbol = locateOperator(open.strokes, open.raw);
         annotatorRef.current?.draw(
