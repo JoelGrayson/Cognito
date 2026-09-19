@@ -76,7 +76,10 @@ export interface EndpointConfig {
    *  whatever they wrote is what they wrote. */
   minStrokesForIdleCommit: number;
   /** Fallback only, for the final line: commit after the pen is idle this long.
-   *  Tuned DOWN from a cautious 2500ms because the commit is provisional -- firing
+   *  Raised back to 2200ms after 1200ms proved short enough to fire mid-word while
+   *  the learner paused between strokes of a character, which reads as garbage and
+   *  strands the rest of the character on the next line.
+   *  Originally tuned DOWN from 2500ms because the commit is provisional -- firing
    *  early costs one wasted read and a briefly-wrong line in the panel, both of which
    *  self-correct, while waiting long is felt on every single final line. When the
    *  cost of being wrong is near zero, bias toward being fast. */
@@ -89,7 +92,7 @@ export const DEFAULT_ENDPOINT_CONFIG: EndpointConfig = {
   minLineHeight: 12,
   minLineWidthForBreak: 40,
   minStrokesForIdleCommit: 2,
-  finalLineIdleMs: 1200,
+  finalLineIdleMs: 2200,
 };
 
 export function boundsOf(points: Point[]): Bounds {
