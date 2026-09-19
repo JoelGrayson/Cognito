@@ -1,5 +1,5 @@
 import { VIDEO_PICK_SYSTEM_PROMPT, videoPickPrompt } from "@/lib/prompt";
-import type { Provider } from "@/lib/providers";
+import type { Provider, ProviderContext } from "@/lib/providers";
 import { VideoPickSchema, type Video } from "@/lib/schema";
 import { noVideo, searchVideos, type VideoCandidate } from "@/lib/youtube";
 
@@ -26,13 +26,14 @@ export async function findHelpfulVideo(
   about: VideoContext,
   query: string,
   model?: string,
+  providerContext?: ProviderContext,
 ): Promise<Video> {
   const none = noVideo(query);
   if (!query.trim()) return none;
   const candidates = (await searchVideos(query)).filter(
     (c) => c.seconds === null || (c.seconds >= MIN_SECONDS && c.seconds <= MAX_SECONDS),
   );
-  const { chosen } = await chooseVideo(provider, about, candidates, model);
+  const { chosen } = await chooseVideo(provider, about, candidates, model, providerContext);
   return chosen ? { id: chosen.id, title: chosen.title, searchUrl: none.searchUrl } : none;
 }
 
@@ -42,6 +43,7 @@ export async function chooseVideo(
   about: VideoContext,
   candidates: VideoCandidate[],
   model?: string,
+  providerContext?: ProviderContext,
 ): Promise<{ chosen: VideoCandidate | null; reason: string }> {
   if (candidates.length === 0) return { chosen: null, reason: "No usable search results." };
   try {
@@ -54,6 +56,7 @@ export async function chooseVideo(
         effort: "minimal",
       },
       model,
+      providerContext,
     );
     // Results arrive in search-relevance order, so the first strong one wins.
     const strong = output.ratings.find((r) => r.fit === "strong" && candidates[r.index]);

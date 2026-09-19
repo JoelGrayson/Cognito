@@ -14,6 +14,9 @@ importers:
       '@next/env':
         specifier: ^16.3.5
         version: 16.3.5
+      '@opencoredev/loginwithchatgpt-core':
+        specifier: 0.2.0
+        version: 0.2.0
       '@trpc/client':
         specifier: ^11.19.0
         version: 11.19.0(@trpc/server@11.19.0(typescript@5.9.3))(typescript@5.9.3)
@@ -1038,6 +1041,10 @@ packages:
   '@nolyfill/is-core-module@1.0.39':
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
+
+  '@opencoredev/loginwithchatgpt-core@0.2.0':
+    resolution: {integrity: sha512-PRzUWEYJepxkcYVvk/Uc7bc8YfUr50PWqNMjfNs/AZOF6/H73QykzFhjZJIG5cphIKrNdjOmvofuy25cH1F8ow==}
+    engines: {node: '>=18'}
 
   '@opentelemetry/semantic-conventions@1.43.0':
     resolution: {integrity: sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg==}
@@ -3556,6 +3563,8 @@ snapshots:
       fastq: 1.20.3
 
   '@nolyfill/is-core-module@1.0.39': {}
+
+  '@opencoredev/loginwithchatgpt-core@0.2.0': {}
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
 

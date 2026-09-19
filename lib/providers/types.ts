@@ -1,6 +1,10 @@
 import type { z } from "zod";
 
-export type ProviderId = "anthropic" | "openai" | "xai" | "local";
+export type ProviderId = "anthropic" | "openai" | "chatgpt" | "xai" | "local";
+
+export interface ProviderContext {
+  userId?: string;
+}
 
 export interface ProviderInfo {
   id: ProviderId;
@@ -43,9 +47,13 @@ export interface Provider {
   /** Resolve the model name (env override or default). */
   model(): string;
   /** Cheap check: is this provider usable right now? */
-  info(): Promise<ProviderInfo>;
+  info(ctx?: ProviderContext): Promise<ProviderInfo>;
   /** Ask the model for output matching a schema. Throws ProviderError on failure. */
-  structured<T>(req: StructuredRequest<T>, model?: string): Promise<StructuredResult<T>>;
+  structured<T>(
+    req: StructuredRequest<T>,
+    model?: string,
+    ctx?: ProviderContext,
+  ): Promise<StructuredResult<T>>;
 }
 
 export class ProviderError extends Error {

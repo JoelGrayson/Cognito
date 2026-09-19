@@ -3,6 +3,7 @@ import { apiHandler, providerFrom, readJson } from "@/lib/api";
 import { writeLesson } from "@/lib/lesson";
 import { MindMapSchema, NodeSchema, PhaseSchema } from "@/lib/schema";
 import { ndjson } from "@/lib/stream";
+import { getAuth } from "@/lib/auth";
 
 export const maxDuration = 120;
 
@@ -22,13 +23,14 @@ const BodySchema = z.object({
  *   {type:"error", error}
  */
 export const POST = apiHandler(async (request) => {
+  const session = await getAuth().api.getSession({ headers: request.headers });
   const body = await readJson(request, BodySchema);
   const provider = providerFrom(body.provider);
   const ctx = { topic: body.topic, node: body.node, phase: body.phase, map: body.map };
   const started = Date.now();
 
   return ndjson(async (emit) => {
-    const { lesson, model } = await writeLesson(provider, ctx, body.model, emit);
+    const { lesson, model } = await writeLesson(provider, ctx, body.model, emit, session ? { userId: session.user.id } : undefined);
     emit({ type: "done", lesson, provider: provider.id, model, ms: Date.now() - started });
   });
 });

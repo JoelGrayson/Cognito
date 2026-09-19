@@ -64,6 +64,7 @@ export const POST = apiHandler(async (request) => {
         },
       },
       body.model,
+      { userId: session.user.id },
     );
     emit({
       type: "done",
