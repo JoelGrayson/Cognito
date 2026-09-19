@@ -27,12 +27,9 @@ function serve() {
 const store = () => useOnboarding.getState();
 const saved = () => onboardingRepo.get(session.userId);
 
-async function answerSteps1to3(goal = "Learn linear algebra") {
+async function answerStep1(goal = "Learn linear algebra") {
   store().setProfile({ goal });
   store().advance();
-  store().setProfile({ goalType: "curiosity" });
-  store().advance();
-  store().advance({ hoursPerWeek: 8, preferences: { pace: "steady" }, availability: { daysPerWeek: 4 } });
 }
 
 beforeEach(() => {
@@ -63,31 +60,25 @@ describe("hydrate", () => {
     expect(store().status).toBe("error");
   });
 
-  it("resumes at step 4 with answers intact after a refresh (scenario 1)", async () => {
+  it("resumes at step 2 with answers intact after a refresh (scenario 1)", async () => {
     serve();
     await store().hydrate();
-    await answerSteps1to3();
-    expect(store().step).toBe(4);
-    await vi.waitFor(async () => expect((await saved()).profile.hoursPerWeek).toBe(8));
+    await answerStep1();
+    expect(store().step).toBe(2);
+    await vi.waitFor(async () => expect((await saved()).profile.goal).toBe("Learn linear algebra"));
 
     resetOnboardingStore(); // a page refresh
     await store().hydrate();
-    expect(store().step).toBe(4);
-    expect(store().profile).toMatchObject({
-      goal: "Learn linear algebra",
-      goalType: "curiosity",
-      hoursPerWeek: 8,
-      preferences: { pace: "steady" },
-      availability: { daysPerWeek: 4 },
-    });
+    expect(store().step).toBe(2);
+    expect(store().profile).toMatchObject({ goal: "Learn linear algebra" });
     expect((await saved()).step).toBe("questionnaire");
   });
 
-  it("refetches concepts on resume so step 4 has chips", async () => {
+  it("refetches concepts on resume so step 2 has chips", async () => {
     serve();
     await store().hydrate();
-    await answerSteps1to3();
-    await vi.waitFor(async () => expect((await saved()).profile.hoursPerWeek).toBe(8));
+    await answerStep1();
+    await vi.waitFor(async () => expect((await saved()).profile.goal).toBe("Learn linear algebra"));
     resetOnboardingStore();
     await store().hydrate();
     await vi.waitFor(() => expect(store().concepts.status).toBe("ready"));
@@ -97,9 +88,13 @@ describe("hydrate", () => {
   it("flags a finished questionnaire so the page can redirect", async () => {
     serve();
     await store().hydrate();
-    await answerSteps1to3();
-    store().advance({ priorKnowledge: [{ concept: "Vectors", level: 1 }] });
-    expect(await store().finish({ preferences: { formats: ["reading"] } })).toBe(true);
+    await answerStep1();
+    expect(
+      await store().finish({
+        preferences: { formats: ["reading"] },
+        priorKnowledge: [{ concept: "Vectors", level: 1 }],
+      }),
+    ).toBe(true);
     resetOnboardingStore();
     await store().hydrate();
     expect(store().serverStep).toBe("workshop");
@@ -204,15 +199,12 @@ describe("navigation and persistence", () => {
   it("Back keeps answers and never goes below step 1", async () => {
     serve();
     await store().hydrate();
-    await answerSteps1to3();
-    store().back();
+    await answerStep1();
     store().back();
     store().back();
     store().back();
     expect(store().step).toBe(1);
     expect(store().profile.goal).toBe("Learn linear algebra");
-    expect(store().profile.goalType).toBe("curiosity");
-    expect(store().profile.hoursPerWeek).toBe(8);
   });
 
   it("does not persist invalid drafts", async () => {
@@ -232,9 +224,13 @@ describe("navigation and persistence", () => {
     expect(store().serverStep).toBe("questionnaire");
     expect((await saved()).step).toBe("questionnaire");
 
-    await answerSteps1to3();
-    store().advance({ priorKnowledge: [{ concept: "Learn linear algebra", level: 0 }] });
-    expect(await store().finish()).toBe(true);
+    await answerStep1();
+    expect(
+      await store().finish({
+        preferences: { formats: ["reading"] },
+        priorKnowledge: [{ concept: "Learn linear algebra", level: 0 }],
+      }),
+    ).toBe(true);
     expect(store().serverStep).toBe("workshop");
     expect((await saved()).step).toBe("workshop");
   });

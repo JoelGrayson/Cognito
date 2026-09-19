@@ -153,7 +153,7 @@ export const PlanGraph = DraftGraph.extend({ nodes: z.array(PlanNode).max(30) })
 
 export const LearnerProfile = z.object({
   goal: z.string(),
-  goalType: z.enum(["career", "exam", "project", "curiosity"]),
+  goalType: z.enum(["career", "exam", "project", "curiosity"]).optional(),
   deadline: z.string().optional(),            // ISO date
   hoursPerWeek: z.number(),
   priorKnowledge: z.array(z.object({ concept: z.string(), level: z.union([z.literal(0), z.literal(1), z.literal(2)]) })),

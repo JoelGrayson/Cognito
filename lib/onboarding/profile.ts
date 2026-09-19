@@ -1,8 +1,8 @@
-import type { LearnerProfile, OnboardingProfile } from "@/types/learning";
+import { LearnerProfile, type OnboardingProfile } from "@/types/learning";
 import { CONSTRAINTS_MAX, GOAL_MAX, GOAL_MIN, HOURS_MAX, HOURS_MIN, type ProfilePatch } from "./schemas";
 
-export type UiStep = 1 | 2 | 3 | 4 | 5;
-export const STEP_COUNT = 5;
+export type UiStep = 1 | 2;
+export const STEP_COUNT = 2;
 export type Level = 0 | 1 | 2;
 type PriorKnowledge = LearnerProfile["priorKnowledge"];
 
@@ -37,26 +37,19 @@ const daysOk = (days?: number) => days !== undefined && Number.isInteger(days) &
 export function stepError(step: UiStep, profile: OnboardingProfile, today = localToday()): string | null {
   switch (step) {
     case 1:
-      return goalOk(profile.goal) ? null : `Describe what you want to learn in ${GOAL_MIN} to ${GOAL_MAX} characters.`;
-    case 2:
-      if (!profile.goalType) return "Pick the option that fits best.";
+      if (!goalOk(profile.goal)) return `Describe what you want to learn in ${GOAL_MIN} to ${GOAL_MAX} characters.`;
       if (profile.deadline && !isFutureDate(profile.deadline, today)) return "Pick a date in the future, or clear it.";
       return null;
-    case 3:
-      if (!hoursOk(profile.hoursPerWeek)) return `Choose between ${HOURS_MIN} and ${HOURS_MAX} hours a week.`;
-      if (!profile.preferences?.pace) return "Pick a pace.";
-      if (!daysOk(profile.availability?.daysPerWeek)) return "Choose how many days a week.";
+    case 2:
+      if (!profile.preferences?.formats?.length) return "Pick at least one way you like to learn.";
+      if (!profile.priorKnowledge?.length) return "Tell us where you are starting from.";
       return null;
-    case 4:
-      return profile.priorKnowledge?.length ? null : "Tell us where you are starting from.";
-    case 5:
-      return profile.preferences?.formats?.length ? null : "Pick at least one way you like to learn.";
   }
 }
 
 /** Resume point: the first step whose answers are missing or invalid, or null when all are complete. */
 export function firstIncompleteStep(profile: OnboardingProfile, today = localToday()): UiStep | null {
-  for (const step of [1, 2, 3, 4, 5] as const) if (stepError(step, profile, today)) return step;
+  for (const step of [1, 2] as const) if (stepError(step, profile, today)) return step;
   return null;
 }
 
@@ -110,4 +103,24 @@ export function priorKnowledgeToRatings(priorKnowledge: PriorKnowledge | undefin
 
 export function priorKnowledgeToLevel(priorKnowledge: PriorKnowledge | undefined, goal: string): Level | undefined {
   return priorKnowledge?.find((entry) => entry.concept === goal)?.level;
+}
+
+/**
+ * Materializes the strict LearnerProfile once the questionnaire is complete, or null.
+ * Fields the questionnaire no longer asks (hoursPerWeek, pace, daysPerWeek)
+ * resolve to DEFAULTS until the learner changes them in settings. Optional
+ * answers like goalType stay unset rather than being guessed.
+ */
+export function toLearnerProfile(profile: OnboardingProfile): LearnerProfile | null {
+  // "0000-00-00" accepts any stored deadline, same as the PATCH gate.
+  if (firstIncompleteStep(profile, "0000-00-00")) return null;
+  const parsed = LearnerProfile.safeParse({
+    ...profile,
+    goal: profile.goal!.trim(),
+    hoursPerWeek: profile.hoursPerWeek ?? DEFAULTS.hoursPerWeek,
+    preferences: { pace: DEFAULTS.pace, ...profile.preferences },
+    availability: { daysPerWeek: DEFAULTS.daysPerWeek, ...profile.availability },
+    priorKnowledge: profile.priorKnowledge ?? [],
+  });
+  return parsed.success ? parsed.data : null;
 }

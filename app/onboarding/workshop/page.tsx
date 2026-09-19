@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { DEFAULTS } from "@/lib/onboarding/profile";
 import { onboardingRepo } from "@/lib/repo";
 import { getUserId } from "@/lib/session";
 
@@ -15,13 +16,13 @@ export default async function WorkshopPlaceholder() {
     ["Goal", profile.goal],
     ["Why", profile.goalType],
     ["Deadline", profile.deadline ?? "None"],
-    ["Hours per week", profile.hoursPerWeek?.toString()],
-    ["Pace", profile.preferences?.pace],
-    ["Days per week", profile.availability?.daysPerWeek?.toString()],
+    ["Hours per week", (profile.hoursPerWeek ?? DEFAULTS.hoursPerWeek).toString()],
+    ["Pace", profile.preferences?.pace ?? DEFAULTS.pace],
+    ["Days per week", (profile.availability?.daysPerWeek ?? DEFAULTS.daysPerWeek).toString()],
     ["Starting point", profile.priorKnowledge?.map((k) => `${k.concept} (${k.level})`).join(", ")],
     ["Formats", profile.preferences?.formats?.join(", ")],
     ["Tutor style", profile.tutorStyle],
-    ["Constraints", profile.constraints || undefined],
+    ["Context", profile.constraints || undefined],
     ["Timezone", profile.availability?.timezone],
   ];
 

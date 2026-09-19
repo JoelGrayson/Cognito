@@ -22,9 +22,9 @@ interface OnboardingStore {
   /** Loading the saved answers. */
   status: "loading" | "ready" | "error";
   profile: OnboardingProfile;
-  /** The screen being shown (1 to 5). */
+  /** The screen being shown (1 to 2). */
   step: UiStep;
-  /** The persisted step: stays "questionnaire" until step 5 completes. */
+  /** The persisted step: stays "questionnaire" until the final screen completes. */
   serverStep: OnboardingStep;
   save: "idle" | "saving" | "error";
   saveError: string | null;
@@ -35,7 +35,7 @@ interface OnboardingStore {
   setProfile: (patch: OnboardingProfile) => void;
   advance: (patch?: OnboardingProfile) => void;
   back: () => void;
-  /** Step 5: saves and moves the flow to the workshop. Resolves false when saving failed. */
+  /** Final screen: saves and moves the flow to the workshop. Resolves false when saving failed. */
   finish: (patch?: OnboardingProfile) => Promise<boolean>;
   retryConcepts: () => void;
 }

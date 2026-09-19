@@ -24,7 +24,7 @@ const PROBLEMS = [
 ];
 
 const STEPS = [
-  { title: "Tell us your goal", body: "Five quick questions: what you want, why, your deadline, and what you already know." },
+  { title: "Tell us your goal", body: "Two quick screens: what you want to learn and what you already know." },
   { title: "Shape the map", body: "Chat with the AI or edit the graph yourself. Your edits always win." },
   { title: "Get your plan", body: "An ordered roadmap with a week-by-week schedule, ready to start." },
 ];

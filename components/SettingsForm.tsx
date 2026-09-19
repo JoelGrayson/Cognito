@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
+import { LearningPrefs } from "@/components/LearningPrefs";
 import { readSettings, serverSettings, subscribeSettings, writeSettings } from "@/lib/settings";
 
 export function SettingsForm() {
@@ -37,6 +38,8 @@ export function SettingsForm() {
           <span className="switch-knob" />
         </button>
       </div>
+
+      <LearningPrefs />
     </main>
   );
 }
