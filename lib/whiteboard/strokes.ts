@@ -84,6 +84,11 @@ export interface EndpointConfig {
    *  on the next line. Line-break commits are exempt: if the learner has moved on,
    *  whatever they wrote is what they wrote. */
   minStrokesForIdleCommit: number;
+  /** How much LONGER the pen must stay still before a provisionally-read line is
+   *  treated as final. Without this the last line of a session is never settled -
+   *  nothing follows it to trigger a line break - so anything withheld pending
+   *  finalization (notably speech) would be withheld forever. */
+  settleAfterIdleMs: number;
   /** Fallback only, for the final line: commit after the pen is idle this long.
    *  Raised back to 2200ms after 1200ms proved short enough to fire mid-word while
    *  the learner paused between strokes of a character, which reads as garbage and
@@ -102,6 +107,7 @@ export const DEFAULT_ENDPOINT_CONFIG: EndpointConfig = {
   minStrokesForBreak: 2,
   minLineWidthForBreak: 40,
   minStrokesForIdleCommit: 2,
+  settleAfterIdleMs: 1500,
   finalLineIdleMs: 2200,
 };
 
@@ -210,11 +216,14 @@ export function recordStrokes(
   let bounds: Bounds | null = null;
   let lineId = 0;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
   let idleFiredFor = -1;
 
   const cancelIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
+    if (settleTimer) clearTimeout(settleTimer);
     idleTimer = null;
+    settleTimer = null;
   };
 
   /**
@@ -229,7 +238,17 @@ export function recordStrokes(
     idleTimer = setTimeout(() => {
       if (line.length < cfg.minStrokesForIdleCommit) return;
       idleFiredFor = lineId;
+      const committedLine = lineId;
       onCommit({ strokes: [...line], lineId, reason: "idle" });
+
+      // Still nothing written after that? Then the provisional reading was right and
+      // the line is done. This is what settles a LAST line, which no line break ever
+      // reaches. Any new stroke cancels it via armIdle().
+      settleTimer = setTimeout(() => {
+        if (lineId === committedLine && idleFiredFor === committedLine) {
+          onCommit({ strokes: [], lineId: committedLine, reason: "finalized" });
+        }
+      }, cfg.settleAfterIdleMs);
     }, cfg.finalLineIdleMs);
   };
 
