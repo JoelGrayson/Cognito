@@ -1,23 +1,25 @@
 /**
- * Speech -> text. Deepgram, prerecorded endpoint.
+ * Speech -> text. ElevenLabs Scribe, the same key that does the speaking.
  *
- * Prerecorded rather than streaming because the mic is PUSH-TO-TALK: the learner
- * holds a key, speaks, releases, and we get one complete clip. That deletes the
- * entire endpointing problem for audio -- no VAD, no turn detection, no barge-in
- * race -- which matters in a loud room and matters more given how much trouble
- * endpointing already caused on the ink side.
+ * One vendor, one key, one less signup, one less thing to break at hour 23.
+ * Deepgram was the original plan and its turn detection is genuinely better, but
+ * that advantage only matters for an OPEN mic -- and this mic is push-to-talk, so
+ * there is no turn to detect. Release is the end of turn. With that removed, the
+ * remaining difference did not justify a second vendor.
+ *
+ * Prerecorded rather than streaming for the same reason: the learner holds a key,
+ * speaks, releases, and we get one complete clip.
  */
 import { NextResponse } from "next/server";
 
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
-  const key = process.env.DEEPGRAM_API_KEY;
+  const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
-    return NextResponse.json({ error: "Set DEEPGRAM_API_KEY in .env.local." }, { status: 400 });
+    return NextResponse.json({ error: "Set ELEVENLABS_API_KEY in .env.local." }, { status: 400 });
   }
 
-  const contentType = request.headers.get("content-type") ?? "audio/webm";
   const audio = await request.arrayBuffer();
   if (audio.byteLength === 0) {
     return NextResponse.json({ error: "No audio received." }, { status: 400 });
@@ -26,25 +28,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Clip too long." }, { status: 413 });
   }
 
-  const started = Date.now();
-  const params = new URLSearchParams({
-    model: "nova-3",
-    smart_format: "true",
-    punctuate: "true",
-    // The learner is explaining maths out loud; these are the words they'll use.
-    keyterm: "inequality",
-  });
+  const contentType = request.headers.get("content-type") ?? "audio/webm";
+  const form = new FormData();
+  form.append("model_id", "scribe_v1");
+  form.append("file", new Blob([audio], { type: contentType }), "clip.webm");
 
+  const started = Date.now();
   let res: Response;
   try {
-    res = await fetch(`https://api.deepgram.com/v1/listen?${params}`, {
+    res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
       method: "POST",
-      headers: { Authorization: `Token ${key}`, "Content-Type": contentType },
-      body: audio,
+      headers: { "xi-api-key": key },
+      body: form,
     });
   } catch (error) {
     return NextResponse.json(
-      { error: `Could not reach Deepgram: ${error instanceof Error ? error.message : "unknown"}` },
+      { error: `Could not reach ElevenLabs: ${error instanceof Error ? error.message : "unknown"}` },
       { status: 502 },
     );
   }
@@ -53,14 +52,19 @@ export async function POST(request: Request) {
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
-    return NextResponse.json({ error: `Deepgram ${res.status}`, ms }, { status: 502 });
+    return NextResponse.json(
+      { error: `ElevenLabs ${res.status}: ${data?.detail?.message ?? "transcription failed"}`, ms },
+      { status: 502 },
+    );
   }
 
-  const alt = data?.results?.channels?.[0]?.alternatives?.[0];
-  const transcript: string = alt?.transcript ?? "";
-  const confidence: number | null = alt?.confidence ?? null;
+  const transcript: string = (data?.text ?? "").trim();
+  console.log(`[voice] transcribe ${ms}ms bytes=${audio.byteLength} "${transcript.slice(0, 60)}"`);
 
-  console.log(`[voice] transcribe ${ms}ms bytes=${audio.byteLength} conf=${confidence?.toFixed?.(2) ?? "?"} "${transcript.slice(0, 60)}"`);
-
-  return NextResponse.json({ transcript, confidence, ms });
+  return NextResponse.json({
+    transcript,
+    // Scribe reports language confidence rather than a transcription confidence.
+    confidence: data?.language_probability ?? null,
+    ms,
+  });
 }

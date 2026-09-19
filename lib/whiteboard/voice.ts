@@ -5,6 +5,11 @@
  * is loud, and an open mic turns "has she finished speaking?" into the same
  * endpointing problem that cost three debugging rounds on the ink side. Holding a
  * key removes the question entirely -- release IS the end of turn.
+ *
+ * Both directions run on ONE ElevenLabs key (Flash for speech, Scribe for
+ * transcription). A second STT vendor was in the plan for its better turn
+ * detection, but that only helps an open mic, and push-to-talk has no turn to
+ * detect.
  */
 
 export interface Speaker {
