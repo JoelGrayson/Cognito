@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { LessonView, type LessonState } from "@/components/Lesson";
 import { ProviderSelect } from "@/components/ProviderSelect";
 import { Roadmap, RoadmapLegend, RoadmapSkeleton } from "@/components/Roadmap";
@@ -10,14 +10,18 @@ import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { findRef, lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
 import {
+  deleteRoadmap,
+  listRoadmaps,
   loadLesson as loadSavedLesson,
   loadMap,
   loadRoadmap,
   newRoadmapId,
   roadmapStorageKey,
+  roadmapsVersion,
   roadmapUrl,
   saveLesson,
   saveMap,
+  subscribeRoadmaps,
 } from "@/lib/saved-roadmaps";
 import type { Lesson, MapNode, MindMap, Resource, Video } from "@/lib/schema";
 import { trpc } from "@/lib/trpc";
@@ -58,7 +62,7 @@ export default function Home() {
   const [lessons, setLessons] = useState<Record<string, LessonState>>({});
 
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [providerId, setProviderId] = useState<ProviderId>("anthropic");
+  const [providerId, setProviderId] = useState<ProviderId>("openai");
   const abortRef = useRef<AbortController | null>(null);
   /** Mirrors `selected` for callbacks that must not re-create on every selection. */
   const selectedRef = useRef<NodeRef | null>(null);
@@ -74,6 +78,10 @@ export default function Home() {
   }, [roadmapId]);
   /** Maps this tab generated. Only these are written to storage; other tabs add lessons. */
   const ownedIds = useRef(new Set<string>());
+  /** The change the learner asked for, by id of the revised map it produced. */
+  const instructions = useRef(new Map<string, string>());
+  /** Roadmaps saved in this browser, for the home page. -1 on the server, which has no storage. */
+  const savedVersion = useSyncExternalStore(subscribeRoadmaps, roadmapsVersion, () => -1);
   /** This tab was opened from a lesson link while the map was still streaming in its original tab. */
   const [remoteDraft, setRemoteDraft] = useState(false);
   /** Set once the address has been read, so the address is not overwritten before that. */
@@ -120,6 +128,7 @@ export default function Home() {
     const previousId = roadmapIdRef.current;
     const id = newRoadmapId();
     ownedIds.current.add(id);
+    if (body.instruction) instructions.current.set(id, body.instruction);
     setRoadmapId(id);
     setRemoteDraft(false);
     setLoading(true);
@@ -263,6 +272,12 @@ export default function Home() {
   );
 
   /** Rebuild the page from a lesson link (`?r=<id>&lesson=<name>`) opened in a new tab. */
+  // Only read on the home page, where the list is shown.
+  const history = useMemo(
+    () => (query === null && savedVersion >= 0 ? listRoadmaps() : []),
+    [query, savedVersion],
+  );
+
   const restoreFromAddress = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("r");
@@ -310,7 +325,13 @@ export default function Home() {
   // generated a map saves it, including while it streams; any tab saves finished lessons.
   useEffect(() => {
     if (!roadmapId || !query || !map || !ownedIds.current.has(roadmapId)) return;
-    saveMap(roadmapId, { topic: query, provider: providerId, map, complete: !loading });
+    saveMap(roadmapId, {
+      topic: query,
+      provider: providerId,
+      map,
+      complete: !loading,
+      instruction: instructions.current.get(roadmapId),
+    });
   }, [roadmapId, query, map, loading, providerId]);
 
   useEffect(() => {
@@ -521,6 +542,40 @@ export default function Home() {
         </div>
 
         {error && <p className="mt-6 text-sm text-red-600">{error}</p>}
+
+        {history.length > 0 && (
+          <section className="mt-16 w-full max-w-3xl pb-16" aria-labelledby="history-heading">
+            <h2 id="history-heading" className="px-2 text-sm font-medium text-neutral-500">
+              Your roadmaps
+            </h2>
+            <ul className="mt-2 divide-y divide-neutral-100">
+              {history.map((h) => (
+                <li key={h.id} className="history-item">
+                  <a href={roadmapUrl(h.id)} className="history-link">
+                    <span className="block truncate text-[15px] text-neutral-900">{h.title}</span>
+                    <span className="block truncate text-sm text-neutral-500">
+                      {h.instruction ? <>Revised: &ldquo;{h.instruction}&rdquo;</> : <>&ldquo;{h.topic}&rdquo;</>}
+                    </span>
+                  </a>
+                  <span className="shrink-0 text-right text-xs text-neutral-400">
+                    {h.lessonsWritten} of {h.blocks} lessons
+                    <br />
+                    {timeAgo(h.savedAt)}
+                  </span>
+                  <button
+                    type="button"
+                    className="history-remove"
+                    onClick={() => deleteRoadmap(h.id)}
+                    aria-label={`Remove ${h.title}`}
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
     );
   }
@@ -675,4 +730,16 @@ function allRefs(map: MindMap): NodeRef[] {
     { stage: i, kind: "core" as const, index: 0 },
     ...stage.supporting.map((_, index) => ({ stage: i, kind: "supporting" as const, index })),
   ]);
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 d ago", then a date. */
+function timeAgo(ms: number): string {
+  const minutes = Math.round((Date.now() - ms) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days} d ago`;
+  return new Date(ms).toLocaleDateString();
 }

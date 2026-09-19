@@ -13,10 +13,16 @@ import type {
 export const SYSTEM_PROMPT = `You are an expert curriculum designer. The user names something they want to learn. Lay out the knowledge they need as a learning roadmap.
 
 Structure:
-- stages: ordered top to bottom in the sequence a learner should tackle them. Each stage has one core node (the main thing to learn at that stage; the core nodes form the spine of the roadmap) and 0-2 supporting nodes learned alongside it.
+- stages: listed top to bottom in a sensible order to tackle them. Each stage has one core node (the main thing to learn at that stage) and 0-2 supporting nodes learned alongside it.
+- link: how each stage relates to the stage directly above it. The first stage uses "recommended".
+  - "requires": it genuinely cannot be understood without the stage above (or, if that stage is in an any-order group, without the whole group). A true prerequisite, like derivatives before differential equations. Use it only when that is really so; it is drawn as an arrow.
+  - "any-order": it and the stage above can be learned in either order. A run of stages joined by "any-order" is one group whose stages can all be taken in any order, so only join a stage to a group when it is independent of every stage already in it.
+  - "recommended": no hard dependency; the listed order is simply a sensible default.
 - phase: "prerequisite" for background a learner needs before the topic itself, "core" for the topic proper, "advanced" for deeper or applied material that builds on the core. Phases appear in that order.
 
 Guidelines:
+- Be strict about "requires". Test each one: could a motivated learner follow this stage if they skipped the stage above and got a one-paragraph recap? If yes, it is not "requires". Coming later in time or in a textbook is not a prerequisite: in history, a later period is "recommended" after an earlier one, not "requires". Good "requires" links are rare, like needing algebra before calculus or needing to know what a variable is before loops. Use "requires" at most three times in the whole map; when in doubt, use "recommended".
+- Look for groups: stages that build on the same foundation but not on each other (the army, religion and daily life of one era; several independent tools or techniques; separate applications) belong in one "any-order" group.
 - Aim for 4-7 stages. Most stages have 2 supporting nodes; use fewer when nothing genuinely belongs alongside.
 - Node names are 1-4 words. Subtitles list the key concepts in 2-5 words, comma-separated (e.g. "P, Q, S, power factor"). Descriptions are one plain sentence.
 - Match the scope of the request. A narrow topic gets a narrow, deep roadmap; a broad field gets a broad one.
@@ -55,7 +61,7 @@ export const PLAN_SYSTEM_PROMPT = `You are an expert teacher planning one lesson
 
 Guidelines:
 - 3-6 sections in teaching order: motivate, explain the core ideas, work a concrete example, connect to what comes next. Each section's intent is one sentence saying exactly what it must cover, precise enough that a writer who sees only the plan will not overlap the neighbouring sections.
-- Assume the learner knows the earlier stages of the roadmap and nothing from later ones.
+- Assume the learner knows what this block builds on (the stages above it, especially ones it needs) and nothing from later stages.
 - TL;DR: 2-3 plain sentences that give the gist to someone who reads nothing else: the core idea, why it matters, and the one thing to remember. No jargon the lesson has not explained.
 - Key takeaways: 3-5 one-sentence statements the learner should be able to make afterwards.
 - Write in the same language the roadmap is written in.`;
@@ -93,8 +99,9 @@ export const SECTION_SYSTEM_PROMPT = `You are an expert teacher writing one sect
 Guidelines:
 - Teach, don't list. Explain the ideas and why they matter. Include a concrete example (a calculation, a code snippet, a worked scenario) when the section's intent calls for it.
 - 1-3 short paragraphs separated by blank lines, about 120-220 words; a worked example may run to 300.
-- You may use **bold** for key terms, \`code\` for code or symbols, and lines starting with "- " for bullet lists. No headings and no section title.
-- Assume the learner knows the earlier stages of the roadmap and nothing from later ones.
+- You may use **bold** for key terms, \`code\` for short code or symbols, and lines starting with "- " for bullet lists. No headings and no section title.
+- Multi-line code goes in a fenced block on its own lines (\`\`\`rust, code, then \`\`\`), never across single backticks and never inside a bullet.
+- Assume the learner knows what this block builds on (the stages above it, especially ones it needs) and nothing from later stages.
 - Write in the same language as the plan.`;
 
 export function sectionPrompt(req: LessonRequest & { outline: LessonPlan; index: number }): string {
@@ -115,14 +122,16 @@ function outline(map: MindMap): string {
   return map.stages
     .map((s, i) => {
       const alongside = s.supporting.map((n) => n.name).join(", ");
-      return `${i + 1}. [${s.phase}] ${s.core.name}${alongside ? ` (alongside: ${alongside})` : ""}`;
+      const link =
+        i === 0 ? "" : s.link === "requires" ? " (needs the stage above)" : s.link === "any-order" ? " (any order with the stage above)" : "";
+      return `${i + 1}. [${s.phase}] ${s.core.name}${alongside ? ` (alongside: ${alongside})` : ""}${link}`;
     })
     .join("\n");
 }
 
 /* ---------- Tutor chat ---------- */
 
-export const TUTOR_SYSTEM_PROMPT = `You are a patient tutor sitting next to a learner who is reading a lesson. You can see the lesson. Answer their questions directly and concretely, tying answers back to the lesson where that helps. Keep replies short: a few sentences to a few short paragraphs. You may use **bold**, \`code\` and "- " bullets.
+export const TUTOR_SYSTEM_PROMPT = `You are a patient tutor sitting next to a learner who is reading a lesson. You can see the lesson. Answer their questions directly and concretely, tying answers back to the lesson where that helps. Keep replies short: a few sentences to a few short paragraphs. You may use **bold**, \`code\` and "- " bullets; put multi-line code in a fenced \`\`\` block on its own lines.
 
 If the learner asks you to change the lesson itself (make it simpler or deeper, add or remove a section, add an example, shift the focus, fix a mistake), return the complete revised lesson in updatedLesson and use reply to say briefly what you changed. Keep everything they did not ask about as it was, including resources and videoQuery unless the change calls for new ones. If they are only asking a question, set updatedLesson to null.`;
 

@@ -53,13 +53,13 @@ dev server after changing environment variables.
 
 ## Swapping the AI provider
 
-The model dropdown lets you pick who generates the roadmap. A provider shows up as available once its credentials are in `.env.local` (or, for local, once the server is reachable).
+The model dropdown lets you pick who generates the roadmap. A provider shows up as available once its credentials are in `.env.local` (or, for local, once the server is reachable). The dropdown lists OpenAI, Grok, Claude, then Local, and defaults to the first one that is set up.
 
 | Provider | Env vars | Default model |
 | --- | --- | --- |
-| Claude | `ANTHROPIC_API_KEY`, optional `ANTHROPIC_MODEL` | `claude-opus-5` |
 | OpenAI | `OPENAI_API_KEY`, optional `OPENAI_MODEL` | `gpt-5` |
 | Grok | `XAI_API_KEY`, optional `XAI_MODEL` | `grok-4` |
+| Claude | `ANTHROPIC_API_KEY`, optional `ANTHROPIC_MODEL` | `claude-opus-5` |
 | Local | optional `LOCAL_BASE_URL`, `LOCAL_MODEL`, `LOCAL_API_KEY` | auto-detected from the server, preferring a Qwen model |
 
 Optional: set `YOUTUBE_API_KEY` (YouTube Data API v3) to pick lesson videos through the official API. Without it the app reads the first result off YouTube's public search page, and falls back to a search link if that fails.

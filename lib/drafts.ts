@@ -1,4 +1,4 @@
-import type { Lesson, MapNode, MindMap, Phase, QuizQuestion, Resource, Video } from "@/lib/schema";
+import type { Lesson, MapNode, MindMap, Phase, StageLink, QuizQuestion, Resource, Video } from "@/lib/schema";
 
 /* Shapes of things while they are still streaming in, plus the sanitisers
    that turn a half-parsed JSON object into one of them. Client-safe. */
@@ -57,6 +57,7 @@ export interface QuestionDraft {
 }
 
 const PHASES = new Set<Phase>(["prerequisite", "core", "advanced"]);
+const LINKS = new Set<StageLink>(["requires", "any-order", "recommended"]);
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -85,10 +86,11 @@ export function partialMindMap(raw: unknown): MindMap | null {
       const core = node(s.core);
       if (!core) continue;
       const phase = PHASES.has(s.phase as Phase) ? (s.phase as Phase) : "core";
+      const link = LINKS.has(s.link as StageLink) ? (s.link as StageLink) : "recommended";
       const supporting = Array.isArray(s.supporting)
         ? s.supporting.map(node).filter((n): n is MapNode => n !== null)
         : [];
-      stages.push({ phase, core, supporting });
+      stages.push({ link, phase, core, supporting });
     }
   }
   return { topic: str(raw.topic), summary: str(raw.summary), stages };

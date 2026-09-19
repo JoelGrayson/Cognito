@@ -382,6 +382,25 @@ a.card:focus-visible {
 .prose-lite strong {
   font-weight: 600;
 }
+.prose-lite pre {
+  margin: 0 0 0.9em;
+  overflow-x: auto;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #f1f0ec;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.prose-lite pre:last-child {
+  margin-bottom: 0;
+}
+.prose-lite pre code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-size: inherit;
+  white-space: pre;
+}
 
 /* ---------- Quiz ---------- */
 .quiz-cta {
@@ -626,12 +645,18 @@ a.card:focus-visible {
 /* Legend under the roadmap. */
 .legend {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px 18px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   margin-top: 14px;
   font-size: 12.5px;
   color: #6f6f6f;
+}
+.legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
 }
 .legend li {
   display: inline-flex;
@@ -654,4 +679,91 @@ a.card:focus-visible {
 .legend .legend-swatch-plain {
   --card-bg: #fff;
   --card-border: #8c8b86;
+}
+.legend-arrow {
+  width: 9px;
+  height: 16px;
+}
+.legend-group {
+  display: inline-block;
+  width: 22px;
+  height: 14px;
+  border: 1px solid #cfcdc5;
+  border-radius: 4px;
+  background: #fff;
+}
+
+/* ---------- Roadmap structure ---------- */
+/* No hard dependency between these stages: just space, no arrow. */
+.gap-row {
+  height: 30px;
+}
+/* Stages that can be learned in any order share a box. It bleeds into the
+   panel's padding so the columns inside stay aligned with the ones outside. */
+.order-group {
+  position: relative;
+  margin: 0 -16px;
+  padding: 32px 16px 16px;
+  border: 1px solid #dcdad3;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+}
+.order-group-label {
+  position: absolute;
+  top: 10px;
+  left: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8c8b86;
+}
+.group-gap {
+  height: 18px;
+}
+.roadmap-compact .gap-row {
+  height: 9px;
+}
+.roadmap-compact .order-group {
+  margin: 0 -4px;
+  padding: 5px 4px;
+  border-radius: 7px;
+}
+.roadmap-compact .group-gap {
+  height: 7px;
+}
+
+/* ---------- Saved roadmaps on the home page ---------- */
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 10px;
+  padding: 10px 8px;
+}
+.history-item:hover {
+  background: #f6f5f2;
+}
+.history-link {
+  min-width: 0;
+  flex: 1;
+}
+.history-remove {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  color: #a3a29d;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+.history-item:hover .history-remove,
+.history-remove:focus-visible {
+  opacity: 1;
+}
+.history-remove:hover {
+  background: #e9e8e3;
+  color: #333;
 }
