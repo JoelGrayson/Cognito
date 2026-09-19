@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiHandler, BadRequest, providerFrom, readJson } from "@/lib/api";
 import { keepReachable } from "@/lib/links";
+import { parsePartialJson } from "@/lib/partial-json";
 import { TUTOR_SYSTEM_PROMPT, tutorPrompt } from "@/lib/prompt";
 import { ChatMessageSchema, LessonSchema, TutorReplySchema, type Lesson } from "@/lib/schema";
+import { ndjson, throttle } from "@/lib/stream";
 import { findVideo } from "@/lib/youtube";
 
 export const maxDuration = 120;
@@ -12,17 +13,19 @@ const BodySchema = z.object({
   topic: z.string().trim().min(1).max(500),
   lesson: LessonSchema,
   messages: z
-    .array(
-      ChatMessageSchema.extend({
-        content: z.string().trim().min(1).max(4000),
-      }),
-    )
+    .array(ChatMessageSchema.extend({ content: z.string().trim().min(1).max(4000) }))
     .min(1)
     .max(40),
   provider: z.string(),
   model: z.string().optional(),
 });
 
+/**
+ * Streams newline-delimited JSON:
+ *   {type:"reply", reply}                              the answer, as it is written
+ *   {type:"done", reply, lesson|null, provider, model, ms}
+ *   {type:"error", error}
+ */
 export const POST = apiHandler(async (request) => {
   const body = await readJson(request, BodySchema);
   const provider = providerFrom(body.provider);
@@ -31,35 +34,43 @@ export const POST = apiHandler(async (request) => {
 
   // The model sees the lesson content, not the server-resolved video.
   const { video, ...content } = body.lesson;
-
   const started = Date.now();
-  const result = await provider.structured(
-    {
-      name: "tutor_reply",
-      effort: "low",
-      schema: TutorReplySchema,
-      system: TUTOR_SYSTEM_PROMPT,
-      user: tutorPrompt(body.topic, content, body.messages),
-    },
-    body.model,
-  );
 
-  let lesson: Lesson | null = null;
-  const updated = result.output.updatedLesson;
-  if (updated) {
-    const sameVideo = updated.videoQuery.trim() === content.videoQuery.trim();
-    const [resources, newVideo] = await Promise.all([
-      keepReachable(updated.resources),
-      sameVideo ? Promise.resolve(video) : findVideo(updated.videoQuery),
-    ]);
-    lesson = { ...updated, resources, video: newVideo };
-  }
+  return ndjson(async (emit) => {
+    const partial = throttle(emit);
+    const result = await provider.structured(
+      {
+        name: "tutor_reply",
+        schema: TutorReplySchema,
+        system: TUTOR_SYSTEM_PROMPT,
+        user: tutorPrompt(body.topic, content, body.messages),
+        effort: "minimal",
+        onText: (text) => {
+          const draft = parsePartialJson(text) as { reply?: unknown } | undefined;
+          if (draft && typeof draft.reply === "string") partial({ type: "reply", reply: draft.reply });
+        },
+      },
+      body.model,
+    );
 
-  return NextResponse.json({
-    reply: result.output.reply,
-    lesson,
-    provider: provider.id,
-    model: result.model,
-    ms: Date.now() - started,
+    let lesson: Lesson | null = null;
+    const updated = result.output.updatedLesson;
+    if (updated) {
+      const sameVideo = updated.videoQuery.trim() === content.videoQuery.trim();
+      const [resources, newVideo] = await Promise.all([
+        keepReachable(updated.resources),
+        sameVideo ? Promise.resolve(video) : findVideo(updated.videoQuery),
+      ]);
+      lesson = { ...updated, resources, video: newVideo };
+    }
+
+    emit({
+      type: "done",
+      reply: result.output.reply,
+      lesson,
+      provider: provider.id,
+      model: result.model,
+      ms: Date.now() - started,
+    });
   });
 });

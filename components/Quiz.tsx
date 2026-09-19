@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import type { QuestionDraft } from "@/lib/drafts";
+import { ensureOk, readNdjson } from "@/lib/ndjson";
 import type { ProviderId } from "@/lib/providers/types";
 import type { Lesson, Quiz } from "@/lib/schema";
 import { RichText } from "./RichText";
@@ -12,7 +14,7 @@ interface Props {
 
 type State =
   | { status: "idle" }
-  | { status: "loading" }
+  | { status: "loading"; questions: QuestionDraft[] }
   | { status: "error"; message: string }
   | { status: "ready"; quiz: Quiz };
 
@@ -23,7 +25,7 @@ export function QuizPanel({ lesson, providerId }: Props) {
   const [checked, setChecked] = useState(false);
 
   async function load() {
-    setState({ status: "loading" });
+    setState({ status: "loading", questions: [] });
     setAnswers({});
     setChecked(false);
     try {
@@ -32,16 +34,31 @@ export function QuizPanel({ lesson, providerId }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lesson, provider: providerId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-      if (!data.quiz?.questions?.length) throw new Error("The quiz came back empty.");
-      setState({ status: "ready", quiz: data.quiz });
+      await ensureOk(res);
+      let finished = false;
+      await readNdjson(res, (event) => {
+        if (event.type === "partial") {
+          setState({ status: "loading", questions: event.questions as QuestionDraft[] });
+        } else if (event.type === "done") {
+          finished = true;
+          const quiz = event.quiz as Quiz;
+          if (!quiz.questions.length) throw new Error("The quiz came back empty.");
+          setState({ status: "ready", quiz });
+        } else if (event.type === "error") {
+          throw new Error(String(event.error));
+        }
+      });
+      if (!finished) throw new Error("The quiz never finished.");
     } catch (err) {
       setState({ status: "error", message: err instanceof Error ? err.message : "Something went wrong." });
     }
   }
 
-  if (state.status !== "ready") {
+  const ready = state.status === "ready";
+  const questions: QuestionDraft[] =
+    state.status === "ready" ? state.quiz.questions : state.status === "loading" ? state.questions : [];
+
+  if (questions.length === 0) {
     return (
       <div className="mt-14 flex flex-col items-center gap-3">
         <button type="button" className="quiz-cta" onClick={load} disabled={state.status === "loading"}>
@@ -58,16 +75,15 @@ export function QuizPanel({ lesson, providerId }: Props) {
     );
   }
 
-  const { quiz } = state;
-  const total = quiz.questions.length;
+  const total = questions.length;
   const answered = Object.keys(answers).length;
-  const score = quiz.questions.reduce((n, q, i) => n + (answers[i] === q.answer ? 1 : 0), 0);
+  const score = questions.reduce((n, q, i) => n + (answers[i] === q.answer ? 1 : 0), 0);
 
   return (
     <section className="mt-14">
       <h2 className="lesson-h2">Quiz</h2>
       <ol className="mt-4 space-y-5">
-        {quiz.questions.map((q, i) => {
+        {questions.map((q, i) => {
           const picked = answers[i];
           return (
             <li key={i} className="panel px-5 py-4">
@@ -85,7 +101,7 @@ export function QuizPanel({ lesson, providerId }: Props) {
                     <button
                       key={j}
                       type="button"
-                      disabled={checked}
+                      disabled={checked || !ready}
                       aria-pressed={isPicked}
                       className={`quiz-choice ${tone}`}
                       onClick={() => setAnswers((a) => ({ ...a, [i]: j }))}
@@ -96,13 +112,19 @@ export function QuizPanel({ lesson, providerId }: Props) {
                   );
                 })}
               </div>
-              {checked && <RichText text={q.explanation} className="mt-3 text-sm text-neutral-600" />}
+              {checked && q.explanation && (
+                <RichText text={q.explanation} className="mt-3 text-sm text-neutral-600" />
+              )}
             </li>
           );
         })}
       </ol>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-        {!checked ? (
+        {!ready ? (
+          <p className="flex items-center gap-2 text-sm text-neutral-500">
+            <span className="spinner spinner-dark" /> Writing more questions…
+          </p>
+        ) : !checked ? (
           <button type="button" className="quiz-cta" disabled={answered < total} onClick={() => setChecked(true)}>
             Check answers{answered < total ? ` (${answered}/${total})` : ""}
           </button>

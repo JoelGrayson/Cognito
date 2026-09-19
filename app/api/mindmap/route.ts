@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiHandler, BadRequest, providerFrom, readJson } from "@/lib/api";
+import { partialMindMap } from "@/lib/drafts";
+import { parsePartialJson } from "@/lib/partial-json";
 import { SYSTEM_PROMPT, userPrompt } from "@/lib/prompt";
 import { MindMapSchema, type GenerateRequest } from "@/lib/schema";
+import { ndjson, throttle } from "@/lib/stream";
 import { getAuth } from "@/lib/auth";
 
 // Roadmap generation can take a while on reasoning models.
@@ -16,6 +19,12 @@ const BodySchema = z.object({
   instruction: z.string().optional(),
 });
 
+/**
+ * Streams newline-delimited JSON:
+ *   {type:"partial", mindMap}   as stages arrive
+ *   {type:"done", mindMap, provider, model, ms}
+ *   {type:"error", error}
+ */
 export const POST = apiHandler(async (request) => {
   const session = await getAuth().api.getSession({ headers: request.headers });
   if (!session) {
@@ -40,14 +49,28 @@ export const POST = apiHandler(async (request) => {
   }
 
   const started = Date.now();
-  const result = await provider.structured(
-    { name: "mind_map", schema: MindMapSchema, system: SYSTEM_PROMPT, user: userPrompt(req) },
-    body.model,
-  );
-  return NextResponse.json({
-    mindMap: result.output,
-    provider: provider.id,
-    model: result.model,
-    ms: Date.now() - started,
+  return ndjson(async (emit) => {
+    const partial = throttle(emit);
+    const result = await provider.structured(
+      {
+        name: "mind_map",
+        schema: MindMapSchema,
+        system: SYSTEM_PROMPT,
+        user: userPrompt(req),
+        effort: "minimal",
+        onText: (text) => {
+          const draft = partialMindMap(parsePartialJson(text));
+          if (draft && draft.stages.length > 0) partial({ type: "partial", mindMap: draft });
+        },
+      },
+      body.model,
+    );
+    emit({
+      type: "done",
+      mindMap: result.output,
+      provider: provider.id,
+      model: result.model,
+      ms: Date.now() - started,
+    });
   });
 });

@@ -79,6 +79,42 @@ export const LessonContentSchema = z.object({
     .describe("A YouTube search query, 3-8 words, that finds a good explanatory video for this lesson"),
 });
 
+/** Writing a lesson, part one: the plan the sections are written from. */
+export const LessonPlanSchema = z.object({
+  title: z.string().describe("Lesson title, usually the node name"),
+  summary: z.string().describe("One sentence on what the learner will understand after this lesson"),
+  sections: z
+    .array(
+      z.object({
+        heading: z.string().describe("Short section title, 2-6 words"),
+        intent: z
+          .string()
+          .describe(
+            "One sentence saying exactly what this section teaches, precise enough that it can be written on its own without overlapping the neighbouring sections",
+          ),
+      }),
+    )
+    .describe("3-6 sections in teaching order: motivate, explain, work an example, connect onward"),
+  keyTakeaways: z.array(z.string()).describe("3-5 one-sentence takeaways"),
+});
+
+/** Written alongside the plan: where else to look. */
+export const LessonExtrasSchema = z.object({
+  resources: z.array(ResourceSchema).describe("3-5 useful resources"),
+  videoQuery: z
+    .string()
+    .describe("A YouTube search query, 3-8 words, that finds a good explanatory video for this lesson"),
+});
+
+/** Phase two: one section's text, written from the plan. */
+export const SectionBodySchema = z.object({
+  body: z
+    .string()
+    .describe(
+      "1-3 paragraphs separated by blank lines. May use **bold** for key terms, `code` for code or symbols, and lines starting with '- ' for bullets. No headings.",
+    ),
+});
+
 /** A video the server resolved from the model's search query. */
 export const VideoSchema = z.object({
   id: z.string().nullable(),
@@ -90,6 +126,8 @@ export const VideoSchema = z.object({
 export const LessonSchema = LessonContentSchema.extend({ video: VideoSchema });
 
 export type Resource = z.infer<typeof ResourceSchema>;
+export type LessonPlan = z.infer<typeof LessonPlanSchema>;
+export type LessonExtras = z.infer<typeof LessonExtrasSchema>;
 export type LessonSection = z.infer<typeof LessonSectionSchema>;
 export type LessonContent = z.infer<typeof LessonContentSchema>;
 export type Video = z.infer<typeof VideoSchema>;
