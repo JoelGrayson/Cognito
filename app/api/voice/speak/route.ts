@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiHandler, readJson } from "@/lib/api";
+import { getAuth } from "@/lib/auth";
 import { deepgramConfigured, deepgramSpeak } from "@/lib/deepgram";
 
 export const maxDuration = 30;
@@ -10,6 +11,10 @@ const BodySchema = z.object({
 });
 
 export const POST = apiHandler(async (request) => {
+  const session = await getAuth().api.getSession({ headers: request.headers });
+  if (!session) {
+    return NextResponse.json({ error: "Your session has expired. Please try again." }, { status: 401 });
+  }
   if (!deepgramConfigured()) {
     return NextResponse.json({ error: "Voice is not configured." }, { status: 503 });
   }

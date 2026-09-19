@@ -33,7 +33,7 @@ const eslintConfig = defineConfig([
   {
     files: [
       "lib/auth.ts", "lib/auth-client.ts", "lib/user-data.ts", "app/api/auth/**",
-      "app/legacy/**", "app/api/mindmap/**", "app/api/lesson/**", "app/api/quiz/**",
+      "app/legacy/**", "app/api/mindmap/**", "app/api/lesson/**", "app/api/quiz/**", "app/api/voice/**",
       "lib/chatgpt/**", "components/ChatGPTConnect.tsx",
       // Persistence and identity boundary: the only Phase-0 modules allowed near db/auth.
       "lib/repo/**", "lib/session.ts",

@@ -106,7 +106,10 @@ function browserVoice(): Voice {
       try {
         recognition.start();
       } catch {
-        handlers.onError();
+        aborted = true;
+        finished = true;
+        recognition.abort();
+        return null;
       }
 
       return {
@@ -193,7 +196,13 @@ function deepgramImplementation(): Voice {
         recorder = null;
         stream?.getTracks().forEach((track) => track.stop());
         stream = null;
-        if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+        if (ws) {
+          ws.onopen = null;
+          ws.onmessage = null;
+          ws.onclose = null;
+          ws.onerror = null;
+          if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) ws.close();
+        }
         ws = null;
       };
       const reportTerminalError = () => {
@@ -242,6 +251,8 @@ function deepgramImplementation(): Voice {
             audio: { echoCancellation: true, noiseSuppression: true },
           });
           if (aborted || finished || stopRequested) {
+            stream.getTracks().forEach((track) => track.stop());
+            stream = null;
             finish();
             return;
           }
@@ -256,9 +267,16 @@ function deepgramImplementation(): Voice {
             vad_events: "true",
             language,
           });
-          ws = new WebSocket(`wss://api.deepgram.com/v1/listen?${query}`, ["bearer", token.access_token]);
-          ws.onopen = () => {
-            if (aborted || finished || stopRequested) {
+          const socket = new WebSocket(`wss://api.deepgram.com/v1/listen?${query}`, ["bearer", token.access_token]);
+          ws = socket;
+          socket.onopen = () => {
+            if (aborted || finished) {
+              socket.close();
+              stream?.getTracks().forEach((track) => track.stop());
+              stream = null;
+              return;
+            }
+            if (stopRequested) {
               requestStop();
               return;
             }
@@ -273,7 +291,7 @@ function deepgramImplementation(): Voice {
               fail();
             }
           };
-          ws.onmessage = (event) => {
+          socket.onmessage = (event) => {
             if (finished) return;
             let message: {
               type?: string;
@@ -301,10 +319,10 @@ function deepgramImplementation(): Voice {
               finish();
             }
           };
-          ws.onerror = () => {
+          socket.onerror = () => {
             if (!transcriptSeen) fail();
           };
-          ws.onclose = () => {
+          socket.onclose = () => {
             if (finished) return;
             if (stopRequested || finalText.trim()) finish();
             else {
@@ -423,7 +441,7 @@ export function loadVoice(): Promise<Voice> {
       .then((response) => {
         const browser = browserVoice();
         if (response.ok) return deepgramVoice();
-        if (response.status === 503) return browser;
+        if (response.status === 401 || response.status === 503) return browser;
         return { ...browser, speak: deepgramSpeak };
       })
       .catch(() => browserVoice());
