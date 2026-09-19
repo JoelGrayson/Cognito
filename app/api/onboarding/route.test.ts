@@ -10,11 +10,8 @@ const patch = (body: unknown) =>
 
 const completeProfile = {
   goal: "Learn linear algebra",
-  goalType: "curiosity",
-  hoursPerWeek: 5,
   priorKnowledge: [{ concept: "Vectors", level: 0 }],
-  preferences: { pace: "steady", formats: ["reading", "voice"] },
-  availability: { daysPerWeek: 3, timezone: "America/New_York" },
+  preferences: { formats: ["reading", "voice"] },
 };
 
 beforeEach(() => {
@@ -110,6 +107,12 @@ describe("PATCH /api/onboarding", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).errors[0]).toMatch(/step 2/);
     expect((await (await GET()).json()).step).toBe("questionnaire");
+  });
+
+  it("lets a profile without the settings-only fields reach the workshop", async () => {
+    const res = await patch({ profile: completeProfile, step: "workshop" });
+    expect(res.status).toBe(200);
+    expect((await res.json()).step).toBe("workshop");
   });
 
   it("returns 500 with a generic message when persistence throws", async () => {

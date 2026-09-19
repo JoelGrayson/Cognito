@@ -75,7 +75,7 @@ export function newRoadmapId(): string {
 }
 
 /** Where the roadmap app lives. */
-export const ROADMAP_PATH = "/";
+export const ROADMAP_PATH: string = "/legacy";
 
 /** Address of a roadmap, or of one block's lesson in it. */
 export function roadmapUrl(id: string, lesson?: string): string {

@@ -6,12 +6,9 @@ import { ensureAnonymousSession } from "@/lib/auth-client";
 import { useOnboarding } from "@/lib/stores/onboarding";
 import { ProgressBar } from "./ProgressBar";
 import { Step1Goal } from "./Step1Goal";
-import { Step2Why } from "./Step2Why";
-import { Step3Time } from "./Step3Time";
-import { Step4Concepts } from "./Step4Concepts";
-import { Step5Style } from "./Step5Style";
+import { Step2Start } from "./Step2Start";
 
-const STEPS = { 1: Step1Goal, 2: Step2Why, 3: Step3Time, 4: Step4Concepts, 5: Step5Style } as const;
+const STEPS = { 1: Step1Goal, 2: Step2Start } as const;
 
 /** `edit` reopens the questionnaire after it was completed (Back from the workshop). */
 export function OnboardingFlow({ edit = false }: { edit?: boolean }) {
