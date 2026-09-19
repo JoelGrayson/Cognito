@@ -24,7 +24,7 @@ import {
   type Lesson,
   type Quiz,
 } from "@/lib/schema";
-import { findVideo } from "@/lib/youtube";
+import { findHelpfulVideo } from "@/lib/video";
 import { publicProcedure, router } from "./trpc";
 
 const ProviderIdSchema = z.enum(["anthropic", "openai", "xai", "local"]);
@@ -143,7 +143,14 @@ export const appRouter = router({
         const sameVideo = updated.videoQuery.trim() === content.videoQuery.trim();
         const [resources, newVideo] = await Promise.all([
           keepReachable(updated.resources),
-          sameVideo ? Promise.resolve(video) : findVideo(updated.videoQuery),
+          sameVideo
+            ? Promise.resolve(video)
+            : findHelpfulVideo(
+                provider,
+                { topic: input.topic, lesson: updated.title, summary: updated.summary },
+                updated.videoQuery,
+                input.model,
+              ),
         ]);
         lesson = { ...updated, resources, video: newVideo };
       }

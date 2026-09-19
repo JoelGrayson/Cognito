@@ -3,7 +3,7 @@
 import { draftFromLesson, type LessonDraft } from "@/lib/drafts";
 import type { ProviderId } from "@/lib/providers/types";
 import { nodeAt, type NodeRef } from "@/lib/roadmap";
-import type { Lesson, MindMap, Video } from "@/lib/schema";
+import type { Lesson, MapNode, MindMap } from "@/lib/schema";
 import { LessonChat } from "./LessonChat";
 import { QuizPanel } from "./Quiz";
 import { RichText } from "./RichText";
@@ -28,6 +28,8 @@ interface Props {
   mapStreaming?: boolean;
   /** Address of a block's lesson, so mini-map blocks open in a new tab too. */
   lessonHref?: (ref: NodeRef) => string | undefined;
+  /** Whether a block's lesson is fully written, for the mini map's borders. */
+  isReady?: (node: MapNode) => boolean;
   onLessonChange: (lesson: Lesson) => void;
 }
 
@@ -42,6 +44,7 @@ export function LessonView({
   onRetry,
   mapStreaming,
   lessonHref,
+  isReady,
   onLessonChange,
 }: Props) {
   const at = nodeAt(map, selected);
@@ -63,14 +66,14 @@ export function LessonView({
       <div className="min-w-0">
         <div className="lesson-top">
           <div className="minimap">
-            <Roadmap map={map} compact selected={selected} onSelect={onSelectNode} streaming={mapStreaming} hrefFor={lessonHref} />
+            <Roadmap map={map} compact selected={selected} onSelect={onSelectNode} streaming={mapStreaming} hrefFor={lessonHref} isReady={isReady} />
             <button type="button" className="minimap-expand" onClick={onBack} title="Back to the roadmap" aria-label="Back to the roadmap">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
               </svg>
             </button>
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="lesson-heading">
             <p className="text-sm text-neutral-500">
               <span className="capitalize">{phase}</span> · {node.subtitle}
             </p>
@@ -96,7 +99,18 @@ export function LessonView({
 
         {draft && (
           <>
-            <div className="lesson-hero">
+            <section className="panel mt-8 px-6 py-5" aria-label="TL;DR">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">TL;DR</h2>
+              {draft.tldr ? (
+                <p className="mt-2 text-[17px] leading-relaxed text-neutral-800">{draft.tldr}</p>
+              ) : (
+                <div className="mt-3 space-y-2" aria-busy="true">
+                  <div className="skeleton-line w-full" />
+                  <div className="skeleton-line w-3/4" />
+                </div>
+              )}
+            </section>
+            <div className={draft.video && !draft.video.id ? "lesson-hero lesson-hero-single" : "lesson-hero"}>
               <section>
                 <h2 className="lesson-h2">Useful resources</h2>
                 {draft.resources === null ? (
@@ -136,9 +150,9 @@ export function LessonView({
                 <div className="video video-pending" aria-busy="true">
                   Finding a video…
                 </div>
-              ) : (
-                <VideoBox video={draft.video} />
-              )}
+              ) : draft.video.id ? (
+                <VideoBox id={draft.video.id} title={draft.video.title} />
+              ) : null}
             </div>
 
             {draft.sections.length === 0
@@ -190,27 +204,21 @@ export function LessonView({
   );
 }
 
-function VideoBox({ video }: { video: Video }) {
-  if (video.id) {
-    return (
-      <div>
-        <div className="video">
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${video.id}`}
-            title={video.title ?? "Lesson video"}
-            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerPolicy="strict-origin-when-cross-origin"
-            allowFullScreen
-          />
-        </div>
-        {video.title && <p className="mt-2 truncate text-sm text-neutral-500">{video.title}</p>}
-      </div>
-    );
-  }
+/** Only shown when a video was judged genuinely helpful; otherwise the slot is left out. */
+function VideoBox({ id, title }: { id: string; title: string | null }) {
   return (
-    <a href={video.searchUrl} target="_blank" rel="noopener noreferrer" className="video video-fallback">
-      Find a video on YouTube ↗
-    </a>
+    <div>
+      <div className="video">
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${id}`}
+          title={title ?? "Lesson video"}
+          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+        />
+      </div>
+      {title && <p className="mt-2 truncate text-sm text-neutral-500">{title}</p>}
+    </div>
   );
 }
 
@@ -227,7 +235,12 @@ function SectionSkeleton() {
 
 function LessonSkeleton() {
   return (
-    <div className="mt-10" aria-busy="true" aria-label="Writing the lesson">
+    <div className="mt-8" aria-busy="true" aria-label="Writing the lesson">
+      <div className="panel space-y-2 px-6 py-5">
+        <div className="skeleton-line h-3 w-12" />
+        <div className="skeleton-line w-full" />
+        <div className="skeleton-line w-3/4" />
+      </div>
       <div className="lesson-hero">
         <div className="space-y-3">
           <div className="skeleton-line h-5 w-40" />

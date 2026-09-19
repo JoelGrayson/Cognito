@@ -77,7 +77,8 @@ body {
   text-align: center;
   min-height: 82px;
   padding: 12px 16px;
-  border: 1.5px solid var(--card-border);
+  /* Dotted until the block's lesson is written, then solid. */
+  border: 1.5px dotted var(--card-border);
   border-radius: 10px;
   background: var(--card-bg);
   color: var(--card-fg);
@@ -169,6 +170,9 @@ a.card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+.card[data-ready="true"] {
+  border-style: solid;
+}
 .card[data-selected="true"] {
   outline: 2px solid #111;
   outline-offset: 1px;
@@ -177,19 +181,19 @@ a.card:focus-visible {
 /* ---------- Mini map in the lesson view ---------- */
 .roadmap-compact .stage-row,
 .roadmap-compact .arrow-row {
-  gap: 5px;
+  gap: 7px;
 }
 .roadmap-compact .arrow-row {
-  height: 13px;
+  height: 16px;
 }
 .roadmap-compact .arrow-row > svg {
-  width: 6px;
+  width: 7px;
 }
 .roadmap-compact .card {
   min-height: 0;
-  padding: 3px 4px;
+  padding: 5px 6px;
   border-width: 1px;
-  border-radius: 4px;
+  border-radius: 5px;
   transition: filter 120ms ease;
 }
 .roadmap-compact .card:hover {
@@ -202,22 +206,22 @@ a.card:focus-visible {
   outline-offset: 0;
 }
 .roadmap-compact .card-name {
-  font-size: 6.5px;
-  line-height: 1.2;
+  font-size: 10.5px;
+  line-height: 1.25;
 }
 .roadmap-compact .card-sub {
-  margin-top: 0;
-  font-size: 5px;
-  line-height: 1.2;
+  margin-top: 1px;
+  font-size: 8.5px;
+  line-height: 1.25;
 }
 @media (max-width: 640px) {
   .roadmap-compact .stage-row,
   .roadmap-compact .arrow-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 5px;
+    gap: 7px;
   }
   .roadmap-compact .arrow-row {
-    height: 13px;
+    height: 16px;
   }
   .roadmap-compact .arrow-row > svg {
     grid-column: 2;
@@ -233,7 +237,8 @@ a.card:focus-visible {
 .minimap {
   position: relative;
   flex: none;
-  width: 250px;
+  width: 380px;
+  max-width: 100%;
   border: 1px solid #dddcd7;
   border-radius: 6px;
   background: #fff;
@@ -283,6 +288,11 @@ a.card:focus-visible {
   align-items: flex-start;
   gap: 24px 32px;
 }
+/* Sits beside the mini map when there is room, and drops below it when there is not. */
+.lesson-heading {
+  flex: 1 1 280px;
+  min-width: 0;
+}
 .lesson-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -293,6 +303,10 @@ a.card:focus-visible {
   .lesson-hero {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
+  }
+  /* No helpful video: the resources take the whole row. */
+  .lesson-hero.lesson-hero-single {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .lesson-h2 {
@@ -333,16 +347,6 @@ a.card:focus-visible {
   width: 100%;
   height: 100%;
   border: 0;
-}
-.video-fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #444;
-  font-size: 15px;
-}
-.video-fallback:hover {
-  background: #d1d1d1;
 }
 
 /* Simple markdown-ish text. */
@@ -602,4 +606,18 @@ a.card:focus-visible {
   color: #777;
   font-size: 14px;
   animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* "Generate all lessons" and its Stop button. */
+.bulk-button {
+  border: 1px solid #d4d3ce;
+  border-radius: 9999px;
+  padding: 5px 14px;
+  background: #fff;
+  color: #333;
+  font-size: 13px;
+  transition: background-color 120ms ease;
+}
+.bulk-button:hover {
+  background: #f1f0ec;
 }

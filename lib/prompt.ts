@@ -56,6 +56,7 @@ export const PLAN_SYSTEM_PROMPT = `You are an expert teacher planning one lesson
 Guidelines:
 - 3-6 sections in teaching order: motivate, explain the core ideas, work a concrete example, connect to what comes next. Each section's intent is one sentence saying exactly what it must cover, precise enough that a writer who sees only the plan will not overlap the neighbouring sections.
 - Assume the learner knows the earlier stages of the roadmap and nothing from later ones.
+- TL;DR: 2-3 plain sentences that give the gist to someone who reads nothing else: the core idea, why it matters, and the one thing to remember. No jargon the lesson has not explained.
 - Key takeaways: 3-5 one-sentence statements the learner should be able to make afterwards.
 - Write in the same language the roadmap is written in.`;
 
@@ -77,7 +78,7 @@ export const EXTRAS_SYSTEM_PROMPT = `You pick further reading and a video for on
 
 Guidelines:
 - Resources: 3-5 real, well-known pages: official documentation, Wikipedia, university course notes, textbook sites, standards bodies. Give full https URLs and only ones you are confident exist. Never invent a URL.
-- videoQuery: the search you would type into YouTube to find a good explanatory video for this lesson.
+- videoQuery: the search you would type into YouTube to find a clear explainer for exactly this lesson. Pin the subject down in the roadmap's context so results are not about something that merely shares a word (for a Roman history roadmap, "Roman Empire Mediterranean trade routes", not "Italy geography"). Leave it empty if a video would add little beyond the written lesson.
 - Write in the same language the roadmap is written in.`;
 
 export function extrasPrompt(req: LessonRequest): string {
@@ -145,4 +146,43 @@ export const QUIZ_SYSTEM_PROMPT = `You write short quizzes that check whether a 
 
 export function quizPrompt(lesson: LessonContent): string {
   return `Write a 5-question quiz for this lesson:\n${JSON.stringify(lesson)}`;
+}
+
+export const VIDEO_PICK_SYSTEM_PROMPT = `You decide whether a YouTube video belongs next to one lesson in a learning roadmap, and which one. You see search results: titles, channels, lengths, view counts and description snippets.
+
+Rate every result:
+- strong: it clearly teaches this lesson's actual subject, in the roadmap's field and era, at a sensible depth, from a credible educational source (educators, universities, established explainer channels). You would confidently put it in a textbook's "watch this" box.
+- weak: related, but generic, shallow, low production, only partly on the lesson, or from an unclear source.
+- off-topic: about a different subject that shares words with the lesson (modern-day geopolitics or travel for a lesson on the ancient world, a different kind of "transformer"), or clickbait, opinion, news, reaction, vlog, trailer, product, or a screen recording that reads pages aloud.
+Judge by what the video is about, not by shared keywords. View count is a quality signal: a video with only a few thousand views from a channel you do not recognise is at most weak, however good its title sounds. When unsure, rate weak. Only strong videos are shown; an empty slot is better than a weak video.`;
+
+export function videoPickPrompt(
+  about: { topic: string; lesson: string; summary: string },
+  candidates: {
+    title: string;
+    channel: string | null;
+    seconds: number | null;
+    views: number | null;
+    description: string | null;
+  }[],
+): string {
+  const length = (s: number | null) =>
+    s === null ? null : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const views = (n: number | null) =>
+    n === null
+      ? null
+      : `${n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : n} views`;
+  return [
+    `Roadmap topic: ${about.topic}`,
+    `Lesson: ${about.lesson}. ${about.summary}`,
+    ``,
+    `Search results:`,
+    ...candidates.map((c, i) =>
+      [`${i}. "${c.title}"`, c.channel, length(c.seconds), views(c.views), c.description?.replace(/\s+/g, " ").slice(0, 160)]
+        .filter(Boolean)
+        .join(" · "),
+    ),
+    ``,
+    `Rate each result.`,
+  ].join("\n");
 }

@@ -19,7 +19,7 @@ import {
   saveLesson,
   saveMap,
 } from "@/lib/saved-roadmaps";
-import type { Lesson, MindMap, Resource, Video } from "@/lib/schema";
+import type { Lesson, MapNode, MindMap, Resource, Video } from "@/lib/schema";
 import { trpc } from "@/lib/trpc";
 
 interface Meta {
@@ -36,6 +36,9 @@ interface GenerateBody {
 }
 
 const EXAMPLES = ["Three-phase power", "Machine learning", "Rust", "Jazz piano"];
+
+/** Lessons written at once by "Generate all". Each lesson already makes several calls in parallel. */
+const BULK_CONCURRENCY = 3;
 
 export default function Home() {
   const [topic, setTopic] = useState("");
@@ -77,6 +80,14 @@ export default function Home() {
   const restoredRef = useRef(false);
   /** Lessons already written to storage, as `${roadmapId}:${lessonKey}`, so each is written once. */
   const savedLessons = useRef(new Map<string, Lesson>());
+  /** Mirrors `lessons` for the "Generate all" workers, which run across many renders. */
+  const lessonsRef = useRef(lessons);
+  useEffect(() => {
+    lessonsRef.current = lessons;
+  }, [lessons]);
+  /** Progress of "Generate all"; null when it is not running. */
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+  const bulkAbortRef = useRef<AbortController | null>(null);
 
   // Find out which providers this server can actually use.
   useEffect(() => {
@@ -102,6 +113,10 @@ export default function Home() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    // Lessons being written in bulk were planned against the old map.
+    bulkAbortRef.current?.abort();
+    bulkAbortRef.current = null;
+    setBulk(null);
     const previousId = roadmapIdRef.current;
     const id = newRoadmapId();
     ownedIds.current.add(id);
@@ -159,7 +174,7 @@ export default function Home() {
   }, []);
 
   const loadLesson = useCallback(
-    async (ref: NodeRef, currentMap: MindMap, currentTopic: string, provider: ProviderId) => {
+    async (ref: NodeRef, currentMap: MindMap, currentTopic: string, provider: ProviderId, signal?: AbortSignal) => {
       const at = nodeAt(currentMap, ref);
       if (!at) return;
       const key = lessonKey(at.node);
@@ -172,6 +187,7 @@ export default function Home() {
       try {
         const res = await fetch("/api/lesson", {
           method: "POST",
+          signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             topic: currentTopic,
@@ -191,6 +207,7 @@ export default function Home() {
                 ...draft,
                 title: o.title || at.node.name,
                 summary: o.summary || at.node.description,
+                tldr: o.tldr,
                 sections: o.sections.map((sec, i) => ({
                   heading: sec.heading,
                   body: draft.sections[i]?.body ?? "",
@@ -227,6 +244,16 @@ export default function Home() {
         });
         if (!finished) throw new Error("The lesson never finished.");
       } catch (err) {
+        if (signal?.aborted) {
+          // Stopped on purpose: forget the half-written lesson so opening the block starts it again.
+          setLessons((s) => {
+            if (s[key]?.status === "ready") return s;
+            const next = { ...s };
+            delete next[key];
+            return next;
+          });
+          return;
+        }
         const message = err instanceof Error ? err.message : "Something went wrong.";
         const partial = draft.sections.length > 0 ? draft : undefined;
         setLessons((s) => ({ ...s, [key]: { status: "error", message, draft: partial } }));
@@ -319,9 +346,63 @@ export default function Home() {
     return at ? roadmapUrl(roadmapId, lessonKey(at.node)) : undefined;
   }
 
+  /** Write every lesson that is not written yet, a few at a time, in roadmap order. */
+  async function generateAll() {
+    if (!map || !query || bulkAbortRef.current) return;
+    const currentMap = map;
+    const currentTopic = query;
+    const provider = providerId;
+    const id = roadmapId;
+    const needsLesson = (ref: NodeRef) => {
+      const at = nodeAt(currentMap, ref);
+      const state = at ? lessonsRef.current[lessonKey(at.node)] : undefined;
+      return !!at && (!state || state.status === "error");
+    };
+    const queue = allRefs(currentMap).filter(needsLesson);
+    if (queue.length === 0) return;
+
+    const controller = new AbortController();
+    bulkAbortRef.current = controller;
+    const total = queue.length;
+    let done = 0;
+    setBulk({ done, total });
+
+    const worker = async () => {
+      for (let ref = queue.shift(); ref && !controller.signal.aborted; ref = queue.shift()) {
+        // Skip blocks opened by hand or written by another tab since the queue was built.
+        if (needsLesson(ref)) {
+          const at = nodeAt(currentMap, ref)!;
+          const key = lessonKey(at.node);
+          const saved = id ? loadSavedLesson(id, key) : null;
+          if (saved && id) {
+            savedLessons.current.set(`${id}:${key}`, saved);
+            setLessons((s) => ({ ...s, [key]: { status: "ready", lesson: saved } }));
+          } else {
+            await loadLesson(ref, currentMap, currentTopic, provider, controller.signal);
+          }
+        }
+        if (controller.signal.aborted) return;
+        done += 1;
+        setBulk({ done, total });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(BULK_CONCURRENCY, total) }, worker));
+    if (bulkAbortRef.current === controller) {
+      bulkAbortRef.current = null;
+      setBulk(null);
+    }
+  }
+
+  function stopGenerateAll() {
+    bulkAbortRef.current?.abort();
+    bulkAbortRef.current = null;
+    setBulk(null);
+  }
+
   function startTopic(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return;
+    stopGenerateAll();
     setQuery(trimmed);
     setMap(null);
     setMeta(null);
@@ -388,6 +469,7 @@ export default function Home() {
 
   function reset() {
     abortRef.current?.abort();
+    stopGenerateAll();
     setQuery(null);
     setMap(null);
     setMeta(null);
@@ -443,6 +525,9 @@ export default function Home() {
     );
   }
 
+  const isReady = (node: MapNode) => lessons[lessonKey(node)]?.status === "ready";
+  const unwritten = map ? allRefs(map).filter((ref) => !isReady(nodeAt(map, ref)!.node)).length : 0;
+
   const selectedAt = map && selected ? nodeAt(map, selected) : null;
   const lessonState: LessonState = selectedAt
     ? (lessons[lessonKey(selectedAt.node)] ?? { status: "loading" })
@@ -475,6 +560,7 @@ export default function Home() {
             onLessonChange={updateLesson}
             mapStreaming={(loading && mapDraft) || remoteDraft}
             lessonHref={lessonHref}
+            isReady={isReady}
           />
         </div>
       ) : (
@@ -484,19 +570,22 @@ export default function Home() {
           </h1>
 
           <div className="mt-12">
-            {map && !loading && !remoteDraft ? <Roadmap map={map} onSelect={openLesson} hrefFor={lessonHref} /> : null}
+            {map && !loading && !remoteDraft ? (
+              <Roadmap map={map} onSelect={openLesson} hrefFor={lessonHref} isReady={isReady} />
+            ) : null}
             {map && ((loading && mapDraft) || (!loading && remoteDraft)) ? (
               <Roadmap
                 map={map}
                 pending={Math.max(1, 5 - map.stages.length)}
                 onSelect={openLesson}
                 hrefFor={lessonHref}
+                isReady={isReady}
                 streaming
               />
             ) : null}
             {map && loading && !mapDraft ? (
               <div className="opacity-50 transition-opacity">
-                <Roadmap map={map} />
+                <Roadmap map={map} isReady={isReady} />
               </div>
             ) : null}
             {!map && loading ? <RoadmapSkeleton /> : null}
@@ -524,6 +613,25 @@ export default function Home() {
               )}
               {!loading && <span className="block mt-1 text-neutral-400">Click a block to open its lesson.</span>}
             </p>
+          )}
+
+          {map && !loading && !remoteDraft && (bulk || unwritten > 0) && (
+            <div className="mt-4 flex items-center justify-center gap-3 text-sm text-neutral-600">
+              {bulk ? (
+                <>
+                  <span aria-live="polite">
+                    Writing lessons: {bulk.done} of {bulk.total} done
+                  </span>
+                  <button type="button" className="bulk-button" onClick={stopGenerateAll}>
+                    Stop
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="bulk-button" onClick={() => void generateAll()}>
+                  Generate all {unwritten} lessons
+                </button>
+              )}
+            </div>
           )}
 
           {map && error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
@@ -557,4 +665,12 @@ export default function Home() {
       )}
     </main>
   );
+}
+
+/** Every block in a map, in roadmap order: each stage's core block, then its supporting blocks. */
+function allRefs(map: MindMap): NodeRef[] {
+  return map.stages.flatMap((stage, i) => [
+    { stage: i, kind: "core" as const, index: 0 },
+    ...stage.supporting.map((_, index) => ({ stage: i, kind: "supporting" as const, index })),
+  ]);
 }
