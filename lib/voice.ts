@@ -52,7 +52,7 @@ function pacedDuration(text: string): number {
   return Math.min(9000, 1200 + text.split(/\s+/).length * 260);
 }
 
-function pacedSpeaker(text: string): Speaker {
+export function pacedSpeaker(text: string): Speaker {
   let settled = false;
   let settle!: () => void;
   const timer = setTimeout(finish, pacedDuration(text));
@@ -101,7 +101,7 @@ function browserVoice(): Voice {
         finished = true;
         handlers.onInterim("");
         const text = finalText.trim();
-        if (text && !aborted) handlers.onFinal(text);
+        if (!aborted) handlers.onFinal(text);
       };
       try {
         recognition.start();
@@ -160,7 +160,7 @@ function browserVoice(): Voice {
   };
 }
 
-function deepgramVoice(): Voice {
+function deepgramImplementation(): Voice {
   const canListen =
     typeof window !== "undefined" &&
     typeof MediaRecorder !== "undefined" &&
@@ -207,7 +207,7 @@ function deepgramVoice(): Voice {
         teardown();
         handlers.onInterim("");
         const text = finalText.trim();
-        if (text) handlers.onFinal(text);
+        handlers.onFinal(text);
       };
       const fail = () => {
         if (finished) return;
@@ -398,12 +398,34 @@ function deepgramVoice(): Voice {
   };
 }
 
+function deepgramListen(handlers: ListenHandlers, lang: string): Listener | null {
+  return deepgramImplementation().listen(handlers, lang);
+}
+
+function deepgramSpeak(text: string): Speaker {
+  return deepgramImplementation().speak(text);
+}
+
+function deepgramVoice(): Voice {
+  const implementation = deepgramImplementation();
+  return {
+    canListen: implementation.canListen,
+    listen: deepgramListen,
+    speak: deepgramSpeak,
+  };
+}
+
 let voicePromise: Promise<Voice> | null = null;
 
 export function loadVoice(): Promise<Voice> {
   if (!voicePromise) {
     voicePromise = fetch("/api/voice/token", { cache: "no-store" })
-      .then((response) => (response.ok ? deepgramVoice() : browserVoice()))
+      .then((response) => {
+        const browser = browserVoice();
+        if (response.ok) return deepgramVoice();
+        if (response.status === 503) return browser;
+        return { ...browser, speak: deepgramSpeak };
+      })
       .catch(() => browserVoice());
   }
   return voicePromise;

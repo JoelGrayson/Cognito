@@ -16,6 +16,9 @@ export async function grantDeepgramToken(): Promise<{ access_token: string; expi
     body: JSON.stringify({ ttl_seconds: 60 }),
   });
   if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error("Deepgram rejected the token grant (403): the API key needs Member permissions.");
+    }
     throw new Error(`Deepgram token request failed (${response.status}).`);
   }
   return (await response.json()) as { access_token: string; expires_in: number };

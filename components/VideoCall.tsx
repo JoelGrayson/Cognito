@@ -5,7 +5,7 @@ import { applyActions, describeBoard, learnerStroke, type BoardElement, type Res
 import { ensureOk } from "@/lib/ndjson";
 import type { ProviderId } from "@/lib/providers/types";
 import type { BoardColor, Lesson } from "@/lib/schema";
-import { loadVoice, type Listener, type Speaker, type Voice } from "@/lib/voice";
+import { loadVoice, pacedSpeaker, type Listener, type Speaker, type Voice } from "@/lib/voice";
 import { Board, INK } from "./Board";
 
 type Status = "thinking" | "speaking" | "listening" | "your-turn" | "drawing" | "ended" | "error";
@@ -116,9 +116,7 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
         await speaker.done;
         if (speakerRef.current === speaker) speakerRef.current = null;
       } else {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, Math.min(9000, 1200 + turn.say.split(/\s+/).length * 260));
-        });
+        await pacedSpeaker(turn.say).done;
       }
       if (ended.current) return;
       if (interrupted.current) {
@@ -190,7 +188,9 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
         onInterim: setHeard,
         onFinal: (text) => {
           setHeard("");
-          if (!ended.current) reply(text);
+          if (ended.current) return;
+          if (text) reply(text);
+          else setStatus((s) => (s === "listening" ? "your-turn" : s));
         },
         onError: () => setStatus("your-turn"),
       },
