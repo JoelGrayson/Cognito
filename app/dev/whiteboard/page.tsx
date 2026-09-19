@@ -21,6 +21,7 @@ import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
+import { createSpeaker, SPOKEN, ASK_WHY, type Speaker } from "@/lib/whiteboard/voice";
 import type { HintLevel } from "@/lib/whiteboard/policy";
 import {
   recordStrokes,
@@ -78,6 +79,13 @@ export default function SpikePage() {
   // Readings mirrored into a ref: the commit callback is registered once at mount
   // and would otherwise close over a stale array.
   const recorderRef = useRef<StrokeRecorder | null>(null);
+  const speakerRef = useRef<Speaker | null>(null);
+  const [voiceOn, setVoiceOn] = useState(true);
+  const voiceOnRef = useRef(voiceOn);
+  useEffect(() => {
+    voiceOnRef.current = voiceOn;
+  }, [voiceOn]);
+  const [said, setSaid] = useState<string | null>(null);
   const annotatorRef = useRef<Annotator | null>(null);
   /** lineId -> where that line sits on the canvas. This is what lets marks be placed
    *  without anyone computing coordinates. */
@@ -147,6 +155,20 @@ export default function SpikePage() {
         const marks = marksFor(verdict, lineId, rungRef.current, symbol);
         if (marks.length > 0) {
           annotatorRef.current?.draw(marks, (id) => boundsRef.current.get(id));
+
+          // Say it out loud. The words withhold exactly as much as the marks do --
+          // rung 1 says something is wrong without saying where. A page that never
+          // speaks is just a page; it's the voice that makes the silence mean
+          // something. Then ask WHY rather than explaining.
+          if (voiceOnRef.current) {
+            const line = SPOKEN[rungRef.current] ?? SPOKEN[1];
+            const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
+            const utterance = `${line} ${why}`;
+            setSaid(utterance);
+            speakerRef.current?.say(utterance).catch((e) => {
+              setError(e instanceof Error ? e.message : "Voice failed.");
+            });
+          }
         }
       }
 
@@ -182,6 +204,8 @@ export default function SpikePage() {
     setError(null);
     recorderRef.current?.clear();
     annotatorRef.current?.clear();
+    speakerRef.current?.stop();
+    setSaid(null);
     boundsRef.current.clear();
     const editor = editorRef.current;
     if (editor) {
@@ -214,6 +238,10 @@ export default function SpikePage() {
             <option value={4}>4 — circle the sign + why</option>
             <option value={5}>5 — + arrow to prior step</option>
           </select>
+        </label>
+        <label className="flex items-center gap-1 text-[11px] text-neutral-500">
+          <input type="checkbox" checked={voiceOn} onChange={(e) => setVoiceOn(e.target.checked)} />
+          voice
         </label>
         <span className="font-mono text-[10px] text-neutral-600">
           idle {idleMs}ms
@@ -253,6 +281,7 @@ export default function SpikePage() {
               if (existing.length > 0) editor.deleteShapes(existing);
 
               annotatorRef.current = createAnnotator(editor);
+              speakerRef.current ??= createSpeaker();
               // React dev-mode mounts twice. Without this, two store listeners end up
               // registered and every line is submitted twice.
               recorderRef.current?.stop();
@@ -269,6 +298,11 @@ export default function SpikePage() {
         <aside className="max-h-[38dvh] shrink-0 overflow-y-auto border-t border-neutral-800 p-3 lg:max-h-none lg:w-96 lg:border-l lg:border-t-0 lg:p-4">
           {error && (
             <p className="mb-3 rounded border border-red-900 bg-red-950/50 p-2 text-xs text-red-300">{error}</p>
+          )}
+          {said && (
+            <p className="mb-3 rounded border border-neutral-700 bg-neutral-900 p-2 text-xs italic text-neutral-300">
+              “{said}”
+            </p>
           )}
           {readings.length === 0 && !error && (
             <p className="text-xs text-neutral-500">
