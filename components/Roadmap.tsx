@@ -9,9 +9,12 @@ interface CardProps {
   onClick?: () => void;
   /** Makes the block a link, so it can also be opened in a new tab. */
   href?: string;
+  /** Its lesson is fully written: solid border instead of dotted. */
+  ready?: boolean;
 }
 
-function Card({ node, phase, selected, onClick, href }: CardProps) {
+function Card({ node, phase, selected, onClick, href, ready }: CardProps) {
+  const readyAttr = ready ? "true" : undefined;
   const inner = (
     <>
       <div className="card-name">{node.name}</div>
@@ -20,7 +23,7 @@ function Card({ node, phase, selected, onClick, href }: CardProps) {
   );
   if (!onClick) {
     return (
-      <div className="card" data-phase={phase} title={node.description}>
+      <div className="card" data-phase={phase} data-ready={readyAttr} title={node.description}>
         {inner}
       </div>
     );
@@ -31,6 +34,7 @@ function Card({ node, phase, selected, onClick, href }: CardProps) {
         href={href}
         className="card"
         data-phase={phase}
+        data-ready={readyAttr}
         data-selected={selected ? "true" : undefined}
         aria-current={selected ? "true" : undefined}
         title={node.description}
@@ -50,6 +54,7 @@ function Card({ node, phase, selected, onClick, href }: CardProps) {
       type="button"
       className="card"
       data-phase={phase}
+      data-ready={readyAttr}
       data-selected={selected ? "true" : undefined}
       aria-current={selected ? "true" : undefined}
       title={node.description}
@@ -104,6 +109,8 @@ interface RoadmapProps {
   streaming?: boolean;
   /** Address of a block's lesson, so blocks are links that open in a new tab too. */
   hrefFor?: (ref: NodeRef) => string | undefined;
+  /** Whether a block's lesson is fully written. */
+  isReady?: (node: MapNode) => boolean;
 }
 
 /** The block most recently added to a map, which is the one still being written while streaming. */
@@ -116,7 +123,16 @@ function tailOf(map: MindMap): NodeRef | null {
     : { stage, kind: "core", index: 0 };
 }
 
-export function Roadmap({ map, onSelect, selected, compact, pending = 0, streaming = false, hrefFor }: RoadmapProps) {
+export function Roadmap({
+  map,
+  onSelect,
+  selected,
+  compact,
+  pending = 0,
+  streaming = false,
+  hrefFor,
+  isReady,
+}: RoadmapProps) {
   const tail = streaming ? tailOf(map) : null;
   const slot = (ref: NodeRef) => {
     const at = nodeAt(map, ref);
@@ -129,6 +145,7 @@ export function Roadmap({ map, onSelect, selected, compact, pending = 0, streami
         selected={sameRef(selected, ref)}
         onClick={clickable ? () => onSelect(ref) : undefined}
         href={clickable ? hrefFor?.(ref) : undefined}
+        ready={isReady?.(at.node)}
       />
     );
   };

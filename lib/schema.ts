@@ -69,6 +69,11 @@ export const LessonSectionSchema = z.object({
 export const LessonContentSchema = z.object({
   title: z.string().describe("Lesson title, usually the node name"),
   summary: z.string().describe("One sentence on what the learner will understand after this lesson"),
+  tldr: z
+    .string()
+    .describe(
+      "TL;DR: 2-3 plain sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember",
+    ),
   sections: z
     .array(LessonSectionSchema)
     .describe("3-6 sections in teaching order: motivate, explain, work an example, connect onward"),
@@ -76,13 +81,18 @@ export const LessonContentSchema = z.object({
   resources: z.array(ResourceSchema).describe("3-5 useful resources"),
   videoQuery: z
     .string()
-    .describe("A YouTube search query, 3-8 words, that finds a good explanatory video for this lesson"),
+    .describe("A YouTube search query, 3-8 words, that finds a clear explainer for exactly this lesson in the roadmap's context; empty if a video would add little"),
 });
 
 /** Writing a lesson, part one: the plan the sections are written from. */
 export const LessonPlanSchema = z.object({
   title: z.string().describe("Lesson title, usually the node name"),
   summary: z.string().describe("One sentence on what the learner will understand after this lesson"),
+  tldr: z
+    .string()
+    .describe(
+      "TL;DR: 2-3 plain sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember",
+    ),
   sections: z
     .array(
       z.object({
@@ -103,7 +113,7 @@ export const LessonExtrasSchema = z.object({
   resources: z.array(ResourceSchema).describe("3-5 useful resources"),
   videoQuery: z
     .string()
-    .describe("A YouTube search query, 3-8 words, that finds a good explanatory video for this lesson"),
+    .describe("A YouTube search query, 3-8 words, that finds a clear explainer for exactly this lesson in the roadmap's context; empty if a video would add little"),
 });
 
 /** Phase two: one section's text, written from the plan. */
@@ -122,8 +132,27 @@ export const VideoSchema = z.object({
   searchUrl: z.string(),
 });
 
+/** Choosing which search result, if any, to show beside a lesson. */
+export const VideoPickSchema = z.object({
+  ratings: z
+    .array(
+      z.object({
+        index: z.number().int().describe("0-based index of the search result"),
+        why: z.string().describe("A few words on what the video is actually about"),
+        fit: z
+          .enum(["strong", "weak", "off-topic"])
+          .describe("strong only if it clearly teaches this lesson's subject in the roadmap's field and era"),
+      }),
+    )
+    .describe("One rating per search result, in order"),
+});
+
 /** The lesson as the client holds it: model content plus server-resolved extras. */
-export const LessonSchema = LessonContentSchema.extend({ video: VideoSchema });
+export const LessonSchema = LessonContentSchema.extend({
+  // Lessons written before TL;DRs existed have none.
+  tldr: z.string().default(""),
+  video: VideoSchema,
+});
 
 export type Resource = z.infer<typeof ResourceSchema>;
 export type LessonPlan = z.infer<typeof LessonPlanSchema>;

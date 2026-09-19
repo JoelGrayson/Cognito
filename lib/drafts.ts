@@ -7,6 +7,8 @@ import type { Lesson, MapNode, MindMap, Phase, QuizQuestion, Resource, Video } f
 export interface LessonDraft {
   title: string;
   summary: string;
+  /** Empty until the plan has written it. */
+  tldr: string;
   sections: { heading: string; body: string; done: boolean }[];
   keyTakeaways: string[];
   videoQuery: string;
@@ -20,6 +22,7 @@ export function emptyDraft(node: MapNode): LessonDraft {
   return {
     title: node.name,
     summary: node.description,
+    tldr: "",
     sections: [],
     keyTakeaways: [],
     videoQuery: "",
@@ -31,6 +34,7 @@ export function emptyDraft(node: MapNode): LessonDraft {
 export function draftFromLesson(lesson: Lesson): LessonDraft {
   return {
     ...lesson,
+    tldr: lesson.tldr ?? "",
     sections: lesson.sections.map((s) => ({ ...s, done: true })),
   };
 }
@@ -39,6 +43,7 @@ export function draftFromLesson(lesson: Lesson): LessonDraft {
 export interface OutlineDraft {
   title: string;
   summary: string;
+  tldr: string;
   sections: { heading: string }[];
   keyTakeaways: string[];
 }
@@ -99,6 +104,7 @@ export function partialOutline(raw: unknown): OutlineDraft | null {
   return {
     title: str(raw.title),
     summary: str(raw.summary),
+    tldr: str(raw.tldr),
     sections,
     keyTakeaways: strings(raw.keyTakeaways),
   };
