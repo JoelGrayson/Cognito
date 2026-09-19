@@ -11,7 +11,7 @@ import {
 import { APIError, createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { BetterAuthPlugin } from "better-auth";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { getDb } from "@/db";
 import { account } from "@/db/schema";
 import { invalidateChatGPTModelCache } from "@/lib/providers/chatgpt";
@@ -62,7 +62,7 @@ async function saveLinkedAccount(
   accountId: string,
   tokens: ChatGPTTokens,
 ) {
-  let linked: { id: string } | undefined;
+  let linked: { id: string; createdAt: Date } | undefined;
   try {
     linked = await ctx.context.internalAdapter.linkAccount({
       userId,
@@ -78,7 +78,7 @@ async function saveLinkedAccount(
   const existing = await getDb()
     .select({ id: account.id })
     .from(account)
-    .where(and(eq(account.userId, userId), eq(account.providerId, "chatgpt"), ne(account.id, linked.id)));
+    .where(and(eq(account.userId, userId), eq(account.providerId, "chatgpt"), lt(account.createdAt, linked.createdAt)));
   for (const row of existing) await ctx.context.internalAdapter.deleteAccount(row.id);
   invalidateChatGPTModelCache(userId);
 }
