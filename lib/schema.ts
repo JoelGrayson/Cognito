@@ -31,10 +31,30 @@ export const MindMapSchema = z.object({
   summary: z
     .string()
     .describe("One sentence on what the learner will be able to do"),
+  startingPoint: z
+    .array(z.string())
+    .describe(
+      "What you need to know before starting: 1-3 specific, checkable skills, e.g. 'Write a JavaScript function that loops over an array'. One item 'Nothing: this starts from zero' if none",
+    ),
+  outcome: z
+    .array(z.string())
+    .describe(
+      "What you will know at the end: 3-4 specific, testable tasks the learner will be able to do, each naming a concrete thing to build, calculate, write or explain",
+    ),
   stages: z
     .array(StageSchema)
-    .describe("4-7 stages in learning order, top to bottom"),
+    .describe("Stages in learning order, top to bottom: 1 for a single concept, up to about 8 for a broad field"),
+  nextSteps: z
+    .array(
+      z.object({
+        topic: z.string().describe("A short topic name the learner could type next, e.g. 'Power equations'"),
+        why: z.string().describe("One short line on what it adds"),
+      }),
+    )
+    .describe("2-4 topics to learn after this roadmap; none of them are blocks in this map"),
 });
+
+export type NextStep = z.infer<typeof MindMapSchema>["nextSteps"][number];
 
 export type Phase = z.infer<typeof PhaseSchema>;
 export type MapNode = z.infer<typeof NodeSchema>;
@@ -52,15 +72,29 @@ export const MindMapInputSchema = z.preprocess((value) => {
   if (!Array.isArray(stages)) return value;
   return {
     ...value,
+    // Added later: the intro lists at the top of the map. Early versions were one sentence.
+    startingPoint: asList((value as { startingPoint?: unknown }).startingPoint),
+    outcome: asList((value as { outcome?: unknown }).outcome),
+    nextSteps: Array.isArray((value as { nextSteps?: unknown }).nextSteps)
+      ? (value as { nextSteps: unknown[] }).nextSteps
+      : [],
     stages: stages.map((s) =>
       typeof s === "object" && s !== null && !("link" in s) ? { ...s, link: "recommended" } : s,
     ),
   };
 }, MindMapSchema);
 
+/** A list field that older roadmaps stored as one string, or not at all. */
+export function asList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+  return typeof value === "string" && value.trim() ? [value] : [];
+}
+
 /** What the client sends to generate or revise a map. */
 export interface GenerateRequest {
   topic: string;
+  /** What the learner added about their goal and what they already know. */
+  details?: string;
   /** When revising: the map as it currently stands. */
   current?: MindMap;
   /** When revising: what to change. */
@@ -84,7 +118,7 @@ export const LessonSectionSchema = z.object({
   body: z
     .string()
     .describe(
-      "1-3 paragraphs of teaching text separated by blank lines. May use **bold** for key terms, `code` for short code or symbols, lines starting with '- ' for bullets, and a fenced ``` block on its own lines for any multi-line code. No headings.",
+      "Fact-dense teaching text: mostly '- ' bullets, one new fact each, with a short paragraph only where reasoning needs prose. May use **bold** for key terms, `code` for short code or symbols, and a fenced ``` block on its own lines for any multi-line code. No headings, no filler.",
     ),
 });
 
@@ -95,7 +129,7 @@ export const LessonContentSchema = z.object({
   tldr: z
     .string()
     .describe(
-      "TL;DR: 2-3 plain sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember",
+      "TL;DR: 2-3 dense sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember; no filler",
     ),
   sections: z
     .array(LessonSectionSchema)
@@ -114,7 +148,7 @@ export const LessonPlanSchema = z.object({
   tldr: z
     .string()
     .describe(
-      "TL;DR: 2-3 plain sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember",
+      "TL;DR: 2-3 dense sentences a learner could read instead of the whole lesson: the core idea, why it matters, and the one thing to remember; no filler",
     ),
   sections: z
     .array(
@@ -144,7 +178,7 @@ export const SectionBodySchema = z.object({
   body: z
     .string()
     .describe(
-      "1-3 paragraphs separated by blank lines. May use **bold** for key terms, `code` for short code or symbols, lines starting with '- ' for bullets, and a fenced ``` block on its own lines for any multi-line code. No headings.",
+      "Fact-dense teaching text: mostly '- ' bullets, one new fact each, with a short paragraph only where reasoning needs prose. May use **bold** for key terms, `code` for short code or symbols, and a fenced ``` block on its own lines for any multi-line code. No headings, no filler.",
     ),
 });
 
@@ -232,3 +266,145 @@ export function toJsonSchema(schema: z.ZodType): Record<string, unknown> {
   delete out.$schema;
   return out;
 }
+
+/* ---------- Video lesson: whiteboard actions and tutor turns ---------- */
+
+export const BoardColorSchema = z
+  .enum(["ink", "blue", "red", "green", "orange", "purple"])
+  .describe("ink for most things; other colours to tell quantities apart, e.g. red for forces");
+
+const id = z.string().describe("Short unique id, e.g. 'f1', so it can be erased later");
+const num = z.number();
+
+/**
+ * One change to the whiteboard. A plain union (anyOf in JSON Schema), because
+ * OpenAI's strict mode rejects the oneOf a discriminated union would produce.
+ */
+export const BoardActionSchema = z.union([
+  z.object({
+    type: z.literal("text"),
+    id,
+    x: num.describe("Left edge"),
+    y: num.describe("Top edge"),
+    text: z.string().describe("A label, equation or short note. Unicode math is fine: v², √, Δ, θ, ω, →, ≈"),
+    size: z.enum(["small", "medium", "large"]),
+    color: BoardColorSchema,
+  }),
+  z.object({
+    type: z.literal("line"),
+    id,
+    x1: num,
+    y1: num,
+    x2: num,
+    y2: num,
+    arrow: z.boolean().describe("Arrowhead at (x2, y2), for vectors and forces"),
+    dashed: z.boolean(),
+    color: BoardColorSchema,
+  }),
+  z.object({ type: z.literal("rect"), id, x: num, y: num, w: num, h: num, fill: z.boolean(), color: BoardColorSchema }),
+  z.object({ type: z.literal("circle"), id, cx: num, cy: num, r: num, fill: z.boolean(), color: BoardColorSchema }),
+  z.object({
+    type: z.literal("path"),
+    id,
+    points: z.array(num).describe("Flat list x1, y1, x2, y2, ... of at least 2 points; use many points for smooth curves"),
+    closed: z.boolean(),
+    color: BoardColorSchema,
+  }),
+  z.object({
+    type: z.literal("plot"),
+    id,
+    x: num,
+    y: num,
+    w: num,
+    h: num,
+    fn: z
+      .string()
+      .describe("y as a function of x, e.g. 'sin(x)', '0.5*9.8*x^2', 'exp(-x)*cos(4*x)'. Supports + - * / ^, sin cos tan sqrt exp log abs, pi and e"),
+    xMin: num,
+    xMax: num,
+    yMin: num,
+    yMax: num,
+    xLabel: z.string(),
+    yLabel: z.string(),
+    color: BoardColorSchema,
+  }),
+  z.object({
+    type: z.literal("image"),
+    id,
+    x: num,
+    y: num,
+    w: num,
+    h: num,
+    query: z.string().describe("Search for a real photo or standard diagram on Wikimedia Commons, e.g. 'inclined plane free body diagram'"),
+  }),
+  z.object({ type: z.literal("erase"), id: z.string().describe("id of an element to remove") }),
+  z.object({ type: z.literal("clear") }),
+]);
+
+export const TutorTurnSchema = z.object({
+  say: z
+    .string()
+    .describe("What you say aloud this turn: 1-3 short spoken sentences, about 60 words at most. Plain speech, no markdown"),
+  actions: z.array(BoardActionSchema).describe("Whiteboard changes to make while you speak, in drawing order; empty if none"),
+  next: z
+    .enum(["answer", "draw", "continue", "end"])
+    .describe("answer = wait for the learner to reply; draw = wait for the learner to draw on the board; continue = keep teaching without waiting; end = the lesson is finished"),
+});
+
+export type BoardColor = z.infer<typeof BoardColorSchema>;
+export type BoardAction = z.infer<typeof BoardActionSchema>;
+export type TutorTurn = z.infer<typeof TutorTurnSchema>;
+
+/* ---------- Code exercises ---------- */
+
+export const CODE_LANGUAGES = [
+  "python",
+  "javascript",
+  "typescript",
+  "rust",
+  "go",
+  "java",
+  "c",
+  "cpp",
+  "csharp",
+  "sql",
+  "shell",
+  "ruby",
+  "kotlin",
+  "swift",
+  "php",
+] as const;
+
+export const ExerciseSchema = z.object({
+  title: z.string().describe("Short exercise title, 2-6 words"),
+  language: z.enum(CODE_LANGUAGES).describe("The language the lesson uses; python when the lesson is not about a specific language"),
+  task: z
+    .string()
+    .describe("What to do: 2-5 '- ' bullets naming the exact functions or variables to write, with inputs and expected outputs. Fact-dense, no filler"),
+  starterCode: z
+    .string()
+    .describe("5-25 lines that already run: signatures, TODO comments and any setup, with the core logic missing"),
+  solution: z.string().describe("A complete, idiomatic solution that passes every test"),
+  tests: z
+    .array(
+      z.object({
+        name: z.string().describe("What the test checks, e.g. 'handles an empty list'"),
+        expression: z
+          .string()
+          .describe("One boolean expression in the exercise language, evaluated after the code runs, e.g. add(2, 3) == 5. No statements, prints or asserts"),
+      }),
+    )
+    .describe("3-6 tests covering the normal case and edge cases"),
+});
+
+export const CodeReviewSchema = z.object({
+  verdict: z.enum(["correct", "almost", "incorrect"]),
+  feedback: z
+    .string()
+    .describe("2-4 '- ' bullets: what works, what is wrong and why, citing specific lines or values. No filler"),
+  hint: z.string().describe("One next step that nudges toward the fix without giving the full answer; empty if correct"),
+});
+
+export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
+export type Exercise = z.infer<typeof ExerciseSchema>;
+export type CodeReview = z.infer<typeof CodeReviewSchema>;

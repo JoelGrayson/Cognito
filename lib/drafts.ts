@@ -93,7 +93,19 @@ export function partialMindMap(raw: unknown): MindMap | null {
       stages.push({ link, phase, core, supporting });
     }
   }
-  return { topic: str(raw.topic), summary: str(raw.summary), stages };
+  return {
+    topic: str(raw.topic),
+    summary: str(raw.summary),
+    startingPoint: strings(raw.startingPoint),
+    outcome: strings(raw.outcome),
+    stages,
+    nextSteps: Array.isArray(raw.nextSteps)
+      ? raw.nextSteps
+          .filter(isRecord)
+          .filter((n) => typeof n.topic === "string" && n.topic)
+          .map((n) => ({ topic: n.topic as string, why: str(n.why) }))
+      : [],
+  };
 }
 
 export function partialOutline(raw: unknown): OutlineDraft | null {

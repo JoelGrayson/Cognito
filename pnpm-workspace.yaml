@@ -3,3 +3,4 @@ allowBuilds:
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - openai@7.19.0
+  - '@types/node@22.20.4'

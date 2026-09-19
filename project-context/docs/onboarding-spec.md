@@ -200,3 +200,31 @@ Linear fallback graph: each rated concept becomes a `core` leaf (`estMinutes` 60
 7. Objectives enrichment (ship the schedule only)
 
 **Never cut:** data contract, validation and fallback graph, stub plan for teammates, saved-plan handoff.
+
+---
+
+## 9. Measured
+
+Prompt and latency measurements from `scripts/eval-graph.ts` (10 `generateGraph` profiles, 5 `editGraph` chat instructions, one call at a time).
+
+**Status: real-API numbers are NOT measured yet.** No `ANTHROPIC_API_KEY` was available when the AI layer (M3) was written, so the prompts in `lib/ai/functions/*` are unevaluated against the real models and their first-try and after-retry pass rates are unknown. The retry, validation, and fallback wiring is covered by unit tests with a fake client (`lib/ai/functions.test.ts`, `lib/ai/withRetry.test.ts`), which says nothing about prompt quality.
+
+To measure (put the key in `.env.local`, never commit it):
+
+```bash
+pnpm exec tsx --env-file=.env.local scripts/eval-graph.ts
+```
+
+Target: at least 9 of 10 profiles valid after one retry. If it falls short, iterate on `GENERATE_GRAPH_SYSTEM` in `lib/ai/functions/generateGraph.ts` and paste the new run below (date, models from `lib/ai/models.ts`, sample size, first-try and after-retry pass rates, average nodes, cycles, p50 and max latency). Latency targets to compare against are in `architecture.md`: edit turn under 6s, initial graph under 15s.
+
+### Mock smoke run (not a measurement)
+
+2026-09-19, `MOCK_AI=true`, same script. Confirms the script and wiring run; the mocks return the fixture graph, so these numbers say nothing about the prompts or the models.
+
+| Metric | generateGraph (n=10) | editGraph (n=5) |
+|---|---|---|
+| First-try validation pass | 10/10 | 5/5 |
+| Pass after retry | 10/10 | 5/5 |
+| Average nodes | 25.0 | n/a |
+| Attempts with a cycle | 0 | 0 |
+| Latency p50 / max | 0.0s / 0.0s (mock) | 0.0s / 0.0s (mock) |

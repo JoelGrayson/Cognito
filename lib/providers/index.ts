@@ -1,8 +1,9 @@
 import { anthropicProvider } from "./anthropic";
+import { chatgptProvider } from "./chatgpt";
 import { createOpenAICompatibleProvider } from "./openai-compatible";
-import type { Provider, ProviderId, ProviderInfo } from "./types";
+import type { Provider, ProviderContext, ProviderId, ProviderInfo } from "./types";
 
-export type { Provider, ProviderId, ProviderInfo } from "./types";
+export type { Provider, ProviderContext, ProviderId, ProviderInfo } from "./types";
 export { ProviderError } from "./types";
 export type { StructuredRequest, StructuredResult } from "./types";
 
@@ -45,17 +46,18 @@ export const localProvider = createOpenAICompatibleProvider({
 export const PROVIDERS: Record<ProviderId, Provider> = {
   anthropic: anthropicProvider,
   openai: openaiProvider,
+  chatgpt: chatgptProvider,
   xai: xaiProvider,
   local: localProvider,
 };
 
 /** Dropdown order. The first configured one is the default. */
-export const PROVIDER_ORDER: ProviderId[] = ["openai", "xai", "anthropic", "local"];
+export const PROVIDER_ORDER: ProviderId[] = ["openai", "chatgpt", "xai", "anthropic", "local"];
 
 export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && value in PROVIDERS;
 }
 
-export async function listProviders(): Promise<ProviderInfo[]> {
-  return Promise.all(PROVIDER_ORDER.map((id) => PROVIDERS[id].info()));
+export async function listProviders(ctx?: ProviderContext): Promise<ProviderInfo[]> {
+  return Promise.all(PROVIDER_ORDER.map((id) => PROVIDERS[id].info(ctx)));
 }
