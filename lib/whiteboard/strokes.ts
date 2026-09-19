@@ -84,6 +84,11 @@ export interface EndpointConfig {
    *  on the next line. Line-break commits are exempt: if the learner has moved on,
    *  whatever they wrote is what they wrote. */
   minStrokesForIdleCommit: number;
+  /** How much LONGER the pen must stay still before a provisionally-read line is
+   *  treated as final. Without this the last line of a session is never settled -
+   *  nothing follows it to trigger a line break - so anything withheld pending
+   *  finalization (notably speech) would be withheld forever. */
+  settleAfterIdleMs: number;
   /** Fallback only, for the final line: commit after the pen is idle this long.
    *  Raised back to 2200ms after 1200ms proved short enough to fire mid-word while
    *  the learner paused between strokes of a character, which reads as garbage and
@@ -102,6 +107,7 @@ export const DEFAULT_ENDPOINT_CONFIG: EndpointConfig = {
   minStrokesForBreak: 2,
   minLineWidthForBreak: 40,
   minStrokesForIdleCommit: 2,
+  settleAfterIdleMs: 1500,
   finalLineIdleMs: 2200,
 };
 
@@ -162,7 +168,16 @@ function pointsOf(shape: TLDrawShape): Point[] {
  * FINAL (the student has moved on), an idle commit is PROVISIONAL (they may still be
  * mid-line, just thinking).
  */
-export type CommitReason = "line-break" | "idle";
+export type CommitReason =
+  | "line-break"
+  /** Provisional: the learner may still be writing this line. */
+  | "idle"
+  /** A line that was idle-committed has now been superseded by a new line, so the
+   *  earlier provisional reading is final after all. Carries NO strokes - there is
+   *  nothing new to read, and re-reading would cost another OCR call for an
+   *  identical answer. It exists so a consumer that withheld action on the
+   *  provisional reading can now take it. */
+  | "finalized";
 
 export interface Commit {
   strokes: TimedStroke[];
@@ -201,11 +216,14 @@ export function recordStrokes(
   let bounds: Bounds | null = null;
   let lineId = 0;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
   let idleFiredFor = -1;
 
   const cancelIdle = () => {
     if (idleTimer) clearTimeout(idleTimer);
+    if (settleTimer) clearTimeout(settleTimer);
     idleTimer = null;
+    settleTimer = null;
   };
 
   /**
@@ -220,7 +238,17 @@ export function recordStrokes(
     idleTimer = setTimeout(() => {
       if (line.length < cfg.minStrokesForIdleCommit) return;
       idleFiredFor = lineId;
+      const committedLine = lineId;
       onCommit({ strokes: [...line], lineId, reason: "idle" });
+
+      // Still nothing written after that? Then the provisional reading was right and
+      // the line is done. This is what settles a LAST line, which no line break ever
+      // reaches. Any new stroke cancels it via armIdle().
+      settleTimer = setTimeout(() => {
+        if (lineId === committedLine && idleFiredFor === committedLine) {
+          onCommit({ strokes: [], lineId: committedLine, reason: "finalized" });
+        }
+      }, cfg.settleAfterIdleMs);
     }, cfg.finalLineIdleMs);
   };
 
@@ -247,6 +275,9 @@ export function recordStrokes(
           // if it has, the reading already exists and re-sending would duplicate it.
           if (idleFiredFor !== lineId) {
             onCommit({ strokes: [...line], lineId, reason: "line-break" });
+          } else {
+            // Already read on idle. Don't read it again - just say it's settled.
+            onCommit({ strokes: [], lineId, reason: "finalized" });
           }
           lineId += 1;
           line = [];
