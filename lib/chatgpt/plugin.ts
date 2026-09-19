@@ -11,13 +11,14 @@ import {
 import { APIError, createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { BetterAuthPlugin } from "better-auth";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import { account } from "@/db/schema";
 import { invalidateChatGPTModelCache } from "@/lib/providers/chatgpt";
 import { z } from "zod";
 import {
   chatgptConfig,
+  hasUsableCredentials,
   loadChatGPTAccount,
   saveChatGPTTokens,
 } from "@/lib/chatgpt/tokens";
@@ -61,21 +62,25 @@ async function saveLinkedAccount(
   accountId: string,
   tokens: ChatGPTTokens,
 ) {
+  let linked: { id: string } | undefined;
+  try {
+    linked = await ctx.context.internalAdapter.linkAccount({
+      userId,
+      providerId: "chatgpt",
+      accountId,
+      scope: chatgptConfig.scope,
+    });
+    await saveChatGPTTokens(linked.id, tokens);
+  } catch (error) {
+    if (linked) await ctx.context.internalAdapter.deleteAccount(linked.id);
+    throw error;
+  }
   const existing = await getDb()
     .select({ id: account.id })
     .from(account)
-    .where(and(eq(account.userId, userId), eq(account.providerId, "chatgpt")));
-  for (const row of existing) {
-    await ctx.context.internalAdapter.deleteAccount(row.id);
-  }
+    .where(and(eq(account.userId, userId), eq(account.providerId, "chatgpt"), ne(account.id, linked.id)));
+  for (const row of existing) await ctx.context.internalAdapter.deleteAccount(row.id);
   invalidateChatGPTModelCache(userId);
-  const linked = await ctx.context.internalAdapter.linkAccount({
-    userId,
-    providerId: "chatgpt",
-    accountId,
-    scope: chatgptConfig.scope,
-  });
-  await saveChatGPTTokens(linked.id, tokens);
 }
 
 export function chatgptPlugin(): BetterAuthPlugin {
@@ -182,7 +187,12 @@ export function chatgptPlugin(): BetterAuthPlugin {
             createdAt: new Date(),
             updatedAt: new Date(),
           }, { method: "chatgpt" });
-          await saveLinkedAccount(ctx, user.id, chatgptUser.accountId, tokens);
+          try {
+            await saveLinkedAccount(ctx, user.id, chatgptUser.accountId, tokens);
+          } catch (error) {
+            await ctx.context.internalAdapter.deleteUser(user.id);
+            throw error;
+          }
           const session = await ctx.context.internalAdapter.createSession(user.id);
           await setSessionCookie(ctx, { session, user });
           return ctx.json({ status: "authenticated" as const, linked: false, user: publicUser(chatgptUser) });
@@ -195,7 +205,7 @@ export function chatgptPlugin(): BetterAuthPlugin {
         use: [sessionMiddleware],
       }, async (ctx) => {
         const loaded = await loadChatGPTAccount(ctx.context.session.user.id);
-        const linked = Boolean(loaded?.tokens?.refreshToken);
+        const linked = Boolean(loaded && hasUsableCredentials(loaded.credentials));
         return ctx.json({
           linked,
           ...(linked && loaded?.user ? { user: publicUser(loaded.user) } : {}),
