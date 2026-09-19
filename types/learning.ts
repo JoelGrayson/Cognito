@@ -97,3 +97,28 @@ export type WorkshopMessage = z.infer<typeof WorkshopMessage>;
 // Each content kind will define its own payload schema in the learning module.
 export const ContentBody = z.json();
 export type ContentBody = z.infer<typeof ContentBody>;
+
+// Saved plan as seen by every reader (lib/plans). Dates are ISO 8601 strings;
+// the Drizzle repo converts from timestamptz.
+export const StudyPlan = z.object({
+  id: z.string(),
+  userId: z.string(),
+  version: z.number().int().positive(),
+  title: z.string(),
+  profile: LearnerProfile,
+  graph: PlanGraph,
+  order: z.array(NodeId),
+  schedule: z.array(ScheduleWeek),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type StudyPlan = z.infer<typeof StudyPlan>;
+
+// What GET /api/onboarding returns and OnboardingRepo stores.
+export const OnboardingState = z.object({
+  step: OnboardingStep,
+  profile: OnboardingProfile,
+  draftGraph: DraftGraph.nullable(),
+  messages: z.array(WorkshopMessage),
+});
+export type OnboardingState = z.infer<typeof OnboardingState>;

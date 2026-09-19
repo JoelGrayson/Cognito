@@ -1,336 +1,119 @@
-"use client";
+import Link from "next/link";
+import RoadmapPreview from "@/components/landing/RoadmapPreview";
+import { ctaTarget, type LandingState } from "@/components/landing/cta-target";
+import { getUserState } from "@/lib/plans";
+import { requireUserId } from "@/lib/session";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { LessonView, type LessonState } from "@/components/Lesson";
-import { ProviderSelect } from "@/components/ProviderSelect";
-import { Roadmap, RoadmapSkeleton } from "@/components/Roadmap";
-import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
-import { ensureAnonymousSession } from "@/lib/auth-client";
-import { lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
-import type { Lesson, MindMap } from "@/lib/schema";
+// The CTA depends on per-user state, so this page must never be prerendered.
+export const dynamic = "force-dynamic";
 
-interface Meta {
-  provider: string;
-  model: string;
-  ms: number;
+async function loadState(): Promise<LandingState | null> {
+  try {
+    return await getUserState(await requireUserId());
+  } catch (error) {
+    console.error("landing: getUserState failed", error);
+    return null;
+  }
 }
 
-interface GenerateBody {
-  topic: string;
-  provider: ProviderId;
-  current?: MindMap;
-  instruction?: string;
-}
+const PROBLEMS = [
+  { q: "What should I learn?", a: "A map of the topics your goal actually needs, trimmed to what you already know." },
+  { q: "In what order?", a: "Prerequisites come first, so you never hit a wall halfway through." },
+  { q: "How long will it take?", a: "Time per topic and a weekly schedule that fits the hours you really have." },
+];
 
-const EXAMPLES = ["Three-phase power", "Machine learning", "Rust", "Jazz piano"];
+const STEPS = [
+  { title: "Tell us your goal", body: "Five quick questions: what you want, why, your deadline, and what you already know." },
+  { title: "Shape the map", body: "Chat with the AI or edit the graph yourself. Your edits always win." },
+  { title: "Get your plan", body: "An ordered roadmap with a week-by-week schedule, ready to start." },
+];
 
-export default function Home() {
-  const [topic, setTopic] = useState("");
-  /** The topic being mapped. Null means the landing screen. */
-  const [query, setQuery] = useState<string | null>(null);
-  const [map, setMap] = useState<MindMap | null>(null);
-  const [meta, setMeta] = useState<Meta | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [modification, setModification] = useState("");
-
-  /** The block whose lesson is open. Null means the roadmap view. */
-  const [selected, setSelected] = useState<NodeRef | null>(null);
-  /** Lessons already generated, by node name. */
-  const [lessons, setLessons] = useState<Record<string, LessonState>>({});
-
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [providerId, setProviderId] = useState<ProviderId>("anthropic");
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Find out which providers this server can actually use.
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/providers")
-      .then((r) => r.json())
-      .then((list: ProviderInfo[]) => {
-        if (cancelled) return;
-        setProviders(list);
-        setProviderId((current) => {
-          const chosen = list.find((p) => p.id === current);
-          if (chosen?.configured) return current;
-          return list.find((p) => p.configured)?.id ?? current;
-        });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const generate = useCallback(async (body: GenerateBody) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setLoading(true);
-    setError(null);
-    try {
-      await ensureAnonymousSession();
-      if (controller.signal.aborted) return false;
-      const res = await fetch("/api/mindmap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-      setMap(data.mindMap);
-      setMeta({ provider: data.provider, model: data.model, ms: data.ms });
-      return true;
-    } catch (err) {
-      if (controller.signal.aborted) return false;
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-      return false;
-    } finally {
-      if (abortRef.current === controller) setLoading(false);
-    }
-  }, []);
-
-  const loadLesson = useCallback(
-    async (ref: NodeRef, currentMap: MindMap, currentTopic: string, provider: ProviderId) => {
-      const at = nodeAt(currentMap, ref);
-      if (!at) return;
-      const key = lessonKey(at.node);
-      setLessons((s) => ({ ...s, [key]: { status: "loading" } }));
-      try {
-        const res = await fetch("/api/lesson", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            topic: currentTopic,
-            node: at.node,
-            phase: at.phase,
-            map: currentMap,
-            provider,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
-        setLessons((s) => ({ ...s, [key]: { status: "ready", lesson: data.lesson } }));
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Something went wrong.";
-        setLessons((s) => ({ ...s, [key]: { status: "error", message } }));
-      }
-    },
-    [],
-  );
-
-  function startTopic(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    setQuery(trimmed);
-    setMap(null);
-    setMeta(null);
-    setModification("");
-    setSelected(null);
-    setLessons({});
-    void generate({ topic: trimmed, provider: providerId });
-  }
-
-  function onSubmitTopic(e: FormEvent) {
-    e.preventDefault();
-    startTopic(topic);
-  }
-
-  async function onSubmitModification(e: FormEvent) {
-    e.preventDefault();
-    if (!query || !map || !modification.trim() || loading) return;
-    const ok = await generate({
-      topic: query,
-      provider: providerId,
-      current: map,
-      instruction: modification.trim(),
-    });
-    if (ok) setModification("");
-  }
-
-  /** Open a block's lesson, generating it the first time. */
-  function openLesson(ref: NodeRef) {
-    if (!map || !query) return;
-    const at = nodeAt(map, ref);
-    if (!at) return;
-    setSelected(ref);
-    setError(null);
-    const existing = lessons[lessonKey(at.node)];
-    if (!existing || existing.status === "error") void loadLesson(ref, map, query, providerId);
-    window.scrollTo({ top: 0 });
-  }
-
-  function closeLesson() {
-    setSelected(null);
-    window.scrollTo({ top: 0 });
-  }
-
-  /** The tutor rewrote the open lesson. */
-  function updateLesson(lesson: Lesson) {
-    if (!map || !selected) return;
-    const at = nodeAt(map, selected);
-    if (!at) return;
-    setLessons((s) => ({ ...s, [lessonKey(at.node)]: { status: "ready", lesson } }));
-  }
-
-  function reset() {
-    abortRef.current?.abort();
-    setQuery(null);
-    setMap(null);
-    setMeta(null);
-    setError(null);
-    setLoading(false);
-    setTopic("");
-    setModification("");
-    setSelected(null);
-    setLessons({});
-  }
-
-  const providerLabel = providers.find((p) => p.id === meta?.provider)?.label ?? meta?.provider;
-
-  if (query === null) {
-    return (
-      <main className="flex flex-1 flex-col items-center px-4 pt-[10vh] sm:px-8">
-        <h1 className="text-3xl font-normal tracking-tight sm:text-4xl">StructuredLearning.ai</h1>
-
-        <form onSubmit={onSubmitTopic} className="mt-[12vh] w-full max-w-3xl">
-          <input
-            className="pill px-7 py-4 text-xl sm:text-2xl"
-            placeholder="What do you want to learn?"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            autoFocus
-            autoComplete="off"
-            aria-label="What do you want to learn?"
-          />
-        </form>
-
-        <div className="mt-5 flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 px-2 text-sm text-neutral-500">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span>Try</span>
-            {EXAMPLES.map((example) => (
-              <button
-                key={example}
-                type="button"
-                className="rounded-full px-2 py-0.5 hover:bg-neutral-100 hover:text-neutral-800"
-                onClick={() => startTopic(example)}
-              >
-                {example}
-              </button>
-            ))}
-          </div>
-          <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} />
-        </div>
-
-        {error && <p className="mt-6 text-sm text-red-600">{error}</p>}
-      </main>
-    );
-  }
-
-  const selectedAt = map && selected ? nodeAt(map, selected) : null;
-  const lessonState: LessonState = selectedAt
-    ? (lessons[lessonKey(selectedAt.node)] ?? { status: "loading" })
-    : { status: "loading" };
+export default async function Home() {
+  const cta = ctaTarget(await loadState());
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-10 sm:px-8">
-      <header className="flex items-center justify-between py-4">
-        <button
-          type="button"
-          onClick={reset}
-          className="text-sm text-neutral-500 hover:text-neutral-900"
-        >
-          StructuredLearning.ai
-        </button>
-        <ProviderSelect providers={providers} value={providerId} onChange={setProviderId} disabled={loading} />
+    <div className="flex min-h-screen flex-col bg-white text-(--fg)">
+      <header className="mx-auto flex w-full max-w-6xl items-center px-5 py-5 sm:px-8">
+        <span className="text-base font-semibold tracking-tight">StructuredLearning.ai</span>
       </header>
 
-      {map && selected && selectedAt ? (
-        <div className="mx-auto mt-4 w-full max-w-6xl">
-          <LessonView
-            topic={query}
-            map={map}
-            selected={selected}
-            state={lessonState}
-            providerId={providerId}
-            onSelectNode={openLesson}
-            onBack={closeLesson}
-            onRetry={() => void loadLesson(selected, map, query, providerId)}
-            onLessonChange={updateLesson}
-          />
-        </div>
-      ) : (
-        <div className="mx-auto w-full max-w-4xl">
-          <h1 className="mt-6 text-center text-4xl font-medium tracking-tight sm:text-5xl">
-            {map?.topic ?? query}
-          </h1>
-
-          <div className="mt-12">
-            {map && !loading ? <Roadmap map={map} onSelect={openLesson} /> : null}
-            {map && loading ? (
-              <div className="opacity-50 transition-opacity">
-                <Roadmap map={map} />
-              </div>
-            ) : null}
-            {!map && loading ? <RoadmapSkeleton /> : null}
-            {!map && !loading && error ? (
-              <div className="panel px-6 py-16 text-center">
-                <p className="text-red-600">{error}</p>
-                <button
-                  type="button"
-                  className="mt-4 text-sm text-neutral-600 underline underline-offset-4 hover:text-neutral-900"
-                  onClick={() => startTopic(query)}
-                >
-                  Try again
-                </button>
-              </div>
-            ) : null}
+      <main className="flex-1">
+        <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-5 pb-14 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:pb-24 lg:pt-14">
+          <div>
+            <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+              Know what to learn, in what order, and for how long.
+            </h1>
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-neutral-600">
+              Most self-learners stall because nobody hands them a plan. Tell us your goal and get a personalized,
+              editable roadmap in under 3 minutes.
+            </p>
+            <div className="mt-8 flex flex-col items-start gap-3">
+              <Link
+                href={cta.href}
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-accent-strong px-8 text-lg font-semibold text-white transition-colors hover:bg-[#2f47c4] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-strong sm:w-auto"
+              >
+                {cta.label}
+                <svg aria-hidden="true" viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 10h11M11 5l5 5-5 5" />
+                </svg>
+              </Link>
+              <p className="text-sm text-neutral-600">No sign-up needed.</p>
+            </div>
           </div>
 
-          {map && (
-            <p className="mt-4 text-center text-sm text-neutral-500">
-              {map.summary}
-              {meta && (
-                <span className="text-neutral-400">
-                  {" "}· {providerLabel} · {meta.model} · {(meta.ms / 1000).toFixed(1)}s
-                </span>
-              )}
-              {!loading && <span className="block mt-1 text-neutral-400">Click a block to open its lesson.</span>}
+          <div className="rounded-2xl border border-[#e4e3de] bg-(--panel) p-4 sm:p-6">
+            <RoadmapPreview className="mx-auto h-auto w-full max-w-105" />
+            <p className="mt-2 text-center text-xs text-neutral-600">
+              Example roadmap for &ldquo;Learn machine learning&rdquo;
             </p>
-          )}
+          </div>
+        </section>
 
-          {map && error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
+        <section aria-labelledby="problems" className="border-t border-[#ecebe7] bg-(--panel)">
+          <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 lg:py-20">
+            <h2 id="problems" className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              The three questions that stop self-learners
+            </h2>
+            <ul className="mt-8 grid gap-4 md:grid-cols-3">
+              {PROBLEMS.map((item) => (
+                <li key={item.q} className="rounded-xl border border-[#e4e3de] bg-white p-5">
+                  <h3 className="text-lg font-semibold">{item.q}</h3>
+                  <p className="mt-2 leading-relaxed text-neutral-600">{item.a}</p>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-6 max-w-2xl text-neutral-600">
+              Coming next: explaining topics back to an AI tutor and spaced review, to check that it actually stuck.
+            </p>
+          </div>
+        </section>
 
-          <form onSubmit={onSubmitModification} className="relative mt-10">
-            <input
-              className="pill py-5 pl-7 pr-20 text-xl sm:text-2xl"
-              placeholder="Enter modifications"
-              value={modification}
-              onChange={(e) => setModification(e.target.value)}
-              disabled={!map}
-              autoComplete="off"
-              aria-label="Enter modifications"
-            />
-            <button
-              type="submit"
-              disabled={!map || loading || !modification.trim()}
-              aria-label="Apply modifications"
-              className="absolute right-2.5 top-1/2 flex h-[52px] w-[52px] -translate-y-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:h-[60px] sm:w-[60px]"
-            >
-              {loading ? (
-                <span className="spinner" />
-              ) : (
-                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 19V5" />
-                  <path d="M5 12l7-7 7 7" />
-                </svg>
-              )}
-            </button>
-          </form>
-        </div>
-      )}
-    </main>
+        <section aria-labelledby="how" className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 lg:py-20">
+          <h2 id="how" className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            How it works
+          </h2>
+          <ol className="mt-8 grid gap-6 md:grid-cols-3">
+            {STEPS.map((step, i) => (
+              <li key={step.title} className="flex gap-4">
+                <span
+                  aria-hidden="true"
+                  className="flex size-9 flex-none items-center justify-center rounded-full bg-[#ecebfb] font-semibold text-[#3b3499]"
+                >
+                  {i + 1}
+                </span>
+                <div>
+                  <h3 className="text-lg font-semibold">{step.title}</h3>
+                  <p className="mt-1 leading-relaxed text-neutral-600">{step.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </main>
+
+      <footer className="border-t border-[#ecebe7] px-5 py-6 text-center text-sm text-neutral-600 sm:px-8">
+        Built at HackMIT 2026
+      </footer>
+    </div>
   );
 }

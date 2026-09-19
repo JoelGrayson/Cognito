@@ -9,7 +9,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "StructuredLearning.ai",
-  description: "Type what you want to learn and get a structured roadmap of everything you need to know.",
+  description:
+    "Tell us what you want to learn and get a personalized, editable roadmap with a weekly schedule in under 3 minutes. No sign-up.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
