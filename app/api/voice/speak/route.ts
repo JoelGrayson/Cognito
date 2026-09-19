@@ -21,10 +21,10 @@ const MODEL = "eleven_turbo_v2_5";
 const OUTPUT_FORMAT = "mp3_44100_128";
 /** A calm, unhurried default. The voice has to be able to say nothing comfortably.
  *
- *  "Sarah", one of the built-in default voices. NOT a library voice: free accounts
+ *  "Matilda", chosen by ear over the other eleven. One of the built-in default voices. NOT a library voice: free accounts
  *  get 402 paid_plan_required on those, which reads like a broken key but isn't.
  *  Verified working on the free tier alongside George, Jessica and Matilda. */
-const DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
+const DEFAULT_VOICE = "XrExE9yKIg1WjnnlVkGX";
 
 /** Other free-tier-safe defaults, for swapping the tutor's voice. */
 export const VOICES = {
