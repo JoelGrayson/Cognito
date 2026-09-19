@@ -22,7 +22,7 @@ import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
 import { assessExplanation, replyTo } from "@/lib/whiteboard/explanation";
-import { createSpeaker, createPushToTalk, SPOKEN, ASK_WHY, type Speaker, type PushToTalk } from "@/lib/whiteboard/voice";
+import { createSpeaker, createPushToTalk, spokenFor, ASK_WHY, type Speaker, type PushToTalk } from "@/lib/whiteboard/voice";
 
 /** Free-tier-safe voices, verified against this account. Library voices return 402. */
 const VOICE_OPTIONS = [
@@ -225,7 +225,7 @@ export default function SpikePage() {
             provisional: reason === "idle",
           };
 
-          const line = SPOKEN[rungRef.current] ?? SPOKEN[1];
+          const line = spokenFor(rungRef.current, verdict.kind);
           const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
           const utterance = `${line} ${why}`;
           historyRef.current = [{ who: "tutor", text: utterance }];
@@ -358,7 +358,7 @@ export default function SpikePage() {
           (id) => boundsRef.current.get(id),
         );
         // Only bolt the canned rung line on when the model didn't write one.
-        if (!fromModel) line = `${line} ${SPOKEN[next] ?? ""}`.trim();
+        if (!fromModel) line = `${line} ${spokenFor(next, open.verdict.kind)}`.trim();
       }
 
       historyRef.current.push({ who: "tutor", text: line });
