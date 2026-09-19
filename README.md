@@ -12,6 +12,13 @@ npm run dev
 
 Open http://localhost:3000.
 
+## Database
+
+Drizzle is configured for Supabase Postgres. Set `DATABASE_URL` in `.env.local`,
+review the generated SQL in `drizzle/`, then run `npm run db:migrate`.
+See [the database guide](db/README.md) for the schema, connection options,
+migration workflow, and remaining application integration work.
+
 ## Swapping the AI provider
 
 The model dropdown lets you pick who generates the roadmap. A provider shows up as available once its credentials are in `.env.local` (or, for local, once the server is reachable).
