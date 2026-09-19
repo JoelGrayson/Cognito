@@ -36,6 +36,9 @@ export interface Mark {
   toLineId?: number;
   /** `margin-note` only. Keep it short; it sits in the margin. */
   text?: string;
+  /** Overrides the line's bounds, to mark ONE symbol rather than the whole step.
+   *  Used at rung 4, where the tutor points at the operator itself. */
+  bounds?: Bounds;
   /** Red for a problem, blue for a confirmation. */
   tone?: "problem" | "neutral";
 }
@@ -172,7 +175,7 @@ export function createAnnotator(editor: Editor): Annotator {
     draw(marks, boundsOf) {
       const ids: string[] = [];
       for (const m of marks) {
-        const b = boundsOf(m.lineId);
+        const b = m.bounds ?? boundsOf(m.lineId);
         if (!b) continue; // line was cleared or never committed; skip rather than throw
         let id: string | undefined;
         switch (m.kind) {

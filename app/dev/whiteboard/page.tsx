@@ -20,6 +20,7 @@ import "tldraw/tldraw.css";
 import { latexToMathjs } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
+import { locateOperator } from "@/lib/whiteboard/locate";
 import type { HintLevel } from "@/lib/whiteboard/policy";
 import {
   recordStrokes,
@@ -135,7 +136,9 @@ export default function SpikePage() {
 
       // Draw on the learner's work. Marks are tagged, so redrawing never touches ink.
       if (verdict) {
-        const marks = marksFor(verdict, lineId, rungRef.current);
+        // Locate the offending symbol so the higher rungs can point AT it.
+        const symbol = locateOperator(strokes, raw);
+        const marks = marksFor(verdict, lineId, rungRef.current, symbol);
         if (marks.length > 0) {
           annotatorRef.current?.draw(marks, (id) => boundsRef.current.get(id));
         }
@@ -202,7 +205,7 @@ export default function SpikePage() {
             <option value={1}>1 — “?” in margin</option>
             <option value={2}>2 — “look here”</option>
             <option value={3}>3 — circle / strike</option>
-            <option value={4}>4 — + what went wrong</option>
+            <option value={4}>4 — circle the sign + why</option>
             <option value={5}>5 — + arrow to prior step</option>
           </select>
         </label>
