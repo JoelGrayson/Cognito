@@ -5,6 +5,7 @@ import { applyActions, describeBoard, learnerStroke, type BoardElement, type Res
 import { ensureOk } from "@/lib/ndjson";
 import type { ProviderId } from "@/lib/providers/types";
 import type { BoardColor, Lesson } from "@/lib/schema";
+import { loadVoice, type Listener, type Speaker, type Voice } from "@/lib/voice";
 import { Board, INK } from "./Board";
 
 type Status = "thinking" | "speaking" | "listening" | "your-turn" | "drawing" | "ended" | "error";
@@ -30,9 +31,9 @@ const PENS: BoardColor[] = ["blue", "red", "green", "ink"];
 const MAX_CONTINUES = 2;
 
 /**
- * A lesson taught over a "video call": the tutor talks (browser speech), draws on a
- * shared whiteboard, asks questions and asks the learner to draw. The learner
- * replies by voice (browser speech recognition) or by typing.
+ * A lesson taught over a "video call": the tutor talks, draws on a shared
+ * whiteboard, asks questions and asks the learner to draw. The learner replies
+ * by voice or by typing.
  */
 export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
   const [elements, setElements] = useState<BoardElement[]>([]);
@@ -47,6 +48,7 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
   const [cameraOn, setCameraOn] = useState(false);
   const [penColor, setPenColor] = useState<BoardColor>("blue");
   const [pending, setPending] = useState(0);
+  const [voiceReady, setVoiceReady] = useState(false);
 
   // Latest values for the async turn loop.
   const elementsRef = useRef<BoardElement[]>([]);
@@ -59,12 +61,15 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
   const micOnRef = useRef(true);
   const voiceOnRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
-  const recognitionRef = useRef<Recognition | null>(null);
+  const voiceRef = useRef<Voice | null>(null);
+  const listenerRef = useRef<Listener | null>(null);
+  const speakerRef = useRef<Speaker | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const transcriptEnd = useRef<HTMLDivElement>(null);
 
-  const canListen = typeof window !== "undefined" && recognitionCtor() !== null;
+  const voice = voiceReady ? voiceRef.current : null;
+  const canListen = voice?.canListen ?? false;
 
   function setBoard(next: BoardElement[]) {
     elementsRef.current = next;
@@ -105,7 +110,16 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
       setCaption(turn.say);
       setStatus("speaking");
       interrupted.current = false;
-      await speak(turn.say, voiceOnRef.current);
+      if (voiceOnRef.current && voiceRef.current) {
+        const speaker = voiceRef.current.speak(turn.say);
+        speakerRef.current = speaker;
+        await speaker.done;
+        if (speakerRef.current === speaker) speakerRef.current = null;
+      } else {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, Math.min(9000, 1200 + turn.say.split(/\s+/).length * 260));
+        });
+      }
       if (ended.current) return;
       if (interrupted.current) {
         interrupted.current = false;
@@ -166,47 +180,33 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
   }
 
   function listen() {
-    const Ctor = recognitionCtor();
-    if (!Ctor || ended.current) {
+    if (!voice || ended.current) {
       setStatus("your-turn");
       return;
     }
-    recognitionRef.current?.abort();
-    const rec = new Ctor();
-    rec.lang = navigator.language || "en-US";
-    rec.interimResults = true;
-    rec.continuous = false;
-    let finalText = "";
-    rec.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const result = e.results[i];
-        if (result.isFinal) finalText += result[0].transcript;
-        else interim += result[0].transcript;
-      }
-      setHeard(`${finalText}${interim}`);
-    };
-    rec.onerror = () => {};
-    rec.onend = () => {
-      if (recognitionRef.current === rec) recognitionRef.current = null;
-      setHeard("");
-      const text = finalText.trim();
-      if (text && !ended.current) reply(text);
-      else setStatus((s) => (s === "listening" ? "your-turn" : s));
-    };
-    recognitionRef.current = rec;
-    setStatus("listening");
-    try {
-      rec.start();
-    } catch {
+    listenerRef.current?.abort();
+    const listener = voice.listen(
+      {
+        onInterim: setHeard,
+        onFinal: (text) => {
+          setHeard("");
+          if (!ended.current) reply(text);
+        },
+        onError: () => setStatus("your-turn"),
+      },
+      navigator.language,
+    );
+    if (!listener) {
       setStatus("your-turn");
+      return;
     }
+    listenerRef.current = listener;
+    setStatus("listening");
   }
 
   function stopListening() {
-    const rec = recognitionRef.current;
-    recognitionRef.current = null;
-    rec?.abort();
+    listenerRef.current?.abort();
+    listenerRef.current = null;
     setHeard("");
   }
 
@@ -214,11 +214,11 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
   function onMic() {
     if (status === "speaking") {
       interrupted.current = true;
-      window.speechSynthesis?.cancel();
+      speakerRef.current?.cancel();
       return;
     }
     if (status === "listening") {
-      recognitionRef.current?.stop();
+      listenerRef.current?.stop();
       return;
     }
     if (status === "your-turn" || status === "drawing" || status === "error") listen();
@@ -229,7 +229,7 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
     const text = typed.trim();
     if (!text || status === "thinking") return;
     setTyped("");
-    if (status === "speaking") window.speechSynthesis?.cancel();
+    if (status === "speaking") speakerRef.current?.cancel();
     stopListening();
     reply(text);
   }
@@ -255,7 +255,7 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
     ended.current = true;
     abortRef.current?.abort();
     stopListening();
-    window.speechSynthesis?.cancel();
+    speakerRef.current?.cancel();
     onClose();
   }
 
@@ -265,12 +265,19 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
     void requestTurn();
   });
   useEffect(() => {
-    start();
+    let cancelled = false;
+    void loadVoice().then((loadedVoice) => {
+      if (cancelled) return;
+      voiceRef.current = loadedVoice;
+      setVoiceReady(true);
+      start();
+    });
     return () => {
+      cancelled = true;
       ended.current = true;
       abortRef.current?.abort();
-      recognitionRef.current?.abort();
-      window.speechSynthesis?.cancel();
+      listenerRef.current?.abort();
+      speakerRef.current?.cancel();
     };
   }, []);
 
@@ -365,7 +372,7 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
           data-active={status === "listening" ? "true" : undefined}
           onClick={onMic}
           disabled={!canListen || status === "thinking" || status === "ended"}
-          title={canListen ? "Talk (also interrupts the tutor)" : "Voice input needs Chrome or Edge; type instead"}
+          title={canListen ? "Talk (also interrupts the tutor)" : "Voice input is unavailable in this browser; type instead"}
         >
           {status === "listening" ? "Listening… tap to send" : status === "speaking" ? "Interrupt" : "Talk"}
         </button>
@@ -388,7 +395,7 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
           onClick={() => {
             voiceOnRef.current = !voiceOn;
             setVoiceOn(!voiceOn);
-            if (voiceOn) window.speechSynthesis?.cancel();
+            if (voiceOn) speakerRef.current?.cancel();
           }}
         >
           Tutor voice {voiceOn ? "on" : "off"}
@@ -431,61 +438,4 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
       </footer>
     </div>
   );
-}
-
-/* ---------- Browser speech ---------- */
-
-/** Resolves when the tutor has finished speaking (or right away, paced by length, when voice is off). */
-function speak(text: string, voice: boolean): Promise<void> {
-  return new Promise((resolve) => {
-    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
-    if (!voice || !synth) {
-      setTimeout(resolve, Math.min(9000, 1200 + text.split(/\s+/).length * 260));
-      return;
-    }
-    let done = false;
-    const finish = () => {
-      if (!done) {
-        done = true;
-        resolve();
-      }
-    };
-    synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = synth.getVoices();
-    const preferred =
-      voices.find((v) => /Google US English|Samantha|Ava|Allison/i.test(v.name) && v.lang.startsWith("en")) ??
-      voices.find((v) => v.lang.startsWith(navigator.language.slice(0, 2)));
-    if (preferred) utterance.voice = preferred;
-    utterance.rate = 1.04;
-    utterance.onend = finish;
-    utterance.onerror = finish;
-    synth.speak(utterance);
-    // Some browsers occasionally never fire onend.
-    setTimeout(finish, 3000 + text.length * 90);
-  });
-}
-
-interface RecognitionResult {
-  isFinal: boolean;
-  0: { transcript: string };
-}
-interface Recognition {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((e: { resultIndex: number; results: ArrayLike<RecognitionResult> }) => void) | null;
-  onerror: ((e: unknown) => void) | null;
-  onend: (() => void) | null;
-}
-
-function recognitionCtor(): (new () => Recognition) | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => Recognition;
-    webkitSpeechRecognition?: new () => Recognition;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
