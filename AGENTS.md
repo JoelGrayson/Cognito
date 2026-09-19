@@ -11,4 +11,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Project instructions
 
 - Use pnpm for installing dependencies and running scripts. Do not use npm, npx, or yarn. The pinned version is declared in `package.json`.
+- When adding, changing, or removing environment variables, update `.env.example` in the same change. Include required settings and optional flags with brief comments and safe defaults or empty placeholders; never include real credentials.
 - Read the [project context](project-context/) and follow its [AGENTS.md](project-context/AGENTS.md) for the product architecture, data contract, and working rules.

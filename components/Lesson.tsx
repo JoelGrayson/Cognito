@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { draftFromLesson, type LessonDraft } from "@/lib/drafts";
 import type { ProviderId } from "@/lib/providers/types";
 import { nodeAt, type NodeRef } from "@/lib/roadmap";
@@ -8,6 +9,8 @@ import { LessonChat } from "./LessonChat";
 import { QuizPanel } from "./Quiz";
 import { RichText } from "./RichText";
 import { Roadmap } from "./Roadmap";
+import { VideoCall } from "./VideoCall";
+import { CodeExercise, lessonWantsCode } from "./CodeExercise";
 
 export type LessonState =
   | { status: "loading" }
@@ -47,6 +50,7 @@ export function LessonView({
   isReady,
   onLessonChange,
 }: Props) {
+  const [calling, setCalling] = useState(false);
   const at = nodeAt(map, selected);
   if (!at) return null;
   const { node, phase } = at;
@@ -79,6 +83,19 @@ export function LessonView({
             </p>
             <h1 className="mt-1 text-3xl font-medium tracking-tight sm:text-4xl">{draft?.title || node.name}</h1>
             <p className="mt-2 text-neutral-600">{draft?.summary || node.description}</p>
+            <button
+              type="button"
+              className="call-start"
+              onClick={() => setCalling(true)}
+              disabled={!lesson}
+              title={lesson ? "Learn this with a tutor who talks and draws on a whiteboard" : "Available once the lesson is written"}
+            >
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="2" y="6" width="14" height="12" rx="2" />
+                <path d="M16 10l6-3v10l-6-3z" />
+              </svg>
+              Start video lesson
+            </button>
           </div>
         </div>
 
@@ -99,17 +116,20 @@ export function LessonView({
 
         {draft && (
           <>
-            <section className="panel mt-8 px-6 py-5" aria-label="TL;DR">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">TL;DR</h2>
-              {draft.tldr ? (
-                <p className="mt-2 text-[17px] leading-relaxed text-neutral-800">{draft.tldr}</p>
-              ) : (
-                <div className="mt-3 space-y-2" aria-busy="true">
-                  <div className="skeleton-line w-full" />
-                  <div className="skeleton-line w-3/4" />
-                </div>
-              )}
-            </section>
+            {/* Lessons written before TL;DRs existed have none; only show the placeholder while writing. */}
+            {(draft.tldr || state.status === "streaming") && (
+              <section className="panel mt-8 px-6 py-5" aria-label="TL;DR">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">TL;DR</h2>
+                {draft.tldr ? (
+                  <p className="mt-2 text-[17px] leading-relaxed text-neutral-800">{draft.tldr}</p>
+                ) : (
+                  <div className="mt-3 space-y-2" aria-busy="true">
+                    <div className="skeleton-line w-full" />
+                    <div className="skeleton-line w-3/4" />
+                  </div>
+                )}
+              </section>
+            )}
             <div className={draft.video && !draft.video.id ? "lesson-hero lesson-hero-single" : "lesson-hero"}>
               <section>
                 <h2 className="lesson-h2">Useful resources</h2>
@@ -186,6 +206,9 @@ export function LessonView({
               </section>
             )}
 
+            {lesson && lessonWantsCode(lesson) && (
+              <CodeExercise key={lesson.title} topic={topic} lesson={lesson} providerId={providerId} />
+            )}
             {lesson && <QuizPanel lesson={lesson} providerId={providerId} />}
           </>
         )}
@@ -200,6 +223,9 @@ export function LessonView({
           </div>
         )}
       </aside>
+      {calling && lesson && (
+        <VideoCall topic={topic} lesson={lesson} providerId={providerId} onClose={() => setCalling(false)} />
+      )}
     </div>
   );
 }

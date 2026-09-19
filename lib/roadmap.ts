@@ -1,5 +1,11 @@
 import type { MapNode, MindMap, Phase } from "@/lib/schema";
 
+/** A single-stage map is one concept: one tile, no supporting blocks. */
+export function tidyMap(map: MindMap): MindMap {
+  if (map.stages.length !== 1 || map.stages[0].supporting.length === 0) return map;
+  return { ...map, stages: [{ ...map.stages[0], supporting: [] }] };
+}
+
 /** Points at one block in a roadmap. */
 export interface NodeRef {
   stage: number;
