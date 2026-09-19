@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
+import { inArray } from "drizzle-orm";
 import type { NewPlan, OnboardingRepo, PlanRepo } from "./types";
 import { memoryOnboardingRepo, memoryPlanRepo } from "./memory";
 
@@ -80,3 +81,43 @@ function contract(name: string, onboarding: OnboardingRepo, plans: PlanRepo) {
 }
 
 contract("memory", memoryOnboardingRepo, memoryPlanRepo);
+
+// The Drizzle implementations run only when DATABASE_URL points at a local
+// database — tests must never write to a shared remote one.
+const localDb = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL ?? "");
+
+if (localDb) {
+  const { getDb } = await import("@/db");
+  const { user } = await import("@/db/schema");
+  const { drizzleOnboardingRepo } = await import("./onboarding.drizzle");
+  const { drizzlePlanRepo } = await import("./plans.drizzle");
+
+  // userIds get a `user` row first: onboarding_sessions and study_plans FK to it.
+  const seededIds = new Set<string>();
+  const seedUser = async (userId: string) => {
+    if (seededIds.has(userId)) return;
+    await getDb()
+      .insert(user)
+      .values({ id: userId, name: userId, email: `${userId}@contract.test` })
+      .onConflictDoNothing();
+    seededIds.add(userId);
+  };
+
+  const onboarding: OnboardingRepo = {
+    get: (u) => seedUser(u).then(() => drizzleOnboardingRepo.get(u)),
+    update: (u, p) => seedUser(u).then(() => drizzleOnboardingRepo.update(u, p)),
+  };
+  const plans: PlanRepo = {
+    create: (u, p) => seedUser(u).then(() => drizzlePlanRepo.create(u, p)),
+    get: (id, u) => seedUser(u).then(() => drizzlePlanRepo.get(id, u)),
+    getActive: (u) => seedUser(u).then(() => drizzlePlanRepo.getActive(u)),
+    update: (id, u, p) => seedUser(u).then(() => drizzlePlanRepo.update(id, u, p)),
+  };
+
+  // Rows cascade to onboarding_sessions and study_plans when users are removed.
+  afterAll(async () => {
+    if (seededIds.size) await getDb().delete(user).where(inArray(user.id, [...seededIds]));
+  });
+
+  contract("drizzle", onboarding, plans);
+}

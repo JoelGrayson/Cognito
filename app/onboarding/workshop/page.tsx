@@ -1,13 +1,16 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { onboardingRepo } from "@/lib/repo";
-import { requireUserId } from "@/lib/session";
+import { getUserId } from "@/lib/session";
 
 // Reads per-user state, so it must never be prerendered.
 export const dynamic = "force-dynamic";
 
 // PLACEHOLDER: the workshop milestone (graph + chat) replaces this page.
 export default async function WorkshopPlaceholder() {
-  const { profile } = await onboardingRepo.get(await requireUserId());
+  const userId = await getUserId();
+  if (!userId) redirect("/onboarding");
+  const { profile } = await onboardingRepo.get(userId);
   const rows: [string, string | undefined][] = [
     ["Goal", profile.goal],
     ["Why", profile.goalType],

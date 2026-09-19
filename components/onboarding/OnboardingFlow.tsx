@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ensureAnonymousSession } from "@/lib/auth-client";
 import { useOnboarding } from "@/lib/stores/onboarding";
 import { ProgressBar } from "./ProgressBar";
 import { Step1Goal } from "./Step1Goal";
@@ -21,7 +22,13 @@ export function OnboardingFlow({ edit = false }: { edit?: boolean }) {
   const hydrate = useOnboarding((s) => s.hydrate);
 
   useEffect(() => {
-    void hydrate({ edit });
+    let cancelled = false;
+    // The API needs a session; create the anonymous one before loading saved state.
+    // If sign-in fails, hydrate still runs and shows its error state.
+    ensureAnonymousSession()
+      .catch(() => {})
+      .then(() => { if (!cancelled) void hydrate({ edit }); });
+    return () => { cancelled = true; };
   }, [hydrate, edit]);
 
   const leaving = status === "ready" && serverStep === "workshop" && !edit;

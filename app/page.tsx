@@ -2,14 +2,15 @@ import Link from "next/link";
 import RoadmapPreview from "@/components/landing/RoadmapPreview";
 import { ctaTarget, type LandingState } from "@/components/landing/cta-target";
 import { getUserState } from "@/lib/plans";
-import { requireUserId } from "@/lib/session";
+import { getUserId } from "@/lib/session";
 
 // The CTA depends on per-user state, so this page must never be prerendered.
 export const dynamic = "force-dynamic";
 
 async function loadState(): Promise<LandingState | null> {
   try {
-    return await getUserState(await requireUserId());
+    const userId = await getUserId();
+    return userId ? await getUserState(userId) : null;
   } catch (error) {
     console.error("landing: getUserState failed", error);
     return null;
