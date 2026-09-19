@@ -621,3 +621,37 @@ a.card:focus-visible {
 .bulk-button:hover {
   background: #f1f0ec;
 }
+
+
+/* Legend under the roadmap. */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: #6f6f6f;
+}
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend .legend-swatch {
+  display: inline-block;
+  width: 18px;
+  min-height: 0;
+  height: 12px;
+  padding: 0;
+  border-radius: 3px;
+  transition: none;
+}
+.legend .legend-swatch:hover {
+  transform: none;
+  box-shadow: none;
+}
+.legend .legend-swatch-plain {
+  --card-bg: #fff;
+  --card-border: #8c8b86;
+}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { LessonView, type LessonState } from "@/components/Lesson";
 import { ProviderSelect } from "@/components/ProviderSelect";
-import { Roadmap, RoadmapSkeleton } from "@/components/Roadmap";
+import { Roadmap, RoadmapLegend, RoadmapSkeleton } from "@/components/Roadmap";
 import { emptyDraft, type LessonDraft, type OutlineDraft } from "@/lib/drafts";
 import { ensureOk, readNdjson } from "@/lib/ndjson";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
@@ -602,6 +602,8 @@ export default function Home() {
               </div>
             ) : null}
           </div>
+
+          {map && <RoadmapLegend />}
 
           {map && !mapDraft && !remoteDraft && (
             <p className="mt-4 text-center text-sm text-neutral-500">
