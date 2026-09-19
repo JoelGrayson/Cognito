@@ -21,6 +21,7 @@ import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
+import { assessExplanation, replyTo } from "@/lib/whiteboard/explanation";
 import { createSpeaker, createPushToTalk, SPOKEN, ASK_WHY, type Speaker, type PushToTalk } from "@/lib/whiteboard/voice";
 
 /** Free-tier-safe voices, verified against this account. Library voices return 402. */
@@ -39,8 +40,10 @@ const VOICE_OPTIONS = [
   ["onwK4e9ZLuTAKqWW03F9", "Daniel"],
 ] as const;
 import type { HintLevel } from "@/lib/whiteboard/policy";
+import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
 import {
   recordStrokes,
+  type TimedStroke,
   mergeBounds,
   type Bounds,
   toStrokePayload,
@@ -48,7 +51,6 @@ import {
   type Commit,
   type StrokeRecorder,
 } from "@/lib/whiteboard/strokes";
-import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
 
 interface Reading {
   lineId: number;
@@ -107,7 +109,11 @@ export default function SpikePage() {
   const [listening, setListening] = useState(false);
   /** What the learner said, newest last. This is the artifact that matters: the
    *  point of asking "why" is that they articulate it, not that we grade it. */
-  const [explanations, setExplanations] = useState<{ text: string; ms: number }[]>([]);
+  const [explanations, setExplanations] = useState<{ text: string; ms: number; outcome: string }[]>([]);
+  /** The step currently under discussion. Set when a mark is drawn, cleared once the
+   *  learner names the error - that is what makes "speaking is the hint request"
+   *  possible without a button. */
+  const openRef = useRef<{ verdict: Equivalence; lineId: number; strokes: TimedStroke[]; raw: string } | null>(null);
   const voiceIdRef = useRef(voiceId);
   useEffect(() => {
     voiceIdRef.current = voiceId;
@@ -190,6 +196,7 @@ export default function SpikePage() {
             const line = SPOKEN[rungRef.current] ?? SPOKEN[1];
             const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
             const utterance = `${line} ${why}`;
+            openRef.current = { verdict, lineId, strokes, raw };
             setSaid(utterance);
             speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
               setError(e instanceof Error ? e.message : "Voice failed.");
@@ -244,7 +251,41 @@ export default function SpikePage() {
     setListening(false);
     try {
       const { transcript, ms } = await ptt.stopAndTranscribe();
-      if (transcript) setExplanations((e) => [...e, { text: transcript, ms }]);
+      if (!transcript) return;
+
+      const open = openRef.current;
+      if (!open) {
+        setExplanations((e) => [...e, { text: transcript, ms, outcome: "" }]);
+        return;
+      }
+
+      // Explaining and not getting there IS the request for more help, so the
+      // learner never has to press anything to ask. The system still never
+      // volunteers a rung unprompted - this IS the prompt.
+      const outcome = assessExplanation(transcript, open.verdict);
+      setExplanations((e) => [...e, { text: transcript, ms, outcome: outcome.kind }]);
+
+      let line = replyTo(outcome, open.verdict);
+
+      if (outcome.kind === "found-it") {
+        openRef.current = null; // they did the work; get out of the way
+      } else {
+        const next = Math.min(rungRef.current + 1, 5) as HintLevel;
+        setRung(next);
+        rungRef.current = next;
+        annotatorRef.current?.clear();
+        const symbol = locateOperator(open.strokes, open.raw);
+        annotatorRef.current?.draw(
+          marksFor(open.verdict, open.lineId, next, symbol),
+          (id) => boundsRef.current.get(id),
+        );
+        line = `${line} ${SPOKEN[next] ?? ""}`.trim();
+      }
+
+      setSaid(line);
+      if (voiceOnRef.current) {
+        speakerRef.current?.say(line, voiceIdRef.current).catch(() => {});
+      }
     } catch {
       setError("Transcription failed.");
     }
@@ -283,6 +324,7 @@ export default function SpikePage() {
     speakerRef.current?.stop();
     setSaid(null);
     setExplanations([]);
+    openRef.current = null;
     boundsRef.current.clear();
     const editor = editorRef.current;
     if (editor) {
@@ -416,6 +458,13 @@ export default function SpikePage() {
               {explanations.map((x, i) => (
                 <p key={i} className="rounded border border-sky-900 bg-sky-950/40 p-2 text-xs text-sky-200">
                   you: “{x.text}”
+                  {x.outcome && (
+                    <span
+                      className={`ml-1 ${x.outcome === "found-it" ? "text-green-400" : "text-neutral-500"}`}
+                    >
+                      · {x.outcome}
+                    </span>
+                  )}
                 </p>
               ))}
             </div>
