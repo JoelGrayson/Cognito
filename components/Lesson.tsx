@@ -9,7 +9,9 @@ import { LessonChat } from "./LessonChat";
 import { QuizPanel } from "./Quiz";
 import { RichText } from "./RichText";
 import { Roadmap } from "./Roadmap";
+import { Explainer } from "./Explainer";
 import { VideoCall } from "./VideoCall";
+import { CodeExercise, lessonWantsCode } from "./CodeExercise";
 
 export type LessonState =
   | { status: "loading" }
@@ -50,6 +52,7 @@ export function LessonView({
   onLessonChange,
 }: Props) {
   const [calling, setCalling] = useState(false);
+  const [watching, setWatching] = useState(false);
   const at = nodeAt(map, selected);
   if (!at) return null;
   const { node, phase } = at;
@@ -94,6 +97,19 @@ export function LessonView({
                 <path d="M16 10l6-3v10l-6-3z" />
               </svg>
               Start video lesson
+            </button>
+            <button
+              type="button"
+              className="call-start call-start-ghost"
+              onClick={() => setWatching(true)}
+              disabled={!lesson}
+              title={lesson ? "A narrated explainer that draws itself, with an article version" : "Available once the lesson is written"}
+            >
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M10 8.5l6 3.5-6 3.5z" />
+              </svg>
+              Watch explainer
             </button>
           </div>
         </div>
@@ -205,6 +221,9 @@ export function LessonView({
               </section>
             )}
 
+            {lesson && lessonWantsCode(lesson) && (
+              <CodeExercise key={lesson.title} topic={topic} lesson={lesson} providerId={providerId} />
+            )}
             {lesson && <QuizPanel lesson={lesson} providerId={providerId} />}
           </>
         )}
@@ -221,6 +240,9 @@ export function LessonView({
       </aside>
       {calling && lesson && (
         <VideoCall topic={topic} lesson={lesson} providerId={providerId} onClose={() => setCalling(false)} />
+      )}
+      {watching && lesson && (
+        <Explainer topic={topic} lesson={lesson} providerId={providerId} onClose={() => setWatching(false)} />
       )}
     </div>
   );

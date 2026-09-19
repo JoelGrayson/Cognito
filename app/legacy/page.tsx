@@ -6,6 +6,7 @@ import { LessonView, type LessonState } from "@/components/Lesson";
 import { ProviderSelect } from "@/components/ProviderSelect";
 import { ChatGPTConnect } from "@/components/ChatGPTConnect";
 import { Roadmap, RoadmapLegend, RoadmapSkeleton } from "@/components/Roadmap";
+import { RoadmapChat } from "@/components/RoadmapChat";
 import { emptyDraft, type LessonDraft, type OutlineDraft } from "@/lib/drafts";
 import { ensureOk, readNdjson } from "@/lib/ndjson";
 import { RichText } from "@/components/RichText";
@@ -23,6 +24,7 @@ import {
   roadmapStorageKey,
   roadmapsVersion,
   roadmapUrl,
+  ROADMAP_PATH,
   saveLesson,
   saveMap,
   subscribeRoadmaps,
@@ -61,7 +63,6 @@ export default function Home() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [modification, setModification] = useState("");
   /** True while `map` is a partial roadmap still streaming in. */
   const [mapDraft, setMapDraft] = useState(false);
 
@@ -334,7 +335,7 @@ export default function Home() {
   useEffect(() => {
     if (!restoredRef.current) return;
     const at = map && selected ? nodeAt(map, selected) : null;
-    const url = roadmapId && map ? roadmapUrl(roadmapId, at ? lessonKey(at.node) : undefined) : "/";
+    const url = roadmapId && map ? roadmapUrl(roadmapId, at ? lessonKey(at.node) : undefined) : ROADMAP_PATH;
     if (url !== window.location.pathname + window.location.search) window.history.replaceState(null, "", url);
   }, [roadmapId, map, selected]);
 
@@ -444,7 +445,6 @@ export default function Home() {
     setQueryDetails(context);
     setMap(null);
     setMeta(null);
-    setModification("");
     setSelected(null);
     setLessons({});
     const provider = providerId;
@@ -458,23 +458,19 @@ export default function Home() {
     startTopic(topic, details);
   }
 
-  async function onSubmitModification(e: FormEvent) {
-    e.preventDefault();
-    if (!query || !map || !modification.trim() || loading || remoteDraft) return;
-    const done = await generate(
-      {
-        topic: query,
-        provider: providerId,
-        details: queryDetails || undefined,
-        current: map,
-        instruction: modification.trim(),
-      },
-      map,
-    );
-    if (!done) return;
-    setModification("");
-    // Lessons are kept by block name, so only blocks the revision added get written.
-    if (readSettings().autoGenerateLessons) void generateAll(done, query, providerId);
+  /** The assistant revised the roadmap: it becomes the current map, under a new id. */
+  function applyRevisedMap(next: MindMap, instruction: string) {
+    stopGenerateAll();
+    const id = newRoadmapId();
+    ownedIds.current.add(id);
+    instructions.current.set(id, instruction);
+    setRoadmapId(id);
+    setRemoteDraft(false);
+    setMap(next);
+    setMapDraft(false);
+    setMeta(null);
+    setSelected((current) => (current && nodeAt(next, current) ? current : null));
+    if (query && readSettings().autoGenerateLessons) void generateAll(next, query, providerId);
   }
 
   /** Open a block's lesson, generating it the first time. */
@@ -523,7 +519,6 @@ export default function Home() {
     setTopic("");
     setDetails("");
     setQueryDetails("");
-    setModification("");
     setSelected(null);
     setLessons({});
     setMapDraft(false);
@@ -536,21 +531,40 @@ export default function Home() {
   if (query === null) {
     return (
       <main className="relative flex flex-1 flex-col items-center px-4 pt-[10vh] sm:px-8">
-        <Link href="/settings" className="absolute right-4 top-4 text-sm text-neutral-500 hover:text-neutral-900 sm:right-8">
-          Settings
-        </Link>
+        <nav className="absolute right-4 top-4 flex items-center gap-4 text-sm text-neutral-500 sm:right-8">
+          <Link href="/about" className="hover:text-neutral-900">
+            About
+          </Link>
+          <Link href="/settings" className="hover:text-neutral-900">
+            Settings
+          </Link>
+        </nav>
         <h1 className="text-3xl font-normal tracking-tight sm:text-4xl">StructuredLearning.ai</h1>
 
         <form onSubmit={onSubmitTopic} className="mt-[12vh] w-full max-w-3xl">
-          <input
-            className="pill px-7 py-4 text-xl sm:text-2xl"
-            placeholder="What do you want to learn?"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            autoFocus
-            autoComplete="off"
-            aria-label="What do you want to learn?"
-          />
+          <div className="relative">
+            <input
+              className="pill py-4 pl-7 pr-16 text-xl sm:pr-[72px] sm:text-2xl"
+              placeholder="What do you want to learn?"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              autoFocus
+              autoComplete="off"
+              aria-label="What do you want to learn?"
+            />
+            <button
+              type="submit"
+              disabled={!topic.trim()}
+              aria-label="Start roadmap"
+              title="Start roadmap"
+              className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:h-12 sm:w-12"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 19V5" />
+                <path d="M5 12l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
           {(topic.trim() || details.trim()) && (
             <div className="details-box">
               <textarea
@@ -568,7 +582,7 @@ export default function Home() {
                 maxLength={2000}
                 aria-label="Details: what you want to learn and what you already know"
               />
-              <p className="details-hint">Press Enter in the topic, or ⌘ Enter here, to start</p>
+              <p className="details-hint">Press ↑, Enter in the topic, or ⌘ Enter here, to start</p>
             </div>
           )}
         </form>
@@ -651,6 +665,9 @@ export default function Home() {
           StructuredLearning.ai
         </button>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Link href="/about" className="text-sm text-neutral-500 hover:text-neutral-900">
+            About
+          </Link>
           <Link href="/settings" className="mr-2 text-sm text-neutral-500 hover:text-neutral-900">
             Settings
           </Link>
@@ -677,7 +694,8 @@ export default function Home() {
           />
         </div>
       ) : (
-        <div className="mx-auto w-full max-w-4xl">
+        <div className="roadmap-layout">
+          <div className="min-w-0">
           <h1 className="mt-6 text-center text-4xl font-medium tracking-tight sm:text-5xl">
             {map?.topic || query}
           </h1>
@@ -772,31 +790,19 @@ export default function Home() {
             </section>
           )}
 
-          <form onSubmit={onSubmitModification} className="relative mt-10">
-            <input
-              className="pill py-5 pl-7 pr-20 text-xl sm:text-2xl"
-              placeholder="Enter modifications"
-              value={modification}
-              onChange={(e) => setModification(e.target.value)}
-              autoComplete="off"
-              aria-label="Enter modifications"
-            />
-            <button
-              type="submit"
-              disabled={!map || loading || remoteDraft || !modification.trim()}
-              aria-label="Apply modifications"
-              className="absolute right-2.5 top-1/2 flex h-[52px] w-[52px] -translate-y-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:h-[60px] sm:w-[60px]"
-            >
-              {loading ? (
-                <span className="spinner" />
-              ) : (
-                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 19V5" />
-                  <path d="M5 12l7-7 7 7" />
-                </svg>
-              )}
-            </button>
-          </form>
+          </div>
+
+          {map && (
+            <aside className="roadmap-aside">
+              <RoadmapChat
+                topic={query}
+                map={map}
+                providerId={providerId}
+                onMapChange={applyRevisedMap}
+                busy={loading || remoteDraft}
+              />
+            </aside>
+          )}
         </div>
       )}
     </main>
@@ -846,6 +852,7 @@ function RoadmapIntro({ map, writing }: { map: MindMap | null; writing: boolean 
     <div className="intro">
       {line("What you need to know", start, "intro-start")}
       {line("What you will know at the end", end, "intro-end")}
+      {map?.plan && <p className="intro-plan">{map.plan}</p>}
     </div>
   );
 }
