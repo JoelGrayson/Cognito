@@ -162,7 +162,16 @@ function pointsOf(shape: TLDrawShape): Point[] {
  * FINAL (the student has moved on), an idle commit is PROVISIONAL (they may still be
  * mid-line, just thinking).
  */
-export type CommitReason = "line-break" | "idle";
+export type CommitReason =
+  | "line-break"
+  /** Provisional: the learner may still be writing this line. */
+  | "idle"
+  /** A line that was idle-committed has now been superseded by a new line, so the
+   *  earlier provisional reading is final after all. Carries NO strokes - there is
+   *  nothing new to read, and re-reading would cost another OCR call for an
+   *  identical answer. It exists so a consumer that withheld action on the
+   *  provisional reading can now take it. */
+  | "finalized";
 
 export interface Commit {
   strokes: TimedStroke[];
@@ -247,6 +256,9 @@ export function recordStrokes(
           // if it has, the reading already exists and re-sending would duplicate it.
           if (idleFiredFor !== lineId) {
             onCommit({ strokes: [...line], lineId, reason: "line-break" });
+          } else {
+            // Already read on idle. Don't read it again - just say it's settled.
+            onCommit({ strokes: [], lineId, reason: "finalized" });
           }
           lineId += 1;
           line = [];
