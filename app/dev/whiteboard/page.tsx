@@ -110,10 +110,18 @@ export default function SpikePage() {
   /** What the learner said, newest last. This is the artifact that matters: the
    *  point of asking "why" is that they articulate it, not that we grade it. */
   const [explanations, setExplanations] = useState<{ text: string; ms: number; outcome: string }[]>([]);
+  /** Last few turns, so the tutor can avoid repeating itself. */
+  const historyRef = useRef<{ who: "tutor" | "learner"; text: string }[]>([]);
   /** The step currently under discussion. Set when a mark is drawn, cleared once the
    *  learner names the error - that is what makes "speaking is the hint request"
    *  possible without a button. */
-  const openRef = useRef<{ verdict: Equivalence; lineId: number; strokes: TimedStroke[]; raw: string } | null>(null);
+  const openRef = useRef<{
+    verdict: Equivalence;
+    lineId: number;
+    strokes: TimedStroke[];
+    raw: string;
+    parsedStep: string;
+  } | null>(null);
   const voiceIdRef = useRef(voiceId);
   useEffect(() => {
     voiceIdRef.current = voiceId;
@@ -196,7 +204,8 @@ export default function SpikePage() {
             const line = SPOKEN[rungRef.current] ?? SPOKEN[1];
             const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
             const utterance = `${line} ${why}`;
-            openRef.current = { verdict, lineId, strokes, raw };
+            openRef.current = { verdict, lineId, strokes, raw, parsedStep: parsed };
+            historyRef.current = [{ who: "tutor", text: utterance }];
             setSaid(utterance);
             speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
               setError(e instanceof Error ? e.message : "Voice failed.");
@@ -262,10 +271,48 @@ export default function SpikePage() {
       // Explaining and not getting there IS the request for more help, so the
       // learner never has to press anything to ask. The system still never
       // volunteers a rung unprompted - this IS the prompt.
-      const outcome = assessExplanation(transcript, open.verdict);
-      setExplanations((e) => [...e, { text: transcript, ms, outcome: outcome.kind }]);
+      historyRef.current.push({ who: "learner", text: transcript });
 
+      // Ask the model what to say. It is handed the verdict as ground truth and the
+      // rung as a ceiling on what it may reveal -- it decides the WORDS, never the
+      // maths. Falls back to the canned lines if it is unavailable, so a missing key
+      // or a flaky network degrades instead of breaking mid-demo.
+      let outcome = assessExplanation(transcript, open.verdict);
       let line = replyTo(outcome, open.verdict);
+      let fromModel = false;
+
+      try {
+        const r = await fetch("/api/whiteboard/reply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            previousStep: readingsRef.current.find((x) => x.lineId < open.lineId)?.parsed ?? null,
+            currentStep: open.parsedStep,
+            verdictKind: open.verdict.kind,
+            verdictDetail:
+              open.verdict.kind === "direction"
+                ? open.verdict.expected
+                : open.verdict.kind === "rescaled"
+                  ? String(open.verdict.by.toFixed(2))
+                  : "",
+            rung: rungRef.current,
+            said: transcript,
+            history: historyRef.current.slice(-6),
+          }),
+        });
+        if (r.ok) {
+          const d = await r.json();
+          if (d.reply) {
+            line = d.reply;
+            fromModel = true;
+            outcome = { kind: d.foundIt ? "found-it" : d.escalate ? "stuck" : "not-yet" };
+          }
+        }
+      } catch {
+        // keep the canned line
+      }
+
+      setExplanations((e) => [...e, { text: transcript, ms, outcome: outcome.kind }]);
 
       if (outcome.kind === "found-it") {
         openRef.current = null; // they did the work; get out of the way
@@ -279,8 +326,11 @@ export default function SpikePage() {
           marksFor(open.verdict, open.lineId, next, symbol),
           (id) => boundsRef.current.get(id),
         );
-        line = `${line} ${SPOKEN[next] ?? ""}`.trim();
+        // Only bolt the canned rung line on when the model didn't write one.
+        if (!fromModel) line = `${line} ${SPOKEN[next] ?? ""}`.trim();
       }
+
+      historyRef.current.push({ who: "tutor", text: line });
 
       setSaid(line);
       if (voiceOnRef.current) {
@@ -325,6 +375,7 @@ export default function SpikePage() {
     setSaid(null);
     setExplanations([]);
     openRef.current = null;
+    historyRef.current = [];
     boundsRef.current.clear();
     const editor = editorRef.current;
     if (editor) {
