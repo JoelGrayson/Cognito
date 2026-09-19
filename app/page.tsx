@@ -13,7 +13,7 @@ import { RichText } from "@/components/RichText";
 import { readSettings } from "@/lib/settings";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import { ensureAnonymousSession } from "@/lib/auth-client";
-import { findRef, lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
+import { findRef, lessonKey, moveNode, nodeAt, removeNode, updateNode, type NodeRef } from "@/lib/roadmap";
 import {
   deleteRoadmap,
   listRoadmaps,
@@ -103,6 +103,8 @@ export default function Home() {
   useEffect(() => {
     lessonsRef.current = lessons;
   }, [lessons]);
+  /** The block being edited by hand, if any. */
+  const [editing, setEditing] = useState<NodeRef | null>(null);
   /** Progress of "Generate all"; null when it is not running. */
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const bulkAbortRef = useRef<AbortController | null>(null);
@@ -473,6 +475,34 @@ export default function Home() {
     if (query && readSettings().autoGenerateLessons) void generateAll(next, query, providerId);
   }
 
+  /**
+   * The learner edited the map by hand. Their version replaces the current one and is
+   * saved in place, so hand edits do not pile up a new roadmap each time.
+   */
+  function applyEdit(next: MindMap) {
+    if (!roadmapId) return;
+    ownedIds.current.add(roadmapId);
+    setMap(next);
+    setMapDraft(false);
+    setSelected((current) => (current && nodeAt(next, current) ? current : null));
+  }
+
+  function deleteBlock(ref: NodeRef) {
+    if (!map) return;
+    applyEdit(removeNode(map, ref));
+  }
+
+  function moveBlock(from: NodeRef, to: NodeRef) {
+    if (!map) return;
+    applyEdit(moveNode(map, from, to));
+  }
+
+  function saveBlock(ref: NodeRef, patch: { name: string; subtitle: string; description: string }) {
+    if (!map) return;
+    applyEdit(updateNode(map, ref, patch));
+    setEditing(null);
+  }
+
   /** Open a block's lesson, generating it the first time. */
   function openLesson(ref: NodeRef) {
     if (!map || !query) return;
@@ -704,7 +734,15 @@ export default function Home() {
 
           <div className="mt-10">
             {map && !loading && !remoteDraft ? (
-              <Roadmap map={map} onSelect={openLesson} hrefFor={lessonHref} isReady={isReady} />
+              <Roadmap
+                map={map}
+                onSelect={openLesson}
+                hrefFor={lessonHref}
+                isReady={isReady}
+                onEdit={setEditing}
+                onDelete={deleteBlock}
+                onMove={moveBlock}
+              />
             ) : null}
             {map && ((loading && mapDraft) || (!loading && remoteDraft)) ? (
               <Roadmap
@@ -792,6 +830,14 @@ export default function Home() {
 
           </div>
 
+          {map && editing && nodeAt(map, editing) && (
+            <EditBlock
+              node={nodeAt(map, editing)!.node}
+              onCancel={() => setEditing(null)}
+              onSave={(patch) => saveBlock(editing, patch)}
+            />
+          )}
+
           {map && (
             <aside className="roadmap-aside">
               <RoadmapChat
@@ -829,6 +875,13 @@ function timeAgo(ms: number): string {
   return new Date(ms).toLocaleDateString();
 }
 
+/** How the stages are ordered, said plainly above the map. */
+const ORDER_LABEL: Record<Exclude<MindMap["order"], "mixed">, string> = {
+  chronological: "Roughly chronological",
+  difficulty: "Easiest first",
+  parts: "By parts of the system",
+};
+
 /** "What you need to know" and "What you will know at the end", under the roadmap's title. */
 function RoadmapIntro({ map, writing }: { map: MindMap | null; writing: boolean }) {
   // Roadmaps saved before these lists existed have neither; early ones stored a sentence.
@@ -852,7 +905,69 @@ function RoadmapIntro({ map, writing }: { map: MindMap | null; writing: boolean 
     <div className="intro">
       {line("What you need to know", start, "intro-start")}
       {line("What you will know at the end", end, "intro-end")}
-      {map?.plan && <p className="intro-plan">{map.plan}</p>}
+      {(map?.order && map.order !== "mixed") || map?.plan ? (
+        <p className="intro-plan">
+          {map?.order && map.order !== "mixed" && <span className="order-badge">{ORDER_LABEL[map.order]}</span>}
+          {map?.plan}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Rename a block and change what it covers. */
+function EditBlock({
+  node,
+  onSave,
+  onCancel,
+}: {
+  node: MapNode;
+  onSave: (patch: { name: string; subtitle: string; description: string }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(node.name);
+  const [subtitle, setSubtitle] = useState(node.subtitle);
+  const [description, setDescription] = useState(node.description);
+  return (
+    <div className="edit-backdrop" role="dialog" aria-modal="true" aria-label={`Edit ${node.name}`} onClick={onCancel}>
+      <form
+        className="edit-card"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim()) onSave({ name: name.trim(), subtitle: subtitle.trim(), description: description.trim() });
+        }}
+      >
+        <h2 className="text-lg font-medium">Edit block</h2>
+        <label className="edit-field">
+          <span>Name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus maxLength={80} />
+        </label>
+        <label className="edit-field">
+          <span>Key concepts</span>
+          <input
+            value={subtitle}
+            onChange={(e) => setSubtitle(e.target.value)}
+            maxLength={120}
+            placeholder="comma, separated, concepts"
+          />
+        </label>
+        <label className="edit-field">
+          <span>What it covers</span>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={400} />
+        </label>
+        <p className="text-xs text-neutral-500">
+          Renaming a block starts its lesson again; the old one stays under the old name.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="code-btn" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="code-btn code-btn-primary" disabled={!name.trim()}>
+            Save
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

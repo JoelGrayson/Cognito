@@ -1431,3 +1431,120 @@ a.card:focus-visible {
 .order-group .stage-why:first-child {
   margin-top: 2px;
 }
+.order-badge {
+  display: inline-block;
+  margin-right: 8px;
+  border-radius: 9999px;
+  padding: 2px 10px;
+  background: #ecebfb;
+  color: #4b46a8;
+  font-size: 12.5px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+/* ---------- Editing blocks ---------- */
+.card-wrap {
+  position: relative;
+  height: 100%;
+}
+.card-wrap[data-dragging="true"] {
+  opacity: 0.4;
+}
+.slot[data-over="true"] {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+.card-menu {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 24px;
+  height: 20px;
+  border-radius: 6px;
+  color: #6f6f6f;
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+.card-wrap:hover .card-menu,
+.card-menu:focus-visible,
+.card-menu[aria-expanded="true"] {
+  opacity: 1;
+}
+.card-menu:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: #111;
+}
+.card-actions {
+  position: absolute;
+  top: 24px;
+  right: 6px;
+  z-index: 5;
+  display: flex;
+  min-width: 118px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e3e2dd;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.card-actions button {
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 13.5px;
+  color: #333;
+}
+.card-actions button:hover {
+  background: #f4f3ef;
+}
+.card-action-danger {
+  color: #dc2626;
+}
+
+/* ---------- Edit a block ---------- */
+.edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 19, 24, 0.35);
+}
+.edit-card {
+  display: flex;
+  width: 100%;
+  max-width: 460px;
+  flex-direction: column;
+  gap: 14px;
+  border-radius: 14px;
+  padding: 22px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  color: #6f6f6f;
+}
+.edit-field input,
+.edit-field textarea {
+  border: 1px solid #d4d3ce;
+  border-radius: 8px;
+  padding: 8px 11px;
+  color: var(--fg);
+  font-size: 15px;
+  outline: none;
+  resize: vertical;
+}
+.edit-field input:focus,
+.edit-field textarea:focus {
+  border-color: var(--accent);
+}
