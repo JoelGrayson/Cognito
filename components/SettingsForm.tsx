@@ -8,7 +8,7 @@ export function SettingsForm() {
   const settings = useSyncExternalStore(subscribeSettings, readSettings, serverSettings);
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-8">
-      <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-900">
+      <Link href="/legacy" className="text-sm text-neutral-500 hover:text-neutral-900">
         ← StructuredLearning.ai
       </Link>
       <h1 className="mt-6 text-3xl font-medium tracking-tight">Settings</h1>

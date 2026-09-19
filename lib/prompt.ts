@@ -280,8 +280,8 @@ Rules:
 - Practise the lesson's core idea directly, at the depth the lesson teaches. For a non-programming lesson (physics, finance, statistics), write a small Python computation of what the lesson teaches, e.g. a function returning the acceleration on an incline.
 - Use the language the lesson is about. Otherwise use Python.
 - The task names the exact functions or variables to write, their inputs and their expected outputs, so the tests can call them.
-- Starter code runs as is but leaves the core logic as TODOs. Keep the learner's work to 5-20 lines.
-- Tests are boolean expressions evaluated after the learner's code runs, in the same language, e.g. add(2, 3) == 5 in Python or add(2, 3) === 5 in JavaScript. Compare floats with a tolerance, e.g. abs(f(1) - 2.5) < 1e-9. No statements, prints or asserts.
+- Starter code runs as is but leaves the core logic as TODOs, returning a placeholder, so every test FAILS on the starter code. Never put the working logic in the starter. Keep the learner's work to 5-20 lines.
+- Each test is a boolean expression evaluated after the learner's code runs, in the same language, e.g. add(2, 3) == 5 in Python or add(2, 3) === 5 in JavaScript. If a test needs setup, write short statements separated by semicolons that end in the boolean expression, e.g. x = np.array([1.0, 3.0]); abs(mean(x) - 2.0) < 1e-9. The learner's code has already run, so its imports and functions are available. Compare floats with a tolerance. No prints or asserts. For TypeScript exercises, write tests in plain JavaScript without type annotations.
 - The solution must pass every test. Double-check each expected value.
 - Python runs in Pyodide: the standard library, numpy and pandas are available; no network or files. JavaScript and TypeScript run in a browser worker: no DOM, no Node APIs, no npm packages.
 - Be fact-dense: no filler in the task.`;

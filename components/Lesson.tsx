@@ -10,6 +10,7 @@ import { QuizPanel } from "./Quiz";
 import { RichText } from "./RichText";
 import { Roadmap } from "./Roadmap";
 import { VideoCall } from "./VideoCall";
+import { CodeExercise, lessonWantsCode } from "./CodeExercise";
 
 export type LessonState =
   | { status: "loading" }
@@ -205,6 +206,9 @@ export function LessonView({
               </section>
             )}
 
+            {lesson && lessonWantsCode(lesson) && (
+              <CodeExercise key={lesson.title} topic={topic} lesson={lesson} providerId={providerId} />
+            )}
             {lesson && <QuizPanel lesson={lesson} providerId={providerId} />}
           </>
         )}

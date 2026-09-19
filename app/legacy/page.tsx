@@ -23,6 +23,7 @@ import {
   roadmapStorageKey,
   roadmapsVersion,
   roadmapUrl,
+  ROADMAP_PATH,
   saveLesson,
   saveMap,
   subscribeRoadmaps,
@@ -334,7 +335,7 @@ export default function Home() {
   useEffect(() => {
     if (!restoredRef.current) return;
     const at = map && selected ? nodeAt(map, selected) : null;
-    const url = roadmapId && map ? roadmapUrl(roadmapId, at ? lessonKey(at.node) : undefined) : "/";
+    const url = roadmapId && map ? roadmapUrl(roadmapId, at ? lessonKey(at.node) : undefined) : ROADMAP_PATH;
     if (url !== window.location.pathname + window.location.search) window.history.replaceState(null, "", url);
   }, [roadmapId, map, selected]);
 
@@ -542,15 +543,29 @@ export default function Home() {
         <h1 className="text-3xl font-normal tracking-tight sm:text-4xl">StructuredLearning.ai</h1>
 
         <form onSubmit={onSubmitTopic} className="mt-[12vh] w-full max-w-3xl">
-          <input
-            className="pill px-7 py-4 text-xl sm:text-2xl"
-            placeholder="What do you want to learn?"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            autoFocus
-            autoComplete="off"
-            aria-label="What do you want to learn?"
-          />
+          <div className="relative">
+            <input
+              className="pill py-4 pl-7 pr-16 text-xl sm:pr-[72px] sm:text-2xl"
+              placeholder="What do you want to learn?"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              autoFocus
+              autoComplete="off"
+              aria-label="What do you want to learn?"
+            />
+            <button
+              type="submit"
+              disabled={!topic.trim()}
+              aria-label="Start roadmap"
+              title="Start roadmap"
+              className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:h-12 sm:w-12"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 19V5" />
+                <path d="M5 12l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
           {(topic.trim() || details.trim()) && (
             <div className="details-box">
               <textarea
@@ -568,7 +583,7 @@ export default function Home() {
                 maxLength={2000}
                 aria-label="Details: what you want to learn and what you already know"
               />
-              <p className="details-hint">Press Enter in the topic, or ⌘ Enter here, to start</p>
+              <p className="details-hint">Press ↑, Enter in the topic, or ⌘ Enter here, to start</p>
             </div>
           )}
         </form>
