@@ -1,74 +1,64 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { getClient } from "./client";
+import { ConceptsResponse } from "@/lib/onboarding/schemas";
+import { DraftGraph, GraphOp, NodeId } from "@/types/learning";
 
-export class AiValidationError extends Error {
-  constructor(public readonly issues: string[]) {
-    super(`Model output failed validation: ${issues.join("; ")}`);
-    this.name = "AiValidationError";
-  }
-}
+export {
+  AiValidationError,
+  callForcedTool,
+  toInputSchema,
+  type AiCallOptions,
+  type AttemptReport,
+  type ToolClient,
+} from "./withRetry";
 
-/** The slice of the SDK this helper uses, so tests can pass a fake. */
-export interface ToolClient {
-  messages: { create(params: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message> };
-}
+/** Tool input for `edit_graph`: a short reply plus the ops to apply. */
+export const EditGraphOutput = z.object({
+  message: z.string().min(1).max(600),
+  ops: z.array(GraphOp).max(40),
+});
+export type EditGraphOutput = z.infer<typeof EditGraphOutput>;
 
-interface ForcedToolCall<S extends z.ZodType> {
-  model: string;
-  system: string;
-  prompt: string;
-  tool: { name: string; description: string; schema: S };
-  maxTokens?: number;
-  client?: ToolClient;
-}
+export const OBJECTIVES_MIN = 2;
+export const OBJECTIVES_MAX = 4;
+export const OBJECTIVE_MAX_CHARS = 120;
+export const ENRICH_MINUTES_MIN = 15;
+export const ENRICH_MINUTES_MAX = 90;
 
-/**
- * Forces one tool call, validates its input with zod, and retries once with the
- * validation errors appended. Throws AiValidationError after the second failure.
- * Model output is only ever read from the tool input, never parsed from text.
- */
-export async function callForcedTool<S extends z.ZodType>(call: ForcedToolCall<S>): Promise<z.output<S>> {
-  const client = call.client ?? getClient();
-  const { name, description, schema } = call.tool;
-  const inputSchema: Record<string, unknown> = z.toJSONSchema(schema);
-  delete inputSchema.$schema;
-  const tools = [{ name, description, input_schema: inputSchema as Anthropic.Tool.InputSchema }];
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: call.prompt }];
+/** Tool input for `set_objectives`: objectives (and optionally a corrected estimate) per leaf. */
+export const SetObjectivesOutput = z.object({
+  nodes: z.array(
+    z.object({
+      id: NodeId,
+      objectives: z.array(z.string().min(1).max(OBJECTIVE_MAX_CHARS)).min(OBJECTIVES_MIN).max(OBJECTIVES_MAX),
+      estMinutes: z.number().int().min(ENRICH_MINUTES_MIN).max(ENRICH_MINUTES_MAX).optional(),
+    }),
+  ),
+});
+export type SetObjectivesOutput = z.infer<typeof SetObjectivesOutput>;
 
-  let issues: string[] = [];
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await client.messages.create({
-      model: call.model,
-      max_tokens: call.maxTokens ?? 1024,
-      system: call.system,
-      tools,
-      tool_choice: { type: "tool", name },
-      messages,
-    });
-    const block = response.content.find(
-      (item): item is Anthropic.ToolUseBlock => item.type === "tool_use" && item.name === name,
-    );
-    const parsed = block ? schema.safeParse(block.input) : null;
-    if (parsed?.success) return parsed.data;
+/** One tool per AI function. The name is what `tool_choice` forces; the schema becomes `input_schema`. */
+export const setConceptsTool = {
+  name: "set_concepts",
+  description: "Return the concepts the learner can rate their familiarity with.",
+  schema: ConceptsResponse,
+};
 
-    issues = parsed
-      ? parsed.error.issues.map((issue) => (issue.path.length ? `${issue.path.join(".")}: ${issue.message}` : issue.message))
-      : [`The response did not call ${name}.`];
-    if (block) {
-      messages.push(
-        { role: "assistant", content: response.content },
-        {
-          role: "user",
-          content: [{
-            type: "tool_result",
-            tool_use_id: block.id,
-            is_error: true,
-            content: `Invalid input: ${issues.join("; ")}. Call ${name} again with corrected input.`,
-          }],
-        },
-      );
-    }
-  }
-  throw new AiValidationError(issues);
-}
+export const setGraphTool = {
+  name: "set_graph",
+  description: "Return the complete topic roadmap as a graph of nodes and edges.",
+  schema: DraftGraph,
+};
+
+export const editGraphTool = {
+  name: "edit_graph",
+  description: "Reply to the learner in 1 to 3 sentences and return the smallest list of graph ops that fulfils the request (empty if none).",
+  schema: EditGraphOutput,
+};
+
+export const setObjectivesTool = {
+  name: "set_objectives",
+  description: "Return 2 to 4 learning objectives, and optionally a corrected time estimate, for every requested topic.",
+  schema: SetObjectivesOutput,
+};
+
+export const TOOLS = [setConceptsTool, setGraphTool, editGraphTool, setObjectivesTool] as const;
