@@ -3,6 +3,7 @@
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
 import { applyActions, describeBoard, learnerStroke, type BoardElement, type ResolvedAction } from "@/lib/board";
 import { ensureOk } from "@/lib/ndjson";
+import { speak } from "@/lib/speech";
 import type { ProviderId } from "@/lib/providers/types";
 import type { BoardColor, Lesson } from "@/lib/schema";
 import { Board, INK } from "./Board";
@@ -433,38 +434,7 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
   );
 }
 
-/* ---------- Browser speech ---------- */
-
-/** Resolves when the tutor has finished speaking (or right away, paced by length, when voice is off). */
-function speak(text: string, voice: boolean): Promise<void> {
-  return new Promise((resolve) => {
-    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
-    if (!voice || !synth) {
-      setTimeout(resolve, Math.min(9000, 1200 + text.split(/\s+/).length * 260));
-      return;
-    }
-    let done = false;
-    const finish = () => {
-      if (!done) {
-        done = true;
-        resolve();
-      }
-    };
-    synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = synth.getVoices();
-    const preferred =
-      voices.find((v) => /Google US English|Samantha|Ava|Allison/i.test(v.name) && v.lang.startsWith("en")) ??
-      voices.find((v) => v.lang.startsWith(navigator.language.slice(0, 2)));
-    if (preferred) utterance.voice = preferred;
-    utterance.rate = 1.04;
-    utterance.onend = finish;
-    utterance.onerror = finish;
-    synth.speak(utterance);
-    // Some browsers occasionally never fire onend.
-    setTimeout(finish, 3000 + text.length * 90);
-  });
-}
+/* ---------- Browser speech recognition ---------- */
 
 interface RecognitionResult {
   isFinal: boolean;
