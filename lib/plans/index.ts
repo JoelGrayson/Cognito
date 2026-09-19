@@ -1,8 +1,11 @@
+import { DEMO_PLAN_ID, demoPlan } from "@/fixtures/demoPlan";
 import { onboardingRepo, planRepo } from "@/lib/repo";
 import type { OnboardingStep, PlanNode, Progress, StudyPlan } from "@/types/learning";
 
-export const getPlan = (planId: string, userId: string): Promise<StudyPlan | null> =>
-  planRepo.get(planId, userId);
+// "demo" resolves to the fixture plan for any user. It is not stored, so it never
+// becomes anyone's active plan and the landing CTA is unaffected.
+export const getPlan = async (planId: string, userId: string): Promise<StudyPlan | null> =>
+  planId === DEMO_PLAN_ID ? demoPlan(userId) : planRepo.get(planId, userId);
 
 export const getActivePlan = (userId: string): Promise<StudyPlan | null> =>
   planRepo.getActive(userId);
