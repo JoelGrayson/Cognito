@@ -186,3 +186,30 @@ export function RoadmapSkeleton({ rows = 5 }: { rows?: number }) {
     </div>
   );
 }
+
+/** Explains the map's colours and borders. Swatches reuse the card styles, so they always match. */
+export function RoadmapLegend() {
+  const phases: { phase: Phase; label: string }[] = [
+    { phase: "prerequisite", label: "Prerequisite" },
+    { phase: "core", label: "Core" },
+    { phase: "advanced", label: "Advanced" },
+  ];
+  return (
+    <ul className="legend" aria-label="Map legend">
+      {phases.map(({ phase, label }) => (
+        <li key={phase}>
+          <span className="card legend-swatch" data-phase={phase} data-ready="true" aria-hidden="true" />
+          {label}
+        </li>
+      ))}
+      <li>
+        <span className="card legend-swatch legend-swatch-plain" data-ready="true" aria-hidden="true" />
+        Lesson written
+      </li>
+      <li>
+        <span className="card legend-swatch legend-swatch-plain" aria-hidden="true" />
+        Not written yet
+      </li>
+    </ul>
+  );
+}
