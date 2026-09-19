@@ -2,6 +2,8 @@
 
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
 }
 
 :root {
@@ -13,6 +15,8 @@
   --panel: #f8f8f6;
   --arrow: #9a9a9a;
   --accent: #4f6ff2;
+  /* Filled buttons with white text (about 6:1 contrast). */
+  --accent-strong: #3a55d9;
 }
 
 html {
