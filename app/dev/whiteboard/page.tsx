@@ -337,7 +337,14 @@ export default function SpikePage() {
           if (d.reply) {
             line = d.reply;
             fromModel = true;
-            outcome = { kind: d.foundIt ? "found-it" : d.escalate ? "stuck" : "not-yet" };
+            // Take the model's WORDS, not its judgement. At rungs 1-2 it is
+            // deliberately not told the verdict or shown the working, so its
+            // foundIt is a guess - and a wrong guess closes a real error because
+            // the learner happened to name some other plausible mistake. Whether
+            // they found it stays with the deterministic check, which knows.
+            if (open.rung >= 3 && d.foundIt && outcome.kind !== "found-it") {
+              outcome = { kind: "not-yet" };
+            }
           }
         }
       } catch {

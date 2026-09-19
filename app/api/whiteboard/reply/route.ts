@@ -114,9 +114,14 @@ export async function POST(request: Request) {
   }
 
   const level = Math.min(Math.max(rung ?? 1, 1), 5);
+
+  // Bound every caller-supplied string before it reaches the model. A step is one
+  // line of algebra and a spoken turn is a sentence or two; anything longer is a
+  // bug or an attempt to run up the bill.
+  const clip = (v: unknown, n: number) => (typeof v === "string" ? v.slice(0, n) : "");
   const transcript = (history ?? [])
     .slice(-6)
-    .map((h) => `${h.who === "tutor" ? "You" : "Them"}: ${h.text}`)
+    .map((h) => `${h.who === "tutor" ? "You" : "Them"}: ${clip(h.text, 400)}`)
     .join("\n");
 
   const system = `You are a maths tutor sitting beside someone working a problem on paper. You speak out loud, so keep it to one or two short sentences, conversational, no markdown.
@@ -139,13 +144,13 @@ If they have named the error, say so warmly and briefly, and stop helping.`;
   const userTurn = [
     showWorking
       ? previousStep
-        ? `They had written: ${previousStep}`
+        ? `They had written: ${clip(previousStep, 200)}`
         : "This is their first step."
       : "",
-    showWorking ? `Then they wrote: ${currentStep}` : "They have written a few steps of working.",
+    showWorking ? `Then they wrote: ${clip(currentStep, 200)}` : "They have written a few steps of working.",
     `WHAT YOU KNOW (they do not): ${groundTruthFor(verdictKind, verdictDetail ?? "", level)}`,
     transcript ? `\nSo far:\n${transcript}` : "",
-    said ? `\nThey just said: "${said}"` : "\nThey have not said anything yet.",
+    said ? `\nThey just said: "${clip(said, 400)}"` : "\nThey have not said anything yet.",
     `\nReply at rung ${level}.`,
   ]
     .filter(Boolean)
