@@ -42,7 +42,7 @@ export const LearnerProfile = z.object({
   goal: z.string(),
   goalType: z.enum(["career", "exam", "project", "curiosity"]),
   deadline: z.iso.date().optional(),
-  hoursPerWeek: z.number().positive(),
+  hoursPerWeek: z.number().min(1),
   priorKnowledge: z.array(z.object({
     concept: z.string(),
     level: z.union([z.literal(0), z.literal(1), z.literal(2)]),
