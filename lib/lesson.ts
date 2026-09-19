@@ -1,5 +1,4 @@
 import { partialOutline } from "@/lib/drafts";
-import { keepReachable } from "@/lib/links";
 import { parsePartialJson } from "@/lib/partial-json";
 import {
   EXTRAS_SYSTEM_PROMPT,
@@ -11,6 +10,7 @@ import {
   type LessonRequest,
 } from "@/lib/prompt";
 import { ProviderError, type Provider, type ProviderContext } from "@/lib/providers";
+import { findResources } from "@/lib/resources";
 import { LessonExtrasSchema, LessonPlanSchema, SectionBodySchema, type Lesson } from "@/lib/schema";
 import { throttle, type Emit } from "@/lib/stream";
 import { findHelpfulVideo } from "@/lib/video";
@@ -22,7 +22,7 @@ import { findHelpfulVideo } from "@/lib/video";
  * Progress goes to `emit` as it happens:
  *   {type:"outline", outline}              the plan, as it is written
  *   {type:"section", index, body, done}    each section, streamed in parallel
- *   {type:"resources", resources}          links that survived checking
+ *   {type:"resources", resources}          further reading, searched and checked
  *   {type:"video", video}
  * Pass a no-op to just wait for the finished lesson.
  */
@@ -47,18 +47,13 @@ export async function writeLesson(
       providerContext,
     )
     .then(async ({ output }) => {
+      const about = { topic: ctx.topic, lesson: ctx.node.name, summary: ctx.node.description };
       const [resources, video] = await Promise.all([
-        keepReachable(output.resources).then((resources) => {
+        findResources(provider, about, output, model, providerContext).then((resources) => {
           emit({ type: "resources", resources });
           return resources;
         }),
-        findHelpfulVideo(
-          provider,
-          { topic: ctx.topic, lesson: ctx.node.name, summary: ctx.node.description },
-          output.videoQuery,
-          model,
-          providerContext,
-        ).then((video) => {
+        findHelpfulVideo(provider, about, output.videoQuery, model, providerContext).then((video) => {
           emit({ type: "video", video });
           return video;
         }),

@@ -167,10 +167,25 @@ export const LessonPlanSchema = z.object({
 
 /** Written alongside the plan: where else to look. */
 export const LessonExtrasSchema = z.object({
-  resources: z.array(ResourceSchema).describe("3-5 useful resources"),
+  searchQuery: z
+    .string()
+    .describe("A web search query, 3-8 words, that finds authoritative reading (documentation, Wikipedia, course notes, textbooks) for exactly this lesson in the roadmap's context"),
+  resources: z.array(ResourceSchema).describe("3-5 useful resources, used when web search is unavailable"),
   videoQuery: z
     .string()
     .describe("A YouTube search query, 3-8 words, that finds a clear explainer for exactly this lesson in the roadmap's context; empty if a video would add little"),
+});
+
+/** The model's verdict on web search results as further reading. */
+export const ResourcePickSchema = z.object({
+  picks: z
+    .array(
+      z.object({
+        index: z.number().int().min(0).describe("Index of the search result"),
+        why: z.string().describe("A few words on what it is good for"),
+      }),
+    )
+    .describe("The 3-5 results worth reading, best first; fewer if few are good, empty if none are"),
 });
 
 /** Phase two: one section's text, written from the plan. */
@@ -214,6 +229,7 @@ export const LessonSchema = LessonContentSchema.extend({
 export type Resource = z.infer<typeof ResourceSchema>;
 export type LessonPlan = z.infer<typeof LessonPlanSchema>;
 export type LessonExtras = z.infer<typeof LessonExtrasSchema>;
+export type ResourcePick = z.infer<typeof ResourcePickSchema>;
 export type LessonSection = z.infer<typeof LessonSectionSchema>;
 export type LessonContent = z.infer<typeof LessonContentSchema>;
 export type Video = z.infer<typeof VideoSchema>;
