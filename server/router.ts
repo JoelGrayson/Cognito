@@ -28,7 +28,7 @@ import {
 import { findHelpfulVideo } from "@/lib/video";
 import { publicProcedure, router } from "./trpc";
 
-const ProviderIdSchema = z.enum(["anthropic", "openai", "xai", "local"]);
+const ProviderIdSchema = z.enum(["anthropic", "openai", "chatgpt", "xai", "local"]);
 const providerInput = {
   provider: ProviderIdSchema,
   model: z.string().optional(),
@@ -46,7 +46,10 @@ const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
 });
 
 export const appRouter = router({
-  providers: publicProcedure.query(() => listProviders()),
+  providers: publicProcedure.query(async ({ ctx }) => {
+    const session = await getAuth().api.getSession({ headers: ctx.headers });
+    return listProviders(session ? { userId: session.user.id } : undefined);
+  }),
 
   mindMap: protectedProcedure
     .input(
@@ -57,7 +60,7 @@ export const appRouter = router({
         instruction: z.string().trim().max(2000, "Keep the modification under 2000 characters.").optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const provider = PROVIDERS[input.provider];
       const request: GenerateRequest = { topic: input.topic };
 
@@ -72,6 +75,7 @@ export const appRouter = router({
       const result = await provider.structured(
         { name: "mind_map", schema: MindMapSchema, system: SYSTEM_PROMPT, user: userPrompt(request) },
         input.model,
+        { userId: ctx.session.user.id },
       );
 
       return {
@@ -92,7 +96,8 @@ export const appRouter = router({
         ...providerInput,
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const session = await getAuth().api.getSession({ headers: ctx.headers });
       const provider = PROVIDERS[input.provider];
       const started = Date.now();
       // Same two-phase pipeline as the streaming route, without the progress events.
@@ -101,6 +106,7 @@ export const appRouter = router({
         { topic: input.topic, node: input.node, phase: input.phase, map: input.map },
         input.model,
         () => {},
+        session ? { userId: session.user.id } : undefined,
       );
 
       return { lesson, provider: provider.id, model, ms: Date.now() - started };
@@ -118,7 +124,8 @@ export const appRouter = router({
         ...providerInput,
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const session = await getAuth().api.getSession({ headers: ctx.headers });
       const last = input.messages.at(-1);
       if (last?.role !== "user") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "The last message must be from the learner." });
@@ -136,6 +143,7 @@ export const appRouter = router({
           user: tutorPrompt(input.topic, content, input.messages),
         },
         input.model,
+        session ? { userId: session.user.id } : undefined,
       );
 
       let lesson: Lesson | null = null;
@@ -151,6 +159,7 @@ export const appRouter = router({
                 { topic: input.topic, lesson: updated.title, summary: updated.summary },
                 updated.videoQuery,
                 input.model,
+                session ? { userId: session.user.id } : undefined,
               ),
         ]);
         lesson = { ...updated, resources, video: newVideo };
@@ -167,7 +176,8 @@ export const appRouter = router({
 
   quiz: publicProcedure
     .input(z.object({ lesson: LessonSchema, ...providerInput }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const session = await getAuth().api.getSession({ headers: ctx.headers });
       const provider = PROVIDERS[input.provider];
       const { video: _video, ...content } = input.lesson;
       void _video;
@@ -181,6 +191,7 @@ export const appRouter = router({
           user: quizPrompt(content),
         },
         input.model,
+        session ? { userId: session.user.id } : undefined,
       );
       const quiz: Quiz = {
         questions: result.output.questions

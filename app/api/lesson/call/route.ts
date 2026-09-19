@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiHandler, providerFrom, readJson } from "@/lib/api";
+import { getAuth } from "@/lib/auth";
 import type { ResolvedAction } from "@/lib/board";
 import { findImage } from "@/lib/images";
 import { CALL_SYSTEM_PROMPT, callPrompt } from "@/lib/prompt";
@@ -24,6 +25,7 @@ const BodySchema = z.object({
 export const POST = apiHandler(async (request) => {
   const body = await readJson(request, BodySchema);
   const provider = providerFrom(body.provider);
+  const session = await getAuth().api.getSession({ headers: request.headers });
   // The model sees the lesson content, not the server-resolved video.
   const { video, ...lesson } = body.lesson;
   void video;
@@ -38,6 +40,7 @@ export const POST = apiHandler(async (request) => {
       effort: "minimal",
     },
     body.model,
+    session ? { userId: session.user.id } : undefined,
   );
 
   // Turn image searches into real pictures; drop any that find nothing.
