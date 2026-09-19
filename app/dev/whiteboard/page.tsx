@@ -25,10 +25,10 @@ import { createSpeaker, SPOKEN, ASK_WHY, type Speaker } from "@/lib/whiteboard/v
 
 /** Free-tier-safe voices, verified against this account. Library voices return 402. */
 const VOICE_OPTIONS = [
+  ["XrExE9yKIg1WjnnlVkGX", "Matilda"],
   ["EXAVITQu4vr4xnSDxMaL", "Sarah"],
   ["FGY2WhTYpPnrIDTdsKH5", "Laura"],
   ["cgSgspJ2msm6clMCkdW9", "Jessica"],
-  ["XrExE9yKIg1WjnnlVkGX", "Matilda"],
   ["Xb7hH8MSUJpSbSDYk0k2", "Alice"],
   ["pFZP5JQG7iQjIQuC4Bku", "Lily"],
   ["JBFqnCBsd6RMkjVDRZzb", "George"],
