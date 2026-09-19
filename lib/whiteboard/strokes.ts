@@ -62,6 +62,15 @@ export interface EndpointConfig {
   /** Minimum line height in px, so a single dot or dash doesn't produce a degenerate
    *  line box that makes every later stroke look like a new line. */
   minLineHeight: number;
+  /** A line must have at least this many strokes before a break can fire against it.
+   *  WHY (observed live, twice): the first stroke of a new line is usually one
+   *  diagonal of an "x" or the stem of a "4". The SECOND stroke of that same
+   *  character moves back down-and-left, which is exactly the carriage-return
+   *  signature -- so the character gets cut in half and the remainder reads as "1".
+   *  A width guard does not catch it, because handwriting is often wider than any
+   *  sane width threshold. Stroke count does: one stroke is never a line.
+   *  This is the LINE-BREAK counterpart of minStrokesForIdleCommit. */
+  minStrokesForBreak: number;
   /** A line must be at least this wide before a break can fire against it.
    *  WHY: the first stroke of a new line is often one diagonal of an "x" or the stem
    *  of a "4". Compared against a box that narrow, the SECOND stroke of the same
@@ -90,6 +99,7 @@ export const DEFAULT_ENDPOINT_CONFIG: EndpointConfig = {
   belowRatio: 0.75,
   carriageReturnRatio: 0.35,
   minLineHeight: 12,
+  minStrokesForBreak: 2,
   minLineWidthForBreak: 40,
   minStrokesForIdleCommit: 2,
   finalLineIdleMs: 2200,
@@ -232,7 +242,7 @@ export function recordStrokes(
 
         // Decide BEFORE folding this stroke into the line, or it contaminates the
         // bounds it is being compared against.
-        if (bounds && startsNewLine(bounds, stroke, cfg)) {
+        if (line.length >= cfg.minStrokesForBreak && bounds && startsNewLine(bounds, stroke, cfg)) {
           // Only emit a final commit if idle hasn't already spoken for this line;
           // if it has, the reading already exists and re-sending would duplicate it.
           if (idleFiredFor !== lineId) {
