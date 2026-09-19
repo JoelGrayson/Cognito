@@ -4,7 +4,7 @@ import type { Provider, ProviderId, ProviderInfo } from "./types";
 
 export type { Provider, ProviderId, ProviderInfo } from "./types";
 export { ProviderError } from "./types";
-export type { GenerateResult } from "./types";
+export type { StructuredRequest, StructuredResult } from "./types";
 
 export const openaiProvider = createOpenAICompatibleProvider({
   id: "openai",
@@ -13,6 +13,7 @@ export const openaiProvider = createOpenAICompatibleProvider({
   modelEnv: "OPENAI_MODEL",
   apiKeyEnv: "OPENAI_API_KEY",
   hint: "Set OPENAI_API_KEY in .env.local",
+  supportsReasoningEffort: true,
 });
 
 export const xaiProvider = createOpenAICompatibleProvider({

@@ -1,8 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { MindMapSchema, type GenerateRequest } from "@/lib/schema";
-import { SYSTEM_PROMPT, userPrompt } from "@/lib/prompt";
-import { ProviderError, type GenerateResult, type Provider, type ProviderInfo } from "./types";
+import {
+  ProviderError,
+  type Provider,
+  type ProviderInfo,
+  type StructuredRequest,
+  type StructuredResult,
+} from "./types";
 
 const DEFAULT_MODEL = "claude-opus-5";
 
@@ -24,24 +28,48 @@ async function info(): Promise<ProviderInfo> {
   };
 }
 
-async function generate(req: GenerateRequest, override?: string): Promise<GenerateResult> {
+async function structured<T>(req: StructuredRequest<T>, override?: string): Promise<StructuredResult<T>> {
   if (!configured()) {
     throw new ProviderError("Claude is not configured. Set ANTHROPIC_API_KEY in .env.local.", 400);
   }
   const client = new Anthropic();
   const chosen = override || model();
-  let response;
+  const effort = req.effort === "minimal" ? "low" : (req.effort ?? "medium");
+  const params = {
+    model: chosen,
+    max_tokens: req.maxTokens ?? 16000,
+    system: req.system,
+    output_config: {
+      format: zodOutputFormat(req.schema),
+      effort,
+    },
+    messages: [{ role: "user" as const, content: req.user }],
+  };
+  let stopReason: string | null;
+  let explanation: string | null | undefined;
+  let output: unknown;
   try {
-    response = await client.messages.parse({
-      model: chosen,
-      max_tokens: 16000,
-      system: SYSTEM_PROMPT,
-      output_config: {
-        format: zodOutputFormat(MindMapSchema),
-        effort: "medium",
-      },
-      messages: [{ role: "user", content: userPrompt(req) }],
-    });
+    if (req.onText) {
+      const onText = req.onText;
+      const stream = client.messages.stream(params);
+      stream.on("text", (_delta, snapshot) => onText(snapshot));
+      const message = await stream.finalMessage();
+      stopReason = message.stop_reason;
+      explanation = message.stop_details?.explanation;
+      const text = message.content
+        .filter((block): block is Anthropic.TextBlock => block.type === "text")
+        .map((block) => block.text)
+        .join("");
+      if (stopReason === "end_turn") {
+        const parsed = req.schema.safeParse(JSON.parse(text));
+        output = parsed.success ? parsed.data : undefined;
+      }
+    } else {
+      const response = await client.messages.parse(params);
+      stopReason = response.stop_reason;
+      explanation = response.stop_details?.explanation;
+      output = response.parsed_output ?? undefined;
+    }
   } catch (error) {
     if (error instanceof Anthropic.AuthenticationError) {
       throw new ProviderError("Claude rejected the API key. Check ANTHROPIC_API_KEY.", 401);
@@ -52,20 +80,22 @@ async function generate(req: GenerateRequest, override?: string): Promise<Genera
     if (error instanceof Anthropic.APIError) {
       throw new ProviderError(`Claude error ${error.status}: ${error.message}`, 502);
     }
+    if (error instanceof SyntaxError) {
+      throw new ProviderError("Claude returned invalid JSON.", 502);
+    }
     throw error;
   }
 
-  if (response.stop_reason === "refusal") {
-    const why = response.stop_details?.explanation ?? "no explanation given";
-    throw new ProviderError(`Claude declined this request (${why}).`, 422);
+  if (stopReason === "refusal") {
+    throw new ProviderError(`Claude declined this request (${explanation ?? "no explanation given"}).`, 422);
   }
-  if (response.stop_reason === "max_tokens") {
-    throw new ProviderError("Claude ran out of output tokens before finishing the map.", 502);
+  if (stopReason === "max_tokens") {
+    throw new ProviderError("Claude ran out of output tokens before finishing.", 502);
   }
-  if (!response.parsed_output) {
+  if (output === undefined) {
     throw new ProviderError("Claude returned output that did not match the schema.", 502);
   }
-  return { mindMap: response.parsed_output, model: chosen };
+  return { output: output as T, model: chosen };
 }
 
 export const anthropicProvider: Provider = {
@@ -73,5 +103,5 @@ export const anthropicProvider: Provider = {
   label: "Claude",
   model,
   info,
-  generate,
+  structured,
 };
