@@ -9,8 +9,17 @@
 import type { Equivalence } from "./checker/numeric.ts";
 import type { HintLevel } from "./policy.ts";
 import type { Mark } from "./annotate.ts";
+import type { Bounds } from "./strokes.ts";
 
-export function marksFor(verdict: Equivalence, lineId: number, rung: HintLevel): Mark[] {
+export function marksFor(
+  verdict: Equivalence,
+  lineId: number,
+  rung: HintLevel,
+  /** Bounds of the offending symbol, when we could locate it. Null degrades to
+   *  circling the whole step, which is a lower rung anyway - so being unsure gives
+   *  away LESS rather than pointing at the wrong glyph. */
+  symbol?: Bounds | null,
+): Mark[] {
   if (verdict.kind === "equivalent" || verdict.kind === "undetermined") return [];
 
   switch (rung) {
@@ -32,17 +41,18 @@ export function marksFor(verdict: Equivalence, lineId: number, rung: HintLevel):
         ? [{ kind: "strike", lineId }]
         : [{ kind: "circle", lineId, tone: "problem" }];
 
-    // Rung 4: name the nature of the error, still not the fix.
+    // Rung 4: point at the symbol itself and name the error. A tutor circling your
+    // ">" is worth more than circling the line, so it costs a rung.
     case 4:
       return [
-        { kind: "circle", lineId, tone: "problem" },
+        { kind: "circle", lineId, tone: "problem", ...(symbol ? { bounds: symbol } : {}) },
         { kind: "margin-note", lineId, text: noteFor(verdict), tone: "problem" },
       ];
 
     // Rung 5: link it back to the step it contradicts, and say it outright.
     case 5:
       return [
-        { kind: "circle", lineId, tone: "problem" },
+        { kind: "circle", lineId, tone: "problem", ...(symbol ? { bounds: symbol } : {}) },
         { kind: "arrow", lineId, toLineId: Math.max(0, lineId - 1) },
         { kind: "margin-note", lineId, text: noteFor(verdict), tone: "problem" },
       ];
