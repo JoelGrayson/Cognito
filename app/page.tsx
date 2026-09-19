@@ -10,6 +10,7 @@ import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
 import type { Lesson, MindMap, Resource, Video } from "@/lib/schema";
+import { trpc } from "@/lib/trpc";
 
 interface Meta {
   provider: string;
@@ -55,9 +56,8 @@ export default function Home() {
   // Find out which providers this server can actually use.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/providers")
-      .then((r) => r.json())
-      .then((list: ProviderInfo[]) => {
+    trpc.providers.query()
+      .then((list) => {
         if (cancelled) return;
         setProviders(list);
         setProviderId((current) => {
