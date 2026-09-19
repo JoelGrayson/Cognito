@@ -1,0 +1,152 @@
+// Pure layout for <TopicGraph>. No React, no I/O.
+//
+// Approach: containers (nodes that have children) are laid out as GROUP BOXES. Dagre (top to
+// bottom) positions only the top-level units: each container as one box sized to hold its
+// header plus its children in a small grid, and each standalone node as one card. Children are
+// then placed inside their group box. The cap is 30 nodes and depth 2, so this stays legible
+// without any nested dagre passes.
+//
+// Positions are absolute top-left corners in graph space, rounded to whole pixels.
+
+import { Graph, layout } from "@dagrejs/dagre";
+import type { DraftGraph, Edge, PlanGraph } from "@/types/learning";
+
+type AnyGraph = DraftGraph | PlanGraph;
+
+/** Size of a leaf or standalone card. */
+export const NODE_WIDTH = 184;
+export const NODE_HEIGHT = 74;
+/** Card width used on phones (one child per row), so two groups fit side by side on 390px. */
+export const NARROW_NODE_WIDTH = 152;
+/** Height of a container's header strip (title and minutes). */
+export const CONTAINER_HEADER_HEIGHT = 48;
+/** Padding inside a group box and gap between children. */
+export const GROUP_PADDING = 12;
+export const CHILD_GAP = 10;
+
+export type Size = { width: number; height: number };
+export type Point = { x: number; y: number };
+
+export type LayoutOptions = {
+  /** Children per row inside a group box. 3 suits wide screens, 1 suits phones. Default 3. */
+  leafColumns?: number;
+  /** Width of a leaf or standalone card. Default NODE_WIDTH; phones use NARROW_NODE_WIDTH. */
+  nodeWidth?: number;
+  /** Gap between boxes on the same rank, and between ranks. */
+  nodeSep?: number;
+  rankSep?: number;
+};
+
+export type GraphLayout = {
+  /** Absolute top-left position of every node id. */
+  positions: Record<string, Point>;
+  /** Rendered size of every node id (container boxes are larger than a card). */
+  sizes: Record<string, Size>;
+  /** Synthetic thin edges, one per parent to child link. Ids are `contain__<parent>__<child>`. */
+  containmentEdges: Edge[];
+  /** parentId of every child, for consumers that need to convert to relative positions. */
+  parentOf: Record<string, string>;
+};
+
+export function containmentEdgeId(parentId: string, childId: string): string {
+  return `contain__${parentId}__${childId}`;
+}
+
+/**
+ * Splits nodes into top-level units and their children. A node whose parentId does not point at
+ * an existing top-level node is treated as top level, so a transiently invalid draft still lays
+ * out.
+ */
+function groupNodes(graph: AnyGraph) {
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const parentOf: Record<string, string> = {};
+  const childrenOf = new Map<string, string[]>();
+  for (const node of graph.nodes) {
+    const parent = node.parentId ? byId.get(node.parentId) : undefined;
+    if (parent && !parent.parentId && parent.id !== node.id) {
+      parentOf[node.id] = parent.id;
+      const list = childrenOf.get(parent.id) ?? [];
+      list.push(node.id);
+      childrenOf.set(parent.id, list);
+    }
+  }
+  const topLevel = graph.nodes.filter((n) => !(n.id in parentOf)).map((n) => n.id);
+  return { parentOf, childrenOf, topLevel };
+}
+
+export function layoutGraph(graph: AnyGraph, options: LayoutOptions = {}): GraphLayout {
+  const columns = Math.max(1, Math.floor(options.leafColumns ?? 3));
+  const nodeWidth = options.nodeWidth ?? NODE_WIDTH;
+  const { parentOf, childrenOf, topLevel } = groupNodes(graph);
+
+  const sizes: Record<string, Size> = {};
+  for (const id of topLevel) {
+    const kids = childrenOf.get(id) ?? [];
+    if (kids.length === 0) {
+      sizes[id] = { width: nodeWidth, height: NODE_HEIGHT };
+      continue;
+    }
+    const cols = Math.min(columns, kids.length);
+    const rows = Math.ceil(kids.length / cols);
+    sizes[id] = {
+      width: cols * nodeWidth + (cols - 1) * CHILD_GAP + 2 * GROUP_PADDING,
+      height:
+        CONTAINER_HEADER_HEIGHT + rows * NODE_HEIGHT + (rows - 1) * CHILD_GAP + 2 * GROUP_PADDING,
+    };
+  }
+
+  // Dagre works on the top-level units. An edge that touches a child is lifted to its container.
+  const g = new Graph();
+  g.setGraph({
+    rankdir: "TB",
+    nodesep: options.nodeSep ?? 36,
+    ranksep: options.rankSep ?? 64,
+    marginx: 0,
+    marginy: 0,
+  });
+  g.setDefaultEdgeLabel(() => ({}));
+  for (const id of topLevel) g.setNode(id, { ...sizes[id] });
+  const seen = new Set<string>();
+  for (const edge of graph.edges) {
+    const source = parentOf[edge.source] ?? edge.source;
+    const target = parentOf[edge.target] ?? edge.target;
+    const key = `${source}>${target}`;
+    if (source === target || seen.has(key) || !g.hasNode(source) || !g.hasNode(target)) continue;
+    seen.add(key);
+    // Prerequisites pull harder than related links, so the spine stays straight.
+    g.setEdge(source, target, { weight: edge.kind === "prerequisite" ? 3 : 1 });
+  }
+  layout(g);
+
+  const positions: Record<string, Point> = {};
+  for (const id of topLevel) {
+    const box = g.node(id);
+    positions[id] = {
+      x: Math.round(box.x - sizes[id].width / 2),
+      y: Math.round(box.y - sizes[id].height / 2),
+    };
+  }
+
+  const containmentEdges: Edge[] = [];
+  for (const [parentId, kids] of childrenOf) {
+    const cols = Math.min(columns, kids.length);
+    const origin = positions[parentId];
+    kids.forEach((childId, index) => {
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      positions[childId] = {
+        x: origin.x + GROUP_PADDING + col * (nodeWidth + CHILD_GAP),
+        y: origin.y + CONTAINER_HEADER_HEIGHT + GROUP_PADDING + row * (NODE_HEIGHT + CHILD_GAP),
+      };
+      sizes[childId] = { width: nodeWidth, height: NODE_HEIGHT };
+      containmentEdges.push({
+        id: containmentEdgeId(parentId, childId),
+        source: parentId,
+        target: childId,
+        kind: "related",
+      });
+    });
+  }
+
+  return { positions, sizes, containmentEdges, parentOf };
+}

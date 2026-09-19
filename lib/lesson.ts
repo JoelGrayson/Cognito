@@ -10,7 +10,7 @@ import {
   sectionPrompt,
   type LessonRequest,
 } from "@/lib/prompt";
-import { ProviderError, type Provider } from "@/lib/providers";
+import { ProviderError, type Provider, type ProviderContext } from "@/lib/providers";
 import { LessonExtrasSchema, LessonPlanSchema, SectionBodySchema, type Lesson } from "@/lib/schema";
 import { throttle, type Emit } from "@/lib/stream";
 import { findHelpfulVideo } from "@/lib/video";
@@ -31,6 +31,7 @@ export async function writeLesson(
   ctx: LessonRequest,
   model: string | undefined,
   emit: Emit,
+  providerContext?: ProviderContext,
 ): Promise<{ lesson: Lesson; model: string }> {
   // Further reading and the video do not depend on the plan, so they start now.
   const extrasWork = provider
@@ -43,6 +44,7 @@ export async function writeLesson(
         effort: "minimal",
       },
       model,
+      providerContext,
     )
     .then(async ({ output }) => {
       const [resources, video] = await Promise.all([
@@ -55,6 +57,7 @@ export async function writeLesson(
           { topic: ctx.topic, lesson: ctx.node.name, summary: ctx.node.description },
           output.videoQuery,
           model,
+          providerContext,
         ).then((video) => {
           emit({ type: "video", video });
           return video;
@@ -78,6 +81,7 @@ export async function writeLesson(
       },
     },
     model,
+    providerContext,
   );
   const outline = planned.output;
   if (outline.sections.length === 0) throw new ProviderError("The lesson plan came back empty.", 502);
@@ -102,6 +106,7 @@ export async function writeLesson(
         },
       },
       model,
+      providerContext,
     );
     bodies[index] = result.output.body;
     emit({ type: "section", index, body: result.output.body, done: true });

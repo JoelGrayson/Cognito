@@ -5,6 +5,7 @@ import { parsePartialJson } from "@/lib/partial-json";
 import { QUIZ_SYSTEM_PROMPT, quizPrompt } from "@/lib/prompt";
 import { LessonSchema, QuizSchema, type Quiz } from "@/lib/schema";
 import { ndjson, throttle } from "@/lib/stream";
+import { getAuth } from "@/lib/auth";
 
 export const maxDuration = 120;
 
@@ -21,6 +22,7 @@ const BodySchema = z.object({
  *   {type:"error", error}
  */
 export const POST = apiHandler(async (request) => {
+  const session = await getAuth().api.getSession({ headers: request.headers });
   const body = await readJson(request, BodySchema);
   const provider = providerFrom(body.provider);
   const { video: _video, ...content } = body.lesson;
@@ -42,6 +44,7 @@ export const POST = apiHandler(async (request) => {
         },
       },
       body.model,
+      session ? { userId: session.user.id } : undefined,
     );
 
     // Models occasionally miscount; keep the quiz self-consistent.
