@@ -20,11 +20,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./topic-graph.css";
-import { layoutGraph, type GraphLayout } from "@/lib/graph/layout";
+import { NARROW_NODE_WIDTH, layoutGraph, type GraphLayout } from "@/lib/graph/layout";
 import type { DraftGraph, DraftNode, GraphOp, PlanGraph, Progress } from "@/types/learning";
 import { Inspector } from "./Inspector";
 import { TopicGroupNode, TopicNodeCard, type TopicFlowNode } from "./TopicNodeCard";
-import { containerMinutes, isContainer, looksLikePlanGraph, resolveProgress } from "./helpers";
+import { containerMinutes, looksLikePlanGraph, resolveProgress } from "./helpers";
 
 // Defined outside the component so React Flow does not see a new object on every render.
 const nodeTypes: NodeTypes = { topic: TopicNodeCard, container: TopicGroupNode };
@@ -148,7 +148,10 @@ export function TopicGraph({
 
   const narrow = size !== null && size.w < NARROW_PX;
   const layout = useMemo(
-    () => layoutGraph(graph, { leafColumns: narrow ? 1 : 3 }),
+    () => layoutGraph(
+      graph,
+      narrow ? { leafColumns: 1, nodeWidth: NARROW_NODE_WIDTH } : { leafColumns: 3 },
+    ),
     [graph, narrow],
   );
 
@@ -179,8 +182,12 @@ export function TopicGraph({
   const nodes = useMemo<TopicFlowNode[]>(() => {
     const resolved = resolveProgress(graph, progress);
     const highlighted = new Set(highlightIds);
+    // Containers are decided by the layout, so a node with a dangling parentId stays a plain card.
+    const childCounts = new Map<string, number>();
+    for (const parent of Object.values(layout.parentOf)) childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
     const toNode = (node: DraftNode): TopicFlowNode => {
-      const container = isContainer(graph, node.id);
+      const childCount = childCounts.get(node.id) ?? 0;
+      const container = childCount > 0;
       const parentId = layout.parentOf[node.id];
       const pos = layout.positions[node.id];
       const parentPos = parentId ? layout.positions[parentId] : undefined;
@@ -199,7 +206,7 @@ export function TopicGraph({
         data: {
           node,
           minutes: container ? containerMinutes(graph, node.id) : node.estMinutes,
-          childCount: container ? graph.nodes.filter((n) => n.parentId === node.id).length : 0,
+          childCount,
           progress: resolved[node.id],
           pulseKey: highlighted.has(node.id) ? pulseKey : null,
           selected: node.id === selectedId && editing,

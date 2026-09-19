@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { samplePlanGraph } from "@/fixtures/samplePlanGraph";
 import type { DraftGraph } from "@/types/learning";
-import { CONTAINER_HEADER_HEIGHT, layoutGraph, type Point, type Size } from "./layout";
+import { CONTAINER_HEADER_HEIGHT, NARROW_NODE_WIDTH, layoutGraph, type Point, type Size } from "./layout";
 
 type Box = Point & Size;
 
@@ -13,7 +13,7 @@ const boxOf = (layout: ReturnType<typeof layoutGraph>, id: string): Box => ({
 const overlaps = (a: Box, b: Box) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-describe.each([{ leafColumns: 3 }, { leafColumns: 1 }, {}])("layoutGraph %j", (options) => {
+describe.each([{ leafColumns: 3 }, { leafColumns: 1, nodeWidth: NARROW_NODE_WIDTH }, {}])("layoutGraph %j", (options) => {
   const layout = layoutGraph(samplePlanGraph, options);
   const parentOf = (id: string) => samplePlanGraph.nodes.find((n) => n.id === id)?.parentId;
 
