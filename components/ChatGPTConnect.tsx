@@ -28,7 +28,7 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
     interval: number;
     expiresAt: number;
   }>();
-  const [phase, setPhase] = useState<"idle" | "starting" | "polling" | "expired">("idle");
+  const [phase, setPhase] = useState<"idle" | "starting" | "polling" | "expired" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,6 +69,8 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
     const schedule = (seconds: number) => {
       if (generationId !== generation.current) return;
       if (Date.now() >= current.expiresAt) {
+        setError(null);
+        setRetrying(false);
         setPhase("expired");
         return;
       }
@@ -83,7 +85,16 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
           { method: "POST", body: { handle: current.handle } },
         );
         if (gen !== generation.current) return;
-        if (response.error) throw new Error(response.error.message ?? "ChatGPT request failed.");
+        if (response.error) {
+          const status = response.error.status;
+          if (status >= 400 && status < 500 && status !== 429) {
+            setError(response.error.message ?? "ChatGPT request failed.");
+            setRetrying(false);
+            setPhase("error");
+            return;
+          }
+          throw new Error(response.error.message ?? "ChatGPT request failed.");
+        }
         const result = response.data;
         if (result.status === "authenticated") {
           await refresh();
@@ -94,13 +105,9 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
           return;
         }
         if (result.status === "expired") {
-          if (Date.now() >= current.expiresAt) {
-            setPhase("expired");
-          } else {
-            setError("Code expired.");
-            setRetrying(true);
-            schedule(current.interval);
-          }
+          setError(null);
+          setRetrying(false);
+          setPhase("expired");
           return;
         }
         attempt = 0;
@@ -110,6 +117,8 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
       } catch (err) {
         if (gen !== generation.current) return;
         if (Date.now() >= current.expiresAt) {
+          setError(null);
+          setRetrying(false);
           setPhase("expired");
           return;
         }
@@ -205,7 +214,7 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
               <>
                 <h2 className="text-lg font-medium">Finish signing in with ChatGPT</h2>
                 {phase === "starting" && <p className="mt-4 text-sm text-neutral-600">Preparing your sign-in code…</p>}
-                {device && phase !== "expired" && (
+                {device && phase !== "expired" && phase !== "error" && (
                   <>
                     <p className="mt-4 text-sm text-neutral-600">Enter this code in ChatGPT:</p>
                     <div className="mt-2 flex items-center justify-between rounded-xl bg-neutral-100 px-4 py-3">
@@ -222,7 +231,13 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
                     <button type="button" className="mt-3 text-sm underline underline-offset-2" onClick={() => void start()}>Try again</button>
                   </div>
                 )}
-                {error && <p className={retrying ? "mt-4 text-sm text-neutral-500" : "mt-4 text-sm text-red-600"}>{error}{retrying ? " Retrying…" : ""}</p>}
+                {phase === "error" && (
+                  <div className="mt-4">
+                    <p className="text-sm text-red-600">{error}</p>
+                    <button type="button" className="mt-3 text-sm underline underline-offset-2" onClick={() => void start()}>Try again</button>
+                  </div>
+                )}
+                {error && phase !== "error" && <p className={retrying ? "mt-4 text-sm text-neutral-500" : "mt-4 text-sm text-red-600"}>{error}{retrying ? " Retrying…" : ""}</p>}
                 <div className="mt-6 flex justify-end">
                   <button type="button" className="rounded-full px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100" onClick={close}>Cancel</button>
                 </div>
