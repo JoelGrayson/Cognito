@@ -531,9 +531,14 @@ export default function Home() {
   if (query === null) {
     return (
       <main className="relative flex flex-1 flex-col items-center px-4 pt-[10vh] sm:px-8">
-        <Link href="/settings" className="absolute right-4 top-4 text-sm text-neutral-500 hover:text-neutral-900 sm:right-8">
-          Settings
-        </Link>
+        <nav className="absolute right-4 top-4 flex items-center gap-4 text-sm text-neutral-500 sm:right-8">
+          <Link href="/about" className="hover:text-neutral-900">
+            About
+          </Link>
+          <Link href="/settings" className="hover:text-neutral-900">
+            Settings
+          </Link>
+        </nav>
         <h1 className="text-3xl font-normal tracking-tight sm:text-4xl">StructuredLearning.ai</h1>
 
         <form onSubmit={onSubmitTopic} className="mt-[12vh] w-full max-w-3xl">
@@ -660,6 +665,9 @@ export default function Home() {
           StructuredLearning.ai
         </button>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Link href="/about" className="text-sm text-neutral-500 hover:text-neutral-900">
+            About
+          </Link>
           <Link href="/settings" className="mr-2 text-sm text-neutral-500 hover:text-neutral-900">
             Settings
           </Link>
