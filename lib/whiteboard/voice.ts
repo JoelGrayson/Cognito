@@ -148,9 +148,37 @@ export const SPOKEN: Record<number, string> = {
   1: "Something in there doesn't hold up. Want to take another look?",
   2: "It's in one of these lines. Have another go.",
   3: "Check that step.",
-  4: "You divided by a negative there. What should happen to the sign?",
-  5: "That step contradicts the one above it.",
+  4: "Think about what you did to both sides there.",
+  5: "That step doesn't follow from the one above it.",
 };
+
+/**
+ * What to say at rungs 4 and 5, where the words depend on WHICH mistake it was.
+ *
+ * Rungs 1-3 reveal nothing about the nature of the error, so one phrase serves them
+ * all. Rung 4 names the misconception - so a rung-only lookup asserted a negative
+ * division had happened no matter what the verdict was, and told a learner who had
+ * halved an expression that they "divided by a negative". Confidently wrong tutoring
+ * is worse than vague tutoring.
+ */
+export function spokenFor(rung: number, verdictKind: string): string {
+  if (rung < 4) return SPOKEN[rung] ?? SPOKEN[1];
+
+  switch (verdictKind) {
+    case "direction":
+      return rung >= 5
+        ? "You divided both sides by a negative, so the inequality has to turn around."
+        : "You divided by a negative there. What should happen to the sign?";
+    case "rescaled":
+      return rung >= 5
+        ? "You can scale both sides of an equation, but not a lone expression — its value changed."
+        : "That changed the value, not just the form. What did you multiply through by?";
+    default:
+      return rung >= 5
+        ? "That step doesn't follow from the one above it."
+        : "Compare it with the line above — something doesn't carry over.";
+  }
+}
 
 /** Asked after a step is marked, to make the learner explain rather than be told. */
 export const ASK_WHY = [
