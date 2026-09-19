@@ -58,6 +58,7 @@ export interface QuestionDraft {
 
 const PHASES = new Set<Phase>(["prerequisite", "core", "advanced"]);
 const LINKS = new Set<StageLink>(["requires", "any-order", "recommended"]);
+const ORDERS = new Set<MindMap["order"]>(["chronological", "difficulty", "parts", "mixed"]);
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -96,6 +97,7 @@ export function partialMindMap(raw: unknown): MindMap | null {
   return {
     topic: str(raw.topic),
     summary: str(raw.summary),
+    order: ORDERS.has(raw.order as MindMap["order"]) ? (raw.order as MindMap["order"]) : "mixed",
     plan: str(raw.plan),
     startingPoint: strings(raw.startingPoint),
     outcome: strings(raw.outcome),
