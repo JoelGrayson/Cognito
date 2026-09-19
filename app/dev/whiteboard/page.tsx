@@ -106,6 +106,10 @@ export default function SpikePage() {
   const [said, setSaid] = useState<string | null>(null);
   /** Utterance for a line that was read provisionally and hasn't been spoken yet. */
   const pendingSpeechRef = useRef<{ lineId: number; text: string } | null>(null);
+  /** Lines already settled by a line break. Kept separately because the two halves
+   *  race: the idle OCR request is async, so a fast next line can finalize before
+   *  the reading even exists. Whichever arrives second speaks. */
+  const finalizedRef = useRef<Set<number>>(new Set());
   const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
   const pttRef = useRef<PushToTalk | null>(null);
   const [listening, setListening] = useState(false);
@@ -158,9 +162,15 @@ export default function SpikePage() {
     // "finalized" carries no strokes: a line read on idle has now been settled by a
     // line break. Nothing new to read - just say what we held back.
     if (reason === "finalized") {
+      finalizedRef.current.add(lineId);
+      // The reading is no longer provisional, whether or not there was speech held.
+      setReadings((r) =>
+        r.map((x) => (x.lineId === lineId ? { ...x, provisional: false } : x)),
+      );
       const pending = pendingSpeechRef.current;
       if (pending?.lineId === lineId) {
         pendingSpeechRef.current = null;
+        finalizedRef.current.delete(lineId);
         if (voiceOnRef.current) {
           speakerRef.current?.say(pending.text, voiceIdRef.current).catch(() => {});
         }
@@ -202,8 +212,18 @@ export default function SpikePage() {
 
       // The previous STEP is the newest reading from an earlier line -- not simply
       // the last array entry, which may be this same line's provisional reading.
-      const previous =
-        [...readingsRef.current].reverse().find((r) => r.lineId < lineId)?.parsed ?? null;
+      // Both ENDS of the transition have to be trustworthy. Judging a clean line
+      // against a misread premise produces a confident accusation caused entirely by
+      // our own OCR error, so a low-confidence reading is not eligible as `previous`.
+      const prevReading = [...readingsRef.current]
+        .reverse()
+        .find(
+          (r) =>
+            r.lineId < lineId &&
+            (typeof r.confidence !== "number" ||
+              r.confidence >= DEFAULT_CONFIG.recognitionConfidenceFloor),
+        );
+      const previous = prevReading?.parsed ?? null;
 
       const { checkStep } = await import("@/lib/whiteboard/checker/numeric");
       const t0 = performance.now();
@@ -216,6 +236,7 @@ export default function SpikePage() {
       if (openRef.current?.lineId === lineId) {
         openRef.current = null;
         pendingSpeechRef.current = null;
+        finalizedRef.current.delete(lineId);
         annotatorRef.current?.clear();
         setSaid(null);
         historyRef.current = [];
@@ -263,6 +284,13 @@ export default function SpikePage() {
               speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
                 setError(e instanceof Error ? e.message : "Voice failed.");
               });
+            }
+          } else if (finalizedRef.current.has(lineId)) {
+            // Finalization won the race and arrived before this reading existed.
+            // Consume it now rather than waiting for an event that already passed.
+            finalizedRef.current.delete(lineId);
+            if (voiceOnRef.current) {
+              speakerRef.current?.say(utterance, voiceIdRef.current).catch(() => {});
             }
           } else {
             // Provisional: hold the words until the line is settled, so a half-read
@@ -375,6 +403,11 @@ export default function SpikePage() {
             // they found it stays with the deterministic check, which knows.
             if (open.rung >= 3 && d.foundIt && outcome.kind !== "found-it") {
               outcome = { kind: "not-yet" };
+              // The model wrote `reply` and `foundIt` together, so its words are a
+              // congratulation. Keeping them while escalating would tell the learner
+              // "exactly, nice catch" and then hand them a bigger hint.
+              line = replyTo(outcome, open.verdict);
+              fromModel = false;
             }
           }
         }
@@ -443,6 +476,7 @@ export default function SpikePage() {
     speakerRef.current?.stop();
     setSaid(null);
     pendingSpeechRef.current = null;
+    finalizedRef.current.clear();
     setExplanations([]);
     openRef.current = null;
     historyRef.current = [];
