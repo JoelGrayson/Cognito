@@ -226,7 +226,7 @@ export function RoadmapSkeleton({ rows = 5 }: { rows?: number }) {
 }
 
 /** Explains the map's colours, borders and structure. Swatches reuse the map's own styles, so they always match. */
-export function RoadmapLegend() {
+export function RoadmapLegend({ structure = true }: { structure?: boolean }) {
   const phases: { phase: Phase; label: string }[] = [
     { phase: "prerequisite", label: "Prerequisite" },
     { phase: "core", label: "Core" },
@@ -250,6 +250,7 @@ export function RoadmapLegend() {
           Not written yet
         </li>
       </ul>
+      {structure && (
       <ul>
         <li>
           <svg className="legend-arrow" viewBox="0 0 12 22" aria-hidden="true">
@@ -264,6 +265,7 @@ export function RoadmapLegend() {
         </li>
         <li>No arrow: suggested order, top to bottom</li>
       </ul>
+      )}
     </div>
   );
 }

@@ -38,6 +38,7 @@ interface Meta {
 
 interface GenerateBody {
   topic: string;
+  details?: string;
   provider: ProviderId;
   current?: MindMap;
   instruction?: string;
@@ -50,6 +51,10 @@ const BULK_CONCURRENCY = 3;
 
 export default function Home() {
   const [topic, setTopic] = useState("");
+  /** Optional context typed under the topic: the goal and what the learner already knows. */
+  const [details, setDetails] = useState("");
+  /** The details the current roadmap was made with; revisions send them again. */
+  const [queryDetails, setQueryDetails] = useState("");
   /** The topic being mapped. Null means the landing screen. */
   const [query, setQuery] = useState<string | null>(null);
   const [map, setMap] = useState<MindMap | null>(null);
@@ -299,6 +304,7 @@ export default function Home() {
       return;
     }
     setQuery(saved.topic);
+    setQueryDetails(saved.details ?? "");
     setMap(saved.map);
     setRoadmapId(id);
     setProviderId(saved.provider);
@@ -342,8 +348,9 @@ export default function Home() {
       map,
       complete: !loading,
       instruction: instructions.current.get(roadmapId),
+      details: queryDetails || undefined,
     });
-  }, [roadmapId, query, map, loading, providerId]);
+  }, [roadmapId, query, queryDetails, map, loading, providerId]);
 
   useEffect(() => {
     if (!roadmapId) return;
@@ -428,25 +435,27 @@ export default function Home() {
     setBulk(null);
   }
 
-  function startTopic(value: string) {
+  function startTopic(value: string, extra = "") {
     const trimmed = value.trim();
     if (!trimmed) return;
+    const context = extra.trim();
     stopGenerateAll();
     setQuery(trimmed);
+    setQueryDetails(context);
     setMap(null);
     setMeta(null);
     setModification("");
     setSelected(null);
     setLessons({});
     const provider = providerId;
-    void generate({ topic: trimmed, provider }, null).then((done) => {
+    void generate({ topic: trimmed, details: context || undefined, provider }, null).then((done) => {
       if (done && readSettings().autoGenerateLessons) void generateAll(done, trimmed, provider);
     });
   }
 
   function onSubmitTopic(e: FormEvent) {
     e.preventDefault();
-    startTopic(topic);
+    startTopic(topic, details);
   }
 
   async function onSubmitModification(e: FormEvent) {
@@ -456,6 +465,7 @@ export default function Home() {
       {
         topic: query,
         provider: providerId,
+        details: queryDetails || undefined,
         current: map,
         instruction: modification.trim(),
       },
@@ -511,6 +521,8 @@ export default function Home() {
     setError(null);
     setLoading(false);
     setTopic("");
+    setDetails("");
+    setQueryDetails("");
     setModification("");
     setSelected(null);
     setLessons({});
@@ -539,6 +551,26 @@ export default function Home() {
             autoComplete="off"
             aria-label="What do you want to learn?"
           />
+          {(topic.trim() || details.trim()) && (
+            <div className="details-box">
+              <textarea
+                className="details-input"
+                placeholder="Add more details for what you want to learn and what you already know."
+                value={details}
+                onChange={(e) => setDetails(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                rows={3}
+                maxLength={2000}
+                aria-label="Details: what you want to learn and what you already know"
+              />
+              <p className="details-hint">Press Enter in the topic, or ⌘ Enter here, to start</p>
+            </div>
+          )}
         </form>
 
         <div className="mt-5 flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 px-2 text-sm text-neutral-500">
@@ -686,7 +718,7 @@ export default function Home() {
             ) : null}
           </div>
 
-          {map && <RoadmapLegend />}
+          {map && <RoadmapLegend structure={map.stages.length > 1} />}
 
           {map && !mapDraft && !remoteDraft && (
             <p className="mt-4 text-center text-sm text-neutral-500">
@@ -714,13 +746,31 @@ export default function Home() {
                 </>
               ) : (
                 <button type="button" className="bulk-button" onClick={() => void generateAll()}>
-                  Generate all {unwritten} lessons
+                  {unwritten === 1 ? "Write the lesson" : `Generate all ${unwritten} lessons`}
                 </button>
               )}
             </div>
           )}
 
           {map && error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
+
+          {map && !mapDraft && !remoteDraft && (map.nextSteps ?? []).length > 0 && (
+            <section className="mt-10" aria-labelledby="next-steps">
+              <h2 id="next-steps" className="text-center text-sm font-medium text-neutral-500">
+                Next steps
+              </h2>
+              <ul className="next-steps">
+                {(map.nextSteps ?? []).map((n) => (
+                  <li key={n.topic}>
+                    <button type="button" className="next-step" onClick={() => startTopic(n.topic)}>
+                      <span className="block font-medium text-neutral-900">{n.topic} →</span>
+                      {n.why && <span className="mt-0.5 block text-sm text-neutral-500">{n.why}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <form onSubmit={onSubmitModification} className="relative mt-10">
             <input

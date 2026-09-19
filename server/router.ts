@@ -27,6 +27,7 @@ import {
 } from "@/lib/schema";
 import { findHelpfulVideo } from "@/lib/video";
 import { publicProcedure, router } from "./trpc";
+import { tidyMap } from "@/lib/roadmap";
 
 const ProviderIdSchema = z.enum(["anthropic", "openai", "chatgpt", "xai", "local"]);
 const providerInput = {
@@ -58,11 +59,12 @@ export const appRouter = router({
         ...providerInput,
         current: MindMapInputSchema.optional(),
         instruction: z.string().trim().max(2000, "Keep the modification under 2000 characters.").optional(),
+        details: z.string().trim().max(2000, "Keep the details under 2000 characters.").optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const provider = PROVIDERS[input.provider];
-      const request: GenerateRequest = { topic: input.topic };
+      const request: GenerateRequest = { topic: input.topic, details: input.details || undefined };
 
       if (input.current !== undefined || input.instruction !== undefined) {
         if (!input.current) throw new TRPCError({ code: "BAD_REQUEST", message: "The current roadmap is required." });
@@ -79,7 +81,7 @@ export const appRouter = router({
       );
 
       return {
-        mindMap: result.output,
+        mindMap: tidyMap(result.output),
         provider: provider.id,
         model: result.model,
         ms: Date.now() - started,

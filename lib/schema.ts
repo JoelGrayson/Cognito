@@ -43,8 +43,18 @@ export const MindMapSchema = z.object({
     ),
   stages: z
     .array(StageSchema)
-    .describe("4-7 stages in learning order, top to bottom"),
+    .describe("Stages in learning order, top to bottom: 1 for a single concept, up to about 8 for a broad field"),
+  nextSteps: z
+    .array(
+      z.object({
+        topic: z.string().describe("A short topic name the learner could type next, e.g. 'Power equations'"),
+        why: z.string().describe("One short line on what it adds"),
+      }),
+    )
+    .describe("2-4 topics to learn after this roadmap; none of them are blocks in this map"),
 });
+
+export type NextStep = z.infer<typeof MindMapSchema>["nextSteps"][number];
 
 export type Phase = z.infer<typeof PhaseSchema>;
 export type MapNode = z.infer<typeof NodeSchema>;
@@ -65,6 +75,9 @@ export const MindMapInputSchema = z.preprocess((value) => {
     // Added later: the intro lists at the top of the map. Early versions were one sentence.
     startingPoint: asList((value as { startingPoint?: unknown }).startingPoint),
     outcome: asList((value as { outcome?: unknown }).outcome),
+    nextSteps: Array.isArray((value as { nextSteps?: unknown }).nextSteps)
+      ? (value as { nextSteps: unknown[] }).nextSteps
+      : [],
     stages: stages.map((s) =>
       typeof s === "object" && s !== null && !("link" in s) ? { ...s, link: "recommended" } : s,
     ),
@@ -80,6 +93,8 @@ export function asList(value: unknown): string[] {
 /** What the client sends to generate or revise a map. */
 export interface GenerateRequest {
   topic: string;
+  /** What the learner added about their goal and what they already know. */
+  details?: string;
   /** When revising: the map as it currently stands. */
   current?: MindMap;
   /** When revising: what to change. */
@@ -339,3 +354,57 @@ export const TutorTurnSchema = z.object({
 export type BoardColor = z.infer<typeof BoardColorSchema>;
 export type BoardAction = z.infer<typeof BoardActionSchema>;
 export type TutorTurn = z.infer<typeof TutorTurnSchema>;
+
+/* ---------- Code exercises ---------- */
+
+export const CODE_LANGUAGES = [
+  "python",
+  "javascript",
+  "typescript",
+  "rust",
+  "go",
+  "java",
+  "c",
+  "cpp",
+  "csharp",
+  "sql",
+  "shell",
+  "ruby",
+  "kotlin",
+  "swift",
+  "php",
+] as const;
+
+export const ExerciseSchema = z.object({
+  title: z.string().describe("Short exercise title, 2-6 words"),
+  language: z.enum(CODE_LANGUAGES).describe("The language the lesson uses; python when the lesson is not about a specific language"),
+  task: z
+    .string()
+    .describe("What to do: 2-5 '- ' bullets naming the exact functions or variables to write, with inputs and expected outputs. Fact-dense, no filler"),
+  starterCode: z
+    .string()
+    .describe("5-25 lines that already run: signatures, TODO comments and any setup, with the core logic missing"),
+  solution: z.string().describe("A complete, idiomatic solution that passes every test"),
+  tests: z
+    .array(
+      z.object({
+        name: z.string().describe("What the test checks, e.g. 'handles an empty list'"),
+        expression: z
+          .string()
+          .describe("One boolean expression in the exercise language, evaluated after the code runs, e.g. add(2, 3) == 5. No statements, prints or asserts"),
+      }),
+    )
+    .describe("3-6 tests covering the normal case and edge cases"),
+});
+
+export const CodeReviewSchema = z.object({
+  verdict: z.enum(["correct", "almost", "incorrect"]),
+  feedback: z
+    .string()
+    .describe("2-4 '- ' bullets: what works, what is wrong and why, citing specific lines or values. No filler"),
+  hint: z.string().describe("One next step that nudges toward the fix without giving the full answer; empty if correct"),
+});
+
+export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
+export type Exercise = z.infer<typeof ExerciseSchema>;
+export type CodeReview = z.infer<typeof CodeReviewSchema>;
