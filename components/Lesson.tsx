@@ -26,6 +26,8 @@ interface Props {
   onRetry: () => void;
   /** The roadmap is still streaming in; its newest block is not clickable yet. */
   mapStreaming?: boolean;
+  /** Address of a block's lesson, so mini-map blocks open in a new tab too. */
+  lessonHref?: (ref: NodeRef) => string | undefined;
   onLessonChange: (lesson: Lesson) => void;
 }
 
@@ -39,6 +41,7 @@ export function LessonView({
   onBack,
   onRetry,
   mapStreaming,
+  lessonHref,
   onLessonChange,
 }: Props) {
   const at = nodeAt(map, selected);
@@ -60,7 +63,7 @@ export function LessonView({
       <div className="min-w-0">
         <div className="lesson-top">
           <div className="minimap">
-            <Roadmap map={map} compact selected={selected} onSelect={onSelectNode} streaming={mapStreaming} />
+            <Roadmap map={map} compact selected={selected} onSelect={onSelectNode} streaming={mapStreaming} hrefFor={lessonHref} />
             <button type="button" className="minimap-expand" onClick={onBack} title="Back to the roadmap" aria-label="Back to the roadmap">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />

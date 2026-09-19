@@ -22,3 +22,14 @@ export function sameRef(a: NodeRef | null | undefined, b: NodeRef | null | undef
 export function lessonKey(node: MapNode): string {
   return node.name.trim().toLowerCase();
 }
+
+/** The block whose lesson key matches, if the map has one. */
+export function findRef(map: MindMap, key: string): NodeRef | null {
+  for (let stage = 0; stage < map.stages.length; stage++) {
+    const s = map.stages[stage];
+    if (lessonKey(s.core) === key) return { stage, kind: "core", index: 0 };
+    const index = s.supporting.findIndex((n) => lessonKey(n) === key);
+    if (index !== -1) return { stage, kind: "supporting", index };
+  }
+  return null;
+}

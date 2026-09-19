@@ -8,7 +8,17 @@ import { emptyDraft, type LessonDraft, type OutlineDraft } from "@/lib/drafts";
 import { ensureOk, readNdjson } from "@/lib/ndjson";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import { ensureAnonymousSession } from "@/lib/auth-client";
-import { lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
+import { findRef, lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
+import {
+  loadLesson as loadSavedLesson,
+  loadMap,
+  loadRoadmap,
+  newRoadmapId,
+  roadmapStorageKey,
+  roadmapUrl,
+  saveLesson,
+  saveMap,
+} from "@/lib/saved-roadmaps";
 import type { Lesson, MindMap, Resource, Video } from "@/lib/schema";
 import { trpc } from "@/lib/trpc";
 
@@ -53,6 +63,21 @@ export default function Home() {
     selectedRef.current = selected;
   }, [selected]);
 
+  /** Id of the current map in this browser's storage; lesson links point at it. */
+  const [roadmapId, setRoadmapId] = useState<string | null>(null);
+  const roadmapIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    roadmapIdRef.current = roadmapId;
+  }, [roadmapId]);
+  /** Maps this tab generated. Only these are written to storage; other tabs add lessons. */
+  const ownedIds = useRef(new Set<string>());
+  /** This tab was opened from a lesson link while the map was still streaming in its original tab. */
+  const [remoteDraft, setRemoteDraft] = useState(false);
+  /** Set once the address has been read, so the address is not overwritten before that. */
+  const restoredRef = useRef(false);
+  /** Lessons already written to storage, as `${roadmapId}:${lessonKey}`, so each is written once. */
+  const savedLessons = useRef(new Map<string, Lesson>());
+
   // Find out which providers this server can actually use.
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +102,11 @@ export default function Home() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const previousId = roadmapIdRef.current;
+    const id = newRoadmapId();
+    ownedIds.current.add(id);
+    setRoadmapId(id);
+    setRemoteDraft(false);
     setLoading(true);
     setError(null);
     setMapDraft(false);
@@ -115,8 +145,10 @@ export default function Home() {
       if (fallback) {
         setMap(fallback);
         setSelected(null);
+        setRoadmapId(previousId);
       } else {
         setMap((current) => (selectedRef.current && current?.stages.length ? current : null));
+        if (!selectedRef.current) setRoadmapId(null);
       }
       setMapDraft(false);
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -203,6 +235,90 @@ export default function Home() {
     [],
   );
 
+  /** Rebuild the page from a lesson link (`?r=<id>&lesson=<name>`) opened in a new tab. */
+  const restoreFromAddress = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("r");
+    if (!id) return;
+    const saved = loadRoadmap(id);
+    if (!saved) {
+      setError("That roadmap isn't saved in this browser. Start it again below.");
+      return;
+    }
+    setQuery(saved.topic);
+    setMap(saved.map);
+    setRoadmapId(id);
+    setProviderId(saved.provider);
+    setRemoteDraft(!saved.complete);
+    for (const [key, lesson] of Object.entries(saved.lessons)) savedLessons.current.set(`${id}:${key}`, lesson);
+    setLessons(
+      Object.fromEntries(
+        Object.entries(saved.lessons).map(([key, lesson]) => [key, { status: "ready", lesson } as LessonState]),
+      ),
+    );
+    const key = params.get("lesson");
+    const ref = key ? findRef(saved.map, key) : null;
+    if (key && ref) {
+      setSelected(ref);
+      if (!saved.lessons[key]) void loadLesson(ref, saved.map, saved.topic, saved.provider);
+    }
+  }, [loadLesson]);
+
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    // Reading the address and localStorage has to wait until after mount: the server render has neither.
+    restoreFromAddress();
+  }, [restoreFromAddress]);
+
+  // Keep the address pointing at what is on screen, so it can be reloaded or shared across tabs.
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    const at = map && selected ? nodeAt(map, selected) : null;
+    const url = roadmapId && map ? roadmapUrl(roadmapId, at ? lessonKey(at.node) : undefined) : "/";
+    if (url !== window.location.pathname + window.location.search) window.history.replaceState(null, "", url);
+  }, [roadmapId, map, selected]);
+
+  // Save what lesson links opened in new tabs need to rebuild the page. The tab that
+  // generated a map saves it, including while it streams; any tab saves finished lessons.
+  useEffect(() => {
+    if (!roadmapId || !query || !map || !ownedIds.current.has(roadmapId)) return;
+    saveMap(roadmapId, { topic: query, provider: providerId, map, complete: !loading });
+  }, [roadmapId, query, map, loading, providerId]);
+
+  useEffect(() => {
+    if (!roadmapId) return;
+    for (const [key, state] of Object.entries(lessons)) {
+      if (state.status !== "ready") continue;
+      const tag = `${roadmapId}:${key}`;
+      if (savedLessons.current.get(tag) === state.lesson) continue;
+      savedLessons.current.set(tag, state.lesson);
+      saveLesson(roadmapId, key, state.lesson);
+    }
+  }, [roadmapId, lessons]);
+
+  // Opened mid-stream from another tab: follow that tab's map until it finishes.
+  useEffect(() => {
+    if (!remoteDraft || !roadmapId) return;
+    const key = roadmapStorageKey(roadmapId);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== key) return;
+      const saved = loadMap(roadmapId);
+      if (!saved) return;
+      setMap(saved.map);
+      if (saved.complete) setRemoteDraft(false);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [remoteDraft, roadmapId]);
+
+  /** Address of a block's lesson, for opening it in a new tab. */
+  function lessonHref(ref: NodeRef): string | undefined {
+    if (!roadmapId || !map) return undefined;
+    const at = nodeAt(map, ref);
+    return at ? roadmapUrl(roadmapId, lessonKey(at.node)) : undefined;
+  }
+
   function startTopic(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -222,7 +338,7 @@ export default function Home() {
 
   async function onSubmitModification(e: FormEvent) {
     e.preventDefault();
-    if (!query || !map || !modification.trim() || loading) return;
+    if (!query || !map || !modification.trim() || loading || remoteDraft) return;
     const ok = await generate(
       {
         topic: query,
@@ -242,8 +358,18 @@ export default function Home() {
     if (!at) return;
     setSelected(ref);
     setError(null);
-    const existing = lessons[lessonKey(at.node)];
-    if (!existing || existing.status === "error") void loadLesson(ref, map, query, providerId);
+    const key = lessonKey(at.node);
+    const existing = lessons[key];
+    if (!existing || existing.status === "error") {
+      // Another tab may already have written this lesson for the same map.
+      const saved = roadmapId ? loadSavedLesson(roadmapId, key) : null;
+      if (saved && roadmapId) {
+        savedLessons.current.set(`${roadmapId}:${key}`, saved);
+        setLessons((s) => ({ ...s, [key]: { status: "ready", lesson: saved } }));
+      } else {
+        void loadLesson(ref, map, query, providerId);
+      }
+    }
     window.scrollTo({ top: 0 });
   }
 
@@ -272,6 +398,8 @@ export default function Home() {
     setSelected(null);
     setLessons({});
     setMapDraft(false);
+    setRoadmapId(null);
+    setRemoteDraft(false);
   }
 
   const providerLabel = providers.find((p) => p.id === meta?.provider)?.label ?? meta?.provider;
@@ -345,7 +473,8 @@ export default function Home() {
             onBack={closeLesson}
             onRetry={() => void loadLesson(selected, map, query, providerId)}
             onLessonChange={updateLesson}
-            mapStreaming={loading && mapDraft}
+            mapStreaming={(loading && mapDraft) || remoteDraft}
+            lessonHref={lessonHref}
           />
         </div>
       ) : (
@@ -355,9 +484,15 @@ export default function Home() {
           </h1>
 
           <div className="mt-12">
-            {map && !loading ? <Roadmap map={map} onSelect={openLesson} /> : null}
-            {map && loading && mapDraft ? (
-              <Roadmap map={map} pending={Math.max(1, 5 - map.stages.length)} onSelect={openLesson} streaming />
+            {map && !loading && !remoteDraft ? <Roadmap map={map} onSelect={openLesson} hrefFor={lessonHref} /> : null}
+            {map && ((loading && mapDraft) || (!loading && remoteDraft)) ? (
+              <Roadmap
+                map={map}
+                pending={Math.max(1, 5 - map.stages.length)}
+                onSelect={openLesson}
+                hrefFor={lessonHref}
+                streaming
+              />
             ) : null}
             {map && loading && !mapDraft ? (
               <div className="opacity-50 transition-opacity">
@@ -379,7 +514,7 @@ export default function Home() {
             ) : null}
           </div>
 
-          {map && !mapDraft && (
+          {map && !mapDraft && !remoteDraft && (
             <p className="mt-4 text-center text-sm text-neutral-500">
               {map.summary}
               {meta && !loading && (
@@ -404,7 +539,7 @@ export default function Home() {
             />
             <button
               type="submit"
-              disabled={!map || loading || !modification.trim()}
+              disabled={!map || loading || remoteDraft || !modification.trim()}
               aria-label="Apply modifications"
               className="absolute right-2.5 top-1/2 flex h-[52px] w-[52px] -translate-y-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:h-[60px] sm:w-[60px]"
             >
