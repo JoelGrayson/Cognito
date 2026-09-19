@@ -85,7 +85,7 @@ export const appRouter = router({
       };
     }),
 
-  lesson: protectedProcedure
+  lesson: publicProcedure
     .input(
       z.object({
         topic: z.string().trim().min(1).max(500),
@@ -96,6 +96,7 @@ export const appRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const session = await getAuth().api.getSession({ headers: ctx.headers });
       const provider = PROVIDERS[input.provider];
       const started = Date.now();
       // Same two-phase pipeline as the streaming route, without the progress events.
@@ -104,7 +105,7 @@ export const appRouter = router({
         { topic: input.topic, node: input.node, phase: input.phase, map: input.map },
         input.model,
         () => {},
-        { userId: ctx.session.user.id },
+        session ? { userId: session.user.id } : undefined,
       );
 
       return { lesson, provider: provider.id, model, ms: Date.now() - started };
