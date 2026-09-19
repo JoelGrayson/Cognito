@@ -19,25 +19,24 @@ Owner: onboarding. Scope: landing CTA, questionnaire, topic workshop, plan gener
 - One CTA: **Start learning**. Ensures a session (Phase 0: stub, Phase 1: anonymous sign-in), then routes to `/onboarding`.
 - If the user already has a plan, the CTA routes to that plan instead (`getUserState`).
 
-### 1.2 Questionnaire (5 steps, one question per screen)
+### 1.2 Questionnaire (2 screens)
 
 Progress bar, Back button that preserves answers, Enter to continue, every answer persisted on step change.
 
 | Step | Question | Input | Validation | Writes |
 |---|---|---|---|---|
-| 1 | What do you want to learn? | Free text with example placeholders | 3 to 200 chars, required | `goal` |
-| 2 | Why, and by when? | Chips (career, exam, project, curiosity) + optional date | `goalType` required; `deadline` must be in the future | `goalType`, `deadline` |
-| 3 | How much time can you give? | Slider (1 to 40 hrs/week, default 5), pace chips (relaxed, steady, intense), days per week (1 to 7) | `hoursPerWeek >= 1` | `hoursPerWeek`, `preferences.pace`, `availability.daysPerWeek` |
-| 4 | Where are you starting from? | 6 to 8 Claude-generated concept chips; rate each: never heard (0), heard of (1), can explain (2) | Default 0; "Skip" allowed | `priorKnowledge` |
-| 5 | How do you like to learn? | Format multi-select (reading, video, practice, discussion, "talk it out" = voice), tutor style chips (encouraging, socratic, rigorous), optional constraints text | at least 1 format | `preferences.formats`, `tutorStyle`, `constraints` |
+| 1 | What do you want to learn? | Free text with example placeholders. Once typing begins: optional context text, optional reason chips (career, exam, project, curiosity), optional date | `goal` 3 to 200 chars, required; `deadline` must be in the future when set | `goal`, `constraints`, `goalType`, `deadline` |
+| 2 | How do you like to learn, and where are you starting from? | Format multi-select (reading, video, practice, discussion, "talk it out" = voice); 6 to 8 Claude-generated concept chips rated never heard (0), heard of (1), can explain (2) | at least 1 format; unrated concepts default to 0 | `preferences.formats`, `priorKnowledge` |
+
+Pacing and tutor preferences (`hoursPerWeek`, `preferences.pace`, `availability.daysPerWeek`, `tutorStyle`) are not asked during onboarding. They live in `/settings`, stored in the same profile, with defaults (5 hrs, steady, 3 days, unset tutor) applied by `toLearnerProfile` until the learner changes them. They are introduced contextually when the feature they shape is first used (tutor style when a tutor session starts; pace, hours and days when scheduling or spaced repetition starts).
 
 Behavior details:
 
-- **Prefetch:** fire `POST /api/onboarding/concepts` as soon as step 1 is submitted, in the background. By step 4 the chips should be ready. If not, show a short skeleton, never block navigation.
+- **Prefetch:** fire `POST /api/onboarding/concepts` as soon as step 1 is submitted, in the background. By step 2 the chips should be ready. If not, show a short skeleton, never block navigation.
 - **Timezone** is captured silently into `availability.timezone` (`Intl.DateTimeFormat().resolvedOptions().timeZone`). Never asked.
-- **Concept fallback:** if the concepts call fails or times out (8s), step 4 becomes a single selector (beginner, intermediate, advanced) that maps to synthetic `priorKnowledge` (0, 1, 2 applied to the goal itself).
+- **Concept fallback:** if the concepts call fails or times out (8s), step 2 shows a single selector (beginner, intermediate, advanced) that maps to synthetic `priorKnowledge` (0, 1, 2 applied to the goal itself).
 - **Resume:** on load, `GET /api/onboarding` returns `{ step, profile }`; jump to the first incomplete step.
-- On completing step 5: set `step = "workshop"` and navigate to the workshop.
+- On completing step 2: set `step = "workshop"` and navigate to the workshop.
 
 ### 1.3 Workshop (graph plus chat)
 

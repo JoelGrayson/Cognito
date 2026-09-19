@@ -40,7 +40,7 @@ export type PlanGraph = z.infer<typeof PlanGraph>;
 
 export const LearnerProfile = z.object({
   goal: z.string(),
-  goalType: z.enum(["career", "exam", "project", "curiosity"]),
+  goalType: z.enum(["career", "exam", "project", "curiosity"]).optional(),
   deadline: z.iso.date().optional(),
   hoursPerWeek: z.number().min(1),
   priorKnowledge: z.array(z.object({

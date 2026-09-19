@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OnboardingProfile } from "@/types/learning";
 import {
+  DEFAULTS,
   firstIncompleteStep,
   levelToPriorKnowledge,
   mergeProfile,
@@ -9,16 +10,15 @@ import {
   priorKnowledgeToRatings,
   ratingsToPriorKnowledge,
   stepError,
+  toLearnerProfile,
 } from "./profile";
 import { ConceptList, PatchBody } from "./schemas";
 
 const TODAY = "2026-09-19";
 const complete: OnboardingProfile = {
   goal: "Learn linear algebra",
-  goalType: "curiosity",
-  hoursPerWeek: 5,
-  preferences: { pace: "steady", formats: ["reading"] },
-  availability: { daysPerWeek: 3, timezone: "America/New_York" },
+  preferences: { formats: ["reading"] },
+  availability: { timezone: "America/New_York" },
   priorKnowledge: [{ concept: "Vectors", level: 1 }],
 };
 
@@ -32,24 +32,20 @@ describe("stepError", () => {
     expect(stepError(1, { goal: "x".repeat(201) }, TODAY)).not.toBeNull();
   });
 
-  it("requires goalType and a future deadline when one is set", () => {
+  it("lets step 1 pass without goalType but blocks a past deadline", () => {
+    expect(stepError(1, { goal: "Learn Rust" }, TODAY)).toBeNull();
+    expect(stepError(1, { goal: "Learn Rust", goalType: "exam" }, TODAY)).toBeNull();
+    expect(stepError(1, { goal: "Learn Rust", deadline: TODAY }, TODAY)).not.toBeNull();
+    expect(stepError(1, { goal: "Learn Rust", deadline: "2026-09-20" }, TODAY)).toBeNull();
+  });
+
+  it("requires at least one format and a starting point on step 2", () => {
     expect(stepError(2, {}, TODAY)).not.toBeNull();
-    expect(stepError(2, { goalType: "exam" }, TODAY)).toBeNull();
-    expect(stepError(2, { goalType: "exam", deadline: TODAY }, TODAY)).not.toBeNull();
-    expect(stepError(2, { goalType: "exam", deadline: "2026-09-20" }, TODAY)).toBeNull();
-  });
-
-  it("requires hours in range, a pace, and days per week", () => {
-    expect(stepError(3, complete, TODAY)).toBeNull();
-    expect(stepError(3, { ...complete, hoursPerWeek: 0 }, TODAY)).not.toBeNull();
-    expect(stepError(3, { ...complete, hoursPerWeek: 41 }, TODAY)).not.toBeNull();
-    expect(stepError(3, { ...complete, preferences: {} }, TODAY)).not.toBeNull();
-    expect(stepError(3, { ...complete, availability: { daysPerWeek: 8 } }, TODAY)).not.toBeNull();
-  });
-
-  it("requires at least one format on step 5", () => {
-    expect(stepError(5, { preferences: { formats: [] } }, TODAY)).not.toBeNull();
-    expect(stepError(5, { preferences: { formats: ["voice"] } }, TODAY)).toBeNull();
+    expect(stepError(2, { preferences: { formats: ["voice"] } }, TODAY)).not.toBeNull();
+    expect(stepError(2, { priorKnowledge: [{ concept: "Rust", level: 0 }] }, TODAY)).not.toBeNull();
+    expect(
+      stepError(2, { preferences: { formats: ["voice"] }, priorKnowledge: [{ concept: "Rust", level: 0 }] }, TODAY),
+    ).toBeNull();
   });
 });
 
@@ -57,15 +53,57 @@ describe("firstIncompleteStep", () => {
   it("returns the first missing step and null when everything is answered", () => {
     expect(firstIncompleteStep({}, TODAY)).toBe(1);
     expect(firstIncompleteStep({ goal: "Learn Rust" }, TODAY)).toBe(2);
-    expect(firstIncompleteStep({ goal: "Learn Rust", goalType: "career" }, TODAY)).toBe(3);
-    const throughStep3 = { ...complete, priorKnowledge: undefined, preferences: { pace: "steady" as const } };
-    expect(firstIncompleteStep(throughStep3, TODAY)).toBe(4);
-    expect(firstIncompleteStep({ ...throughStep3, priorKnowledge: [] }, TODAY)).toBe(4);
+    expect(firstIncompleteStep({ ...complete, priorKnowledge: undefined }, TODAY)).toBe(2);
+    expect(firstIncompleteStep({ ...complete, priorKnowledge: [] }, TODAY)).toBe(2);
     expect(firstIncompleteStep(complete, TODAY)).toBeNull();
   });
 
-  it("treats a past deadline as an incomplete step 2", () => {
-    expect(firstIncompleteStep({ ...complete, deadline: "2020-01-01" }, TODAY)).toBe(2);
+  it("treats a past deadline as an incomplete step 1", () => {
+    expect(firstIncompleteStep({ ...complete, deadline: "2020-01-01" }, TODAY)).toBe(1);
+  });
+
+  it("is complete without the settings-only fields", () => {
+    expect(firstIncompleteStep(complete, TODAY)).toBeNull();
+    expect(complete.hoursPerWeek).toBeUndefined();
+    expect(complete.goalType).toBeUndefined();
+    expect(complete.preferences?.pace).toBeUndefined();
+  });
+});
+
+describe("toLearnerProfile", () => {
+  it("returns null until the questionnaire is complete", () => {
+    expect(toLearnerProfile({})).toBeNull();
+    expect(toLearnerProfile({ goal: "Learn Rust" })).toBeNull();
+    expect(toLearnerProfile({ ...complete, preferences: {} })).toBeNull();
+  });
+
+  it("fills defaults for fields the questionnaire no longer asks", () => {
+    const learner = toLearnerProfile(complete);
+    expect(learner).not.toBeNull();
+    expect(learner!.goal).toBe("Learn linear algebra");
+    expect(learner!.goalType).toBeUndefined();
+    expect(learner!.hoursPerWeek).toBe(DEFAULTS.hoursPerWeek);
+    expect(learner!.preferences).toEqual({ formats: ["reading"], pace: DEFAULTS.pace });
+    expect(learner!.availability?.daysPerWeek).toBe(DEFAULTS.daysPerWeek);
+    expect(learner!.availability?.timezone).toBe("America/New_York");
+  });
+
+  it("keeps answers and settings values over defaults", () => {
+    const learner = toLearnerProfile({
+      ...complete,
+      goalType: "exam",
+      deadline: "2027-01-01",
+      hoursPerWeek: 8,
+      preferences: { formats: ["video"], pace: "intense" },
+      availability: { daysPerWeek: 6 },
+      tutorStyle: "socratic",
+    });
+    expect(learner!.goalType).toBe("exam");
+    expect(learner!.deadline).toBe("2027-01-01");
+    expect(learner!.hoursPerWeek).toBe(8);
+    expect(learner!.preferences).toEqual({ formats: ["video"], pace: "intense" });
+    expect(learner!.availability?.daysPerWeek).toBe(6);
+    expect(learner!.tutorStyle).toBe("socratic");
   });
 });
 

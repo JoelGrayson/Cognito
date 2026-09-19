@@ -1,17 +1,32 @@
 "use client";
 
-import { GOAL_MAX } from "@/lib/onboarding/schemas";
-import { stepError } from "@/lib/onboarding/profile";
+import { CONSTRAINTS_MAX, GOAL_MAX } from "@/lib/onboarding/schemas";
+import { localToday, stepError } from "@/lib/onboarding/profile";
 import { useOnboarding } from "@/lib/stores/onboarding";
-import { FieldLabel, inputClass, StepShell } from "./ui";
+import type { LearnerProfile } from "@/types/learning";
+import { Choice, ChoiceGroup, FieldLabel, inputClass, StepShell } from "./ui";
 
 const EXAMPLES = ["Linear algebra for machine learning", "Conversational Spanish", "Personal finance basics", "Rust for backend work"];
+
+const REASONS: { value: NonNullable<LearnerProfile["goalType"]>; label: string }[] = [
+  { value: "career", label: "Career" },
+  { value: "exam", label: "Exam" },
+  { value: "project", label: "Project" },
+  { value: "curiosity", label: "Curiosity" },
+];
+
+function tomorrow(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return localToday(date);
+}
 
 export function Step1Goal() {
   const profile = useOnboarding((s) => s.profile);
   const setProfile = useOnboarding((s) => s.setProfile);
   const advance = useOnboarding((s) => s.advance);
   const goal = profile.goal ?? "";
+  const typing = goal.trim().length > 0;
 
   return (
     <StepShell
@@ -38,19 +53,83 @@ export function Step1Goal() {
       <p id="goal-count" className="mt-2 text-right text-xs text-[#8a8a8a]">
         {goal.trim().length}/{GOAL_MAX}
       </p>
-      <p className="mt-4 mb-2 text-sm font-medium text-[#444]">Need ideas?</p>
-      <div className="flex flex-wrap gap-2">
-        {EXAMPLES.map((example) => (
-          <button
-            key={example}
-            type="button"
-            onClick={() => setProfile({ goal: example })}
-            className="min-h-10 rounded-full border border-[#d5d5d1] bg-white px-4 text-sm text-[#333] hover:border-[#b9b9b4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
-          >
-            {example}
-          </button>
-        ))}
-      </div>
+
+      {typing && (
+        <>
+          <div className="mt-4">
+            <FieldLabel htmlFor="constraints">Anything else we should know? (optional)</FieldLabel>
+            <input
+              id="constraints"
+              name="constraints"
+              type="text"
+              autoComplete="off"
+              maxLength={CONSTRAINTS_MAX}
+              value={profile.constraints ?? ""}
+              onChange={(e) => setProfile({ constraints: e.target.value })}
+              placeholder="e.g. for a career switch, I only study on weekends"
+              className={inputClass}
+            />
+          </div>
+
+          <p className="mt-6 mb-2 text-sm font-medium text-[#444]">Why this goal? (optional)</p>
+          <ChoiceGroup label="Why are you learning this?" className="flex flex-wrap gap-2">
+            {REASONS.map((reason) => (
+              <Choice
+                key={reason.value}
+                type="radio"
+                name="goalType"
+                value={reason.value}
+                checked={profile.goalType === reason.value}
+                onChange={() => setProfile({ goalType: reason.value })}
+              >
+                {reason.label}
+              </Choice>
+            ))}
+          </ChoiceGroup>
+
+          <div className="mt-6">
+            <FieldLabel htmlFor="deadline">Goal completion date (optional)</FieldLabel>
+            <div className="flex items-center gap-2">
+              <input
+                id="deadline"
+                name="deadline"
+                type="date"
+                min={tomorrow()}
+                value={profile.deadline ?? ""}
+                onChange={(e) => setProfile({ deadline: e.target.value || undefined })}
+                className={`${inputClass} max-w-64`}
+              />
+              {profile.deadline && (
+                <button
+                  type="button"
+                  onClick={() => setProfile({ deadline: undefined })}
+                  className="min-h-10 rounded-full px-3 text-sm text-[#555] hover:bg-[#f0f0ee] focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {!typing && (
+        <>
+          <p className="mt-4 mb-2 text-sm font-medium text-[#444]">Need ideas?</p>
+          <div className="flex flex-wrap gap-2">
+            {EXAMPLES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => setProfile({ goal: example })}
+                className="min-h-10 rounded-full border border-[#d5d5d1] bg-white px-4 text-sm text-[#333] hover:border-[#b9b9b4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </StepShell>
   );
 }

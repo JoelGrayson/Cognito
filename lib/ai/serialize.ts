@@ -48,7 +48,7 @@ export function serializeProfile(profile: LearnerProfile): string {
     : "none given";
   const lines = [
     `goal: ${profile.goal}`,
-    `goalType: ${profile.goalType}`,
+    `goalType: ${profile.goalType ?? "unspecified"}`,
     `deadline: ${profile.deadline ?? "none"}`,
     `hoursPerWeek: ${profile.hoursPerWeek}`,
     `daysPerWeek: ${profile.availability?.daysPerWeek ?? "unspecified"}`,
