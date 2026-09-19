@@ -57,8 +57,8 @@ Serial total is about 17.5 h; with M1 to M3 in parallel it drops to roughly 13 t
 
 **Tasks**
 
-1. `npx create-next-app@latest` (TypeScript yes, Tailwind yes, App Router yes, no `src/` dir, alias `@/*`).
-2. `npm i zod @anthropic-ai/sdk @xyflow/react @dagrejs/dagre zustand` and `npm i -D vitest tsx`. Add `vitest.config.ts` with the `@/` alias and a `test` script.
+1. `pnpm create next-app@latest` (TypeScript yes, Tailwind yes, App Router yes, no `src/` dir, alias `@/*`).
+2. `pnpm add zod @anthropic-ai/sdk @xyflow/react @dagrejs/dagre zustand` and `pnpm add -D vitest tsx`. Add `vitest.config.ts` with the `@/` alias and a `test` script.
 3. Create the folder layout from `CLAUDE.md`. Add `.env.example` (`ANTHROPIC_API_KEY`, `MOCK_AI`, `REPO_IMPL`). Confirm `.env*.local` is git-ignored.
 4. ESLint `no-restricted-imports` for `db/*`, `drizzle-orm`, `better-auth`, `@supabase/*` (Phase 0 guard).
 5. `types/learning.ts`: transcribe zod schemas from `data-contract.md` section 2 and export inferred types. **Also define** the types the contract references but doesn't spell out: `StudyPlan` (`id`, `userId`, `version`, `title`, `profile`, `graph: PlanGraph`, `order`, `schedule`, `createdAt`, `updatedAt`), `Progress` (`"todo" | "in_progress" | "done"`), `OnboardingState` (`step`, `profile`, `draftGraph`, `messages`).
@@ -70,7 +70,7 @@ Serial total is about 17.5 h; with M1 to M3 in parallel it drops to roughly 13 t
 11. A `demo` plan seeded into the memory repo so `getPlan("demo")` returns the fixture as a `StudyPlan`.
 
 **Done when**
-- `npm run lint`, `npm test`, `npm run build` pass.
+- `pnpm lint`, `pnpm test`, `pnpm build` pass.
 - A teammate can `import { getPlan } from "@/lib/plans"` and get a valid `StudyPlan` for `"demo"`.
 - Importing `drizzle-orm` anywhere fails lint.
 - PR merged; teammates notified.
