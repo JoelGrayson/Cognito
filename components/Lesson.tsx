@@ -274,7 +274,7 @@ export function LessonView({
               </Card>
             )}
 
-            {lesson && lessonWantsCode(lesson) && (
+            {lesson && lessonWantsCode(topic, lesson) && (
               <CodeExercise key={lesson.title} topic={topic} lesson={lesson} providerId={providerId} />
             )}
             {lesson && <QuizPanel lesson={lesson} providerId={providerId} />}
