@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { LearnerProfile, OnboardingProfile } from "@/types/learning";
 import { sampleProfile } from "@/fixtures/sampleProfile";
-import { buildFallbackGraph } from "./fallback";
+import { buildFallbackGraph, isFallbackGraph } from "./fallback";
+import { samplePlanGraph } from "@/fixtures/samplePlanGraph";
 import { validateGraph } from "./validate";
 
 const withConcepts = (concepts: [string, 0 | 1 | 2][]): OnboardingProfile => ({
@@ -106,5 +107,13 @@ describe("buildFallbackGraph", () => {
     const graph = expectValid({ goal: "x".repeat(300) });
     expect(graph.nodes[0].title.length).toBeLessThanOrEqual(80);
     expect(graph.nodes[0].id.length).toBeLessThanOrEqual(60);
+  });
+});
+
+describe("isFallbackGraph", () => {
+  it("recognises fallback graphs built from any profile, but not a model roadmap", () => {
+    expect(isFallbackGraph(buildFallbackGraph(sampleProfile))).toBe(true);
+    expect(isFallbackGraph(buildFallbackGraph({ goal: "Calculus" }))).toBe(true);
+    expect(isFallbackGraph(samplePlanGraph)).toBe(false);
   });
 });

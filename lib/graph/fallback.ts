@@ -34,6 +34,28 @@ const SUMMARY: Record<0 | 1 | 2, string> = {
   1: "Some familiarity: fill in the gaps.",
   2: "You rated this as known.",
 };
+const GOAL_ONLY_SUMMARY = "A first pass at your goal.";
+const FALLBACK_SUMMARIES = new Set<string>([...Object.values(SUMMARY), GOAL_ONLY_SUMMARY]);
+
+/**
+ * Whether a graph came from buildFallbackGraph: a flat chain of 60-minute core leaves whose
+ * summaries are the fixed fallback strings. Model output has containers and prose summaries,
+ * so the shape identifies a fallback even after the profile it was built from has changed.
+ */
+export function isFallbackGraph(graph: DraftGraph): boolean {
+  return (
+    graph.nodes.length > 0 &&
+    graph.nodes.every(
+      (node) =>
+        node.parentId == null &&
+        node.kind === "core" &&
+        node.estMinutes === LEAF_MINUTES &&
+        FALLBACK_SUMMARIES.has(node.summary),
+    ) &&
+    graph.edges.length === graph.nodes.length - 1 &&
+    graph.edges.every((edge, i) => edge.source === graph.nodes[i].id && edge.target === graph.nodes[i + 1].id)
+  );
+}
 
 /**
  * Linear fallback graph (spec section 5): each rated concept becomes a core leaf of 60 minutes,
@@ -67,7 +89,7 @@ export function buildFallbackGraph(profile: OnboardingProfile | LearnerProfile):
           {
             id: uniqueId(slugify(goal) || "getting_started", used),
             title: clip(goal || "Getting started", MAX_TITLE),
-            summary: "A first pass at your goal.",
+            summary: GOAL_ONLY_SUMMARY,
             kind: "core",
             estMinutes: LEAF_MINUTES,
             scope: "included",
