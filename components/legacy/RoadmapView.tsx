@@ -229,7 +229,18 @@ export function RoadmapView({ roadmap, lessonKeys }: Props) {
           </div>
         )}
 
-        {error && map.stages.length > 0 && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
+        {error && map.stages.length > 0 && (
+          <p className="mt-4 text-center text-sm text-red-600">
+            {error}{" "}
+            <button
+              type="button"
+              className="text-neutral-600 underline underline-offset-4 hover:text-neutral-900"
+              onClick={writeMap}
+            >
+              Try again
+            </button>
+          </p>
+        )}
 
         {!writing && (map.nextSteps ?? []).length > 0 && (
           <section className="mt-10" aria-labelledby="next-steps">
