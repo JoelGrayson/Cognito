@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { generateGraph, generateGraphWithProvider, pickProvider } from "@/lib/ai";
+import { deepEqual } from "@/lib/graph/diff";
 import { buildFallbackGraph } from "@/lib/graph/fallback";
 import { applyKnownScope } from "@/lib/graph/known";
 import { jsonError, parseBody, serverError } from "@/lib/http";
@@ -33,10 +34,14 @@ function withConceptsAsKnowledge(profile: OnboardingProfile): OnboardingProfile 
  * Returns the stored draft re-marked with the profile's current ratings — marking is
  * deterministic, so a graph generated during the questionnaire picks up later ratings
  * for free. Persists only when marking changed something; the linked roadmap record
- * (when the draft was resumed from one) gets the same update.
+ * (when the draft was resumed from one) gets the same update. The fallback graph is a
+ * deterministic function of the profile, so a stored draft equal to it was a fallback.
  */
 async function respondWithStored(userId: string, state: OnboardingState) {
-  const graph = applyKnownScope(state.draftGraph!, state.profile.priorKnowledge ?? []);
+  const priorKnowledge = state.profile.priorKnowledge ?? [];
+  const graph = applyKnownScope(state.draftGraph!, priorKnowledge);
+  const fallback = applyKnownScope(buildFallbackGraph(state.profile), priorKnowledge);
+  const usedFallback = deepEqual(graph, fallback);
   if (graph !== state.draftGraph) {
     await onboardingRepo.update(userId, { draftGraph: graph });
     if (state.activeRoadmapId) {
@@ -45,7 +50,7 @@ async function respondWithStored(userId: string, state: OnboardingState) {
         .catch((error) => console.error("roadmap record sync failed", error));
     }
   }
-  return Response.json({ graph, roadmapId: state.activeRoadmapId, usedFallback: false });
+  return Response.json({ graph, roadmapId: state.activeRoadmapId, usedFallback });
 }
 
 /**
