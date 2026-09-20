@@ -40,7 +40,7 @@ export default async function Home() {
   return (
     <div className="wb flex min-h-screen flex-col">
       <main className="flex-1">
-        <section className="mx-auto grid w-full max-w-6xl items-center gap-14 px-5 pb-14 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-16 lg:pb-24 lg:pt-16">
+        <section className="mx-auto grid w-full max-w-6xl items-start gap-14 px-5 pb-14 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-16 lg:pb-24 lg:pt-16">
           <div>
             <ModeSwitch mode="student" className="mb-6" />
             <h1 className="wb-serif text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl">

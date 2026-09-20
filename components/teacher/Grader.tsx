@@ -124,7 +124,7 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
   }
 
   return (
-    <div className="mt-10 grid gap-6">
+    <div className="grid gap-6">
       <section className={cn(card, "grid gap-6 p-6 lg:grid-cols-2")}>
         <div>
           <h2 className="wb-serif flex items-center gap-3 text-2xl">
@@ -169,7 +169,7 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
             page(s) per student
           </label>
         </div>
-        <div className="flex flex-col">
+        <div>
           <h2 className="wb-serif flex items-center gap-3 text-2xl">
             <Step n={2} tint="#f8efc8" ink="#6d5b1c" />
             Answer key (optional)
@@ -179,7 +179,8 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
             onChange={(e) => setAnswerKey(e.target.value)}
             maxLength={4000}
             placeholder={"1. x = 4\n2. x > -3\n3. (x + 2)(x - 5)\nAccept unsimplified fractions."}
-            className="mt-4 min-h-40 flex-1 rounded-2xl border border-[#e6d89a] bg-(--wb-butter)/35 p-4 font-mono text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            rows={7}
+            className="mt-4 block h-44 w-full resize-y rounded-2xl border border-[#e6d89a] bg-(--wb-butter)/35 p-4 font-mono text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           />
           <p className="mt-2 text-sm text-(--wb-muted)">Without a key, each problem is worked out and checked from scratch.</p>
         </div>
