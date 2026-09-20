@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { AgentProvider, useAgentClientTool, useAgentConversation, useAgentMicrophone, useAgentMode, useAgentSession, useAgentState, type AgentSessionConfig } from "@deepgram/react";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { VOICE_LESSON_START, VoiceBoardSchema, voiceAgentSettings } from "@/lib/ai/voice-agent";
-import { applyActions, describeBoard, learnerStroke, type BoardElement, type ResolvedAction } from "@/lib/board";
+import { applyActions, describeBoard, learnerStroke, rubOut, type BoardElement, type ResolvedAction } from "@/lib/board";
 import { ensureOk } from "@/lib/ndjson";
 import type { BoardColor, Lesson } from "@/lib/schema";
 import { plainVoiceText } from "@/lib/voice-text";
@@ -150,8 +150,15 @@ function CallSession({ topic, lesson, onClose, micOn, setMicOn, error, setError 
     sendUserMessage(`I'm done drawing. Please use read_whiteboard to review my ${pendingRef.current} new strokes.`);
     setPendingStrokes(0);
   }
-  function onStroke(points: number[]) {
+  function onStroke(points: number[], erased: boolean) {
     strokeCount.current += 1;
+    // The call board has no eraser button, but a stylus turned upside down still means
+    // "take that off", so the eraser end rubs out what it passes over.
+    if (erased) {
+      const kept = rubOut(elementsRef.current, points);
+      if (kept.length !== elementsRef.current.length) setBoard(kept);
+      return;
+    }
     setBoard([...elementsRef.current, learnerStroke(points, penColor, strokeCount.current)]);
     setPendingStrokes(pendingRef.current + 1);
   }

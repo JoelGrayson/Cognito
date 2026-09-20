@@ -28,19 +28,61 @@ interface Props {
   penColor: BoardColor;
   /** Draw with the eraser instead of a pen. */
   erasing?: boolean;
-  onStroke: (points: number[]) => void;
+  /** `erased` is true when the stroke rubs out rather than draws, which the eraser
+   *  end of a stylus can decide on its own. */
+  onStroke: (points: number[], erased: boolean) => void;
 }
+
+/** The stroke being drawn right now. `erase` is fixed when the pen goes down, so
+ *  flipping the eraser mid-stroke cannot turn half a line into a rub. */
+interface Stroke {
+  points: number[];
+  erase: boolean;
+}
+
+/** A stylus reports its eraser end as button 5, or bit 32 of `buttons` while it moves. */
+function isEraserEnd(button: number, buttons: number): boolean {
+  return button === 5 || (buttons & 32) !== 0;
+}
+
 /** The shared whiteboard: the tutor's drawings animate in, and the learner can draw on top. */
 export function Board({ elements, canDraw, penColor, erasing, onStroke, width = BOARD_W, height = BOARD_H, background, plain }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [current, setCurrent] = useState<number[] | null>(null);
+  const [current, setCurrent] = useState<Stroke | null>(null);
+  /** The one pointer allowed to draw. A tablet reports the palm resting on the glass
+   *  as a second pointer, and without this its moves are appended to the line the
+   *  stylus is drawing - the line jumps across the page to the heel of the hand. */
+  const drawingId = useRef<number | null>(null);
+  /** A stylus has touched this board, so fingers on it are a palm, not a second pen. */
+  const sawPen = useRef(false);
 
-  const toBoard = (e: PointerEvent<SVGSVGElement>): [number, number] | null => {
+  const toBoard = (clientX: number, clientY: number): [number, number] | null => {
     const svg = svgRef.current;
     const matrix = svg?.getScreenCTM();
     if (!svg || !matrix) return null;
-    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(matrix.inverse());
+    const p = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse());
     return [Math.round(p.x), Math.round(p.y)];
+  };
+
+  /** Points for one move, including the ones the browser coalesced into it. A stylus
+   *  reports far faster than the screen refreshes, and only the coalesced batch has
+   *  the whole path - taking the event alone turns fast handwriting into polygons. */
+  const movePoints = (e: PointerEvent<SVGSVGElement>): [number, number][] => {
+    const native = e.nativeEvent;
+    const batch = typeof native.getCoalescedEvents === "function" ? native.getCoalescedEvents() : [];
+    const moves = batch.length > 0 ? batch : [native];
+    return moves.map((m) => toBoard(m.clientX, m.clientY)).filter((p): p is [number, number] => p !== null);
+  };
+
+  /** End the stroke, keeping it if it is long enough to be a mark. A cancelled stroke
+   *  is kept too: Android cancels the stylus the moment a palm lands, and throwing the
+   *  line away would delete work the learner had already written. */
+  const finish = () => {
+    drawingId.current = null;
+    setCurrent((stroke) => {
+      if (stroke && stroke.points.length >= 4) onStroke(stroke.points, stroke.erase);
+      return null;
+    });
   };
 
   return (
@@ -55,23 +97,43 @@ export function Board({ elements, canDraw, penColor, erasing, onStroke, width = 
       aria-label="Whiteboard"
       onPointerDown={(e) => {
         if (!canDraw) return;
-        const p = toBoard(e);
+        if (e.pointerType === "pen") sawPen.current = true;
+        else if (sawPen.current && e.pointerType === "touch") return;
+        // One stroke at a time. A second pointer during a stroke is the other hand
+        // steadying the tablet, and it must not take the line over.
+        if (drawingId.current !== null) return;
+        const p = toBoard(e.clientX, e.clientY);
         if (!p) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        setCurrent(p);
+        drawingId.current = e.pointerId;
+        setCurrent({ points: p, erase: Boolean(erasing) || isEraserEnd(e.button, e.buttons) });
       }}
       onPointerMove={(e) => {
-        if (!current) return;
-        const p = toBoard(e);
-        if (!p) return;
-        const [lx, ly] = current.slice(-2);
-        if (Math.hypot(p[0] - lx, p[1] - ly) >= 2) setCurrent([...current, ...p]);
+        if (drawingId.current !== e.pointerId) return;
+        const points = movePoints(e);
+        if (points.length === 0) return;
+        setCurrent((stroke) => {
+          if (!stroke) return stroke;
+          const next = [...stroke.points];
+          for (const [x, y] of points) {
+            const [lx, ly] = next.slice(-2);
+            if (Math.hypot(x - lx, y - ly) >= 2) next.push(x, y);
+          }
+          return next.length === stroke.points.length ? stroke : { ...stroke, points: next };
+        });
       }}
-      onPointerUp={() => {
-        if (current && current.length >= 4) onStroke(current);
-        setCurrent(null);
+      onPointerUp={(e) => {
+        if (drawingId.current !== e.pointerId) return;
+        finish();
       }}
-      onPointerCancel={() => setCurrent(null)}
+      // Both fire when the system takes the pointer away mid-stroke - a palm landing,
+      // the browser starting a gesture, the stylus leaving range.
+      onPointerCancel={(e) => {
+        if (drawingId.current === e.pointerId) finish();
+      }}
+      onLostPointerCapture={(e) => {
+        if (drawingId.current === e.pointerId) finish();
+      }}
     >
       <defs>
         <pattern id="board-grid" width="50" height="50" patternUnits="userSpaceOnUse">
@@ -88,7 +150,7 @@ export function Board({ elements, canDraw, penColor, erasing, onStroke, width = 
       ) : null}
       {!plain && <rect width={width} height={height} fill="url(#board-grid)" />}
       {elements.map(renderElement)}
-      {current && (erasing ? <polyline points={current.join(" ")} {...rub(RUB_SIZE)} /> : <polyline points={current.join(" ")} {...pen(penColor)} />)}
+      {current && (current.erase ? <polyline points={current.points.join(" ")} {...rub(RUB_SIZE)} /> : <polyline points={current.points.join(" ")} {...pen(penColor)} />)}
     </svg>
   );
 }
