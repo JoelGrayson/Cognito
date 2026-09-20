@@ -76,8 +76,8 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
     };
     const onUp = (e: PointerEvent) => {
       if (!fingers.delete(e.pointerId)) return;
-      last = null;
-      drag = null;
+      last = fingers.size === 2 ? pinch() : null;
+      drag = fingers.size === 1 && fingerPansRef.current ? [...fingers.values()][0] : null;
     };
     // Belt-and-braces: some mobile browsers ignore touch-action for pinch/scroll.
     const onTouchMove = (e: TouchEvent) => {
