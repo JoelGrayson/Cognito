@@ -271,10 +271,6 @@ function Notebook({
     voiceOnRef.current = voiceOn;
   }, [voiceOn]);
   const [said, setSaid] = useState<string | null>(null);
-  const saidRef = useRef(said);
-  useEffect(() => {
-    saidRef.current = said;
-  }, [said]);
   /** Utterance for a line that was read provisionally and hasn't been spoken yet. */
   const pendingSpeechRef = useRef<{ lineId: number; text: string } | null>(null);
   /** Lines already settled by a line break. Kept separately because the two halves
@@ -364,7 +360,7 @@ function Notebook({
   /** An announcement made before the session was up, or during a reconnect. Only
    *  the newest is kept: by the time the socket is back, an older one is describing
    *  a line the learner has moved on from. */
-  const heldRef = useRef<string | null>(null);
+  const heldRef = useRef<{ text: string; gen: number } | null>(null);
 
   /** Put words in the tutor's mouth. What the checker found is spoken verbatim -
    *  the verdict is deterministic and nothing may rephrase it into an accusation
@@ -376,7 +372,7 @@ function Notebook({
       if (agentStateRef.current !== "connected") {
         // Connecting takes a second or two, and the first line can be written and
         // checked inside it. Hold the words rather than dropping them silently.
-        heldRef.current = text;
+        heldRef.current = { text, gen: genRef.current };
         return;
       }
       session.injectAgentMessage(text, "queue");
@@ -388,9 +384,11 @@ function Notebook({
     if (agentState !== "connected") return;
     const held = heldRef.current;
     heldRef.current = null;
-    // Not if the step it was about has since been re-read, fixed or reset - the
-    // bubble is cleared in each of those, and this must not outlive it.
-    if (held && voiceOnRef.current && saidRef.current === held) session.injectAgentMessage(held, "queue");
+    // Not if any line has been re-read since - the words were about the page as it
+    // stood then, and the canned phrases repeat, so text alone cannot tell the two
+    // apart. Reset clears the hold outright.
+    if (held && held.gen === genRef.current && voiceOnRef.current)
+      session.injectAgentMessage(held.text, "queue");
   }, [agentState, session]);
 
   // The voice toggle silences the tutor without dropping the session: the learner
