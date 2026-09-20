@@ -24,8 +24,8 @@ function containerIds(graph: DraftGraph): Set<string> {
 }
 
 /**
- * The nodes the learner studies, in learning order: leaves that are not excluded, prerequisites
- * first. A graph with a cycle falls back to array order for the nodes inside it.
+ * The nodes the learner studies, in learning order: included leaves (known and excluded topics are
+ * skipped, containers only group), prerequisites first. A graph with a cycle falls back to array order for the nodes inside it.
  */
 export function moduleNodes(graph: DraftGraph): DraftNode[] {
   const containers = containerIds(graph);
@@ -36,19 +36,19 @@ export function moduleNodes(graph: DraftGraph): DraftNode[] {
   );
   return [...order, ...remaining]
     .map((id) => byId.get(id)!)
-    .filter((n) => !containers.has(n.id) && n.scope !== "excluded");
+    .filter((n) => !containers.has(n.id) && n.scope === "included");
 }
 
 export function countModules(graph: DraftGraph): number {
   return moduleNodes(graph).length;
 }
 
+/** The study module with this id; null for containers, known/excluded topics and unknown ids. */
 export function findNode(graph: DraftGraph, nodeId: string): DraftNode | null {
-  return graph.nodes.find((n) => n.id === nodeId) ?? null;
+  return moduleNodes(graph).find((n) => n.id === nodeId) ?? null;
 }
 
-function phaseOf(graph: DraftGraph, node: DraftNode): Phase {
-  if (node.scope === "known") return "prerequisite";
+function phaseOf(node: DraftNode): Phase {
   return node.kind === "optional" ? "advanced" : "core";
 }
 
@@ -60,7 +60,7 @@ export function lessonRequest(goal: string, graph: DraftGraph, node: DraftNode):
     .map((e) => graph.nodes.find((n) => n.id === e.source)?.title)
     .filter((t): t is string => !!t);
   const outline = modules
-    .map((n, i) => `${i + 1}. [${phaseOf(graph, n)}] ${n.title}: ${n.summary}${n.id === node.id ? "  <- this lesson" : ""}`)
+    .map((n, i) => `${i + 1}. [${phaseOf(n)}] ${n.title}: ${n.summary}${n.id === node.id ? "  <- this lesson" : ""}`)
     .join("\n");
   return {
     topic: graph.title || goal,
@@ -69,7 +69,7 @@ export function lessonRequest(goal: string, graph: DraftGraph, node: DraftNode):
       subtitle: node.objectives?.length ? node.objectives.join(", ") : node.summary,
       description: [node.summary, needs.length ? `Builds on: ${needs.join(", ")}.` : ""].filter(Boolean).join(" "),
     },
-    phase: phaseOf(graph, node),
+    phase: phaseOf(node),
     roadmap: outline,
   };
 }

@@ -1485,9 +1485,6 @@ a.card:focus-visible {
   background: #f3f3ef;
   font-weight: 500;
 }
-.module-link[data-known="true"] {
-  color: #8a8a86;
-}
 .module-index {
   display: flex;
   width: 22px;

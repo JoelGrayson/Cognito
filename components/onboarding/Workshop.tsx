@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TopicGraph } from "@/components/TopicGraph";
-import { modulePath, topicPath } from "@/lib/modules";
+import { findNode, modulePath, topicPath } from "@/lib/modules";
 import type { DraftGraph } from "@/types/learning";
 
 const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]";
@@ -144,7 +144,7 @@ export function Workshop({ draftGraph, roadmapId }: Props) {
             mode="view"
             onNodeClick={(node) => {
               const id = status.roadmapId;
-              if (id && node.scope !== "excluded") router.push(modulePath(id, node.id));
+              if (id && findNode(status.graph, node.id)) router.push(modulePath(id, node.id));
             }}
           />
         )}

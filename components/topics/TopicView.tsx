@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TopicGraph } from "@/components/TopicGraph";
-import { modulePath } from "@/lib/modules";
+import { findNode, modulePath } from "@/lib/modules";
 import type { RoadmapRecord } from "@/lib/repo";
-import type { Progress } from "@/types/learning";
 import { ModuleList } from "./ModuleList";
 
 interface Props {
@@ -16,7 +15,6 @@ interface Props {
 /** A roadmap: the graph, whose nodes open their lessons, and the same modules as a list. */
 export function TopicView({ roadmap, written }: Props) {
   const router = useRouter();
-  const progress: Record<string, Progress> = Object.fromEntries(written.map((id) => [id, "done" as const]));
 
   return (
     <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-4 py-6 sm:px-8">
@@ -42,9 +40,8 @@ export function TopicView({ roadmap, written }: Props) {
         <TopicGraph
           graph={roadmap.graph}
           mode="view"
-          progress={progress}
           onNodeClick={(node) => {
-            if (node.scope !== "excluded") router.push(modulePath(roadmap.id, node.id));
+            if (findNode(roadmap.graph, node.id)) router.push(modulePath(roadmap.id, node.id));
           }}
         />
       </div>

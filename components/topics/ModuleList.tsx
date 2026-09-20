@@ -30,7 +30,6 @@ export function ModuleList({ roadmapId, graph, written, currentId, compact }: Pr
               className="module-link"
               aria-current={current ? "page" : undefined}
               data-written={done.has(node.id) ? "true" : undefined}
-              data-known={node.scope === "known" ? "true" : undefined}
             >
               <span className="module-index">{i + 1}</span>
               <span className="min-w-0 flex-1">
@@ -39,7 +38,7 @@ export function ModuleList({ roadmapId, graph, written, currentId, compact }: Pr
               </span>
               {!compact && (
                 <span className="shrink-0 text-xs text-neutral-400">
-                  {node.scope === "known" ? "known" : done.has(node.id) ? "written" : `${node.estMinutes} min`}
+                  {done.has(node.id) ? "written" : `${node.estMinutes} min`}
                 </span>
               )}
             </Link>
