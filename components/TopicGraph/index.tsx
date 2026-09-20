@@ -262,7 +262,7 @@ export function TopicGraph({
       data-testid="topic-graph"
       data-mode={mode}
     >
-      {size && (
+      {size !== null && size.w > 0 && size.h > 0 && (
         <ReactFlow
           // Remount when the layout flavour changes so the first viewport is right.
           key={narrow ? "narrow" : "wide"}

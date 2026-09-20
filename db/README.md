@@ -13,8 +13,8 @@ pnpm db:migrate               # apply drizzle/*.sql
 Set in `.env.local`:
 
 ```dotenv
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/structured_learning
-DIRECT_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/structured_learning
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cognition
+DIRECT_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cognition
 ```
 
 Set both: `drizzle.config.ts` prefers `DIRECT_DATABASE_URL`, so a leftover Supabase

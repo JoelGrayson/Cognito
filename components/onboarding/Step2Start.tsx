@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import {
   LEVELS,
   levelToPriorKnowledge,
@@ -54,6 +55,17 @@ export function Step2Start() {
   const loading = status === "loading" || status === "idle";
   const ratings = priorKnowledgeToRatings(profile.priorKnowledge, ready ? concepts.items : []);
   const selfLevel = priorKnowledgeToLevel(profile.priorKnowledge, goal) ?? 0;
+
+  // Roadmap generation starts as soon as the profile has enough for a graph, so the
+  // ~30s model call overlaps the learner's rating time. Ratings finish on the server
+  // anyway: the generate route re-marks known scope from the latest priorKnowledge.
+  const prefetchGraph = useOnboarding((s) => s.prefetchGraph);
+  const prefetched = useRef(false);
+  useEffect(() => {
+    if (prefetched.current || !ready || formats.length === 0) return;
+    prefetched.current = true;
+    prefetchGraph();
+  }, [ready, formats.length, prefetchGraph]);
 
   function toggle(format: Format) {
     const next = formats.includes(format) ? formats.filter((f) => f !== format) : [...formats, format];

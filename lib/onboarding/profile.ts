@@ -69,7 +69,9 @@ export function persistableProfile(profile: OnboardingProfile, today = localToda
   if (profile.availability?.timezone) availability.timezone = profile.availability.timezone;
   patch.availability = availability;
   if (profile.priorKnowledge) patch.priorKnowledge = profile.priorKnowledge;
+  patch.concepts = profile.concepts?.length ? profile.concepts : null;
   if (profile.tutorStyle) patch.tutorStyle = profile.tutorStyle;
+  if (profile.provider) patch.provider = profile.provider;
   if (profile.constraints !== undefined) patch.constraints = profile.constraints.trim().slice(0, CONSTRAINTS_MAX);
   return patch;
 }

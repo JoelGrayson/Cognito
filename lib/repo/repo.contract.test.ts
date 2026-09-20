@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { inArray } from "drizzle-orm";
-import type { NewPlan, OnboardingRepo, PlanRepo } from "./types";
-import { memoryOnboardingRepo, memoryPlanRepo } from "./memory";
+import type { NewPlan, NewRoadmap, OnboardingRepo, PlanRepo, RoadmapRepo } from "./types";
+import { memoryOnboardingRepo, memoryPlanRepo, memoryRoadmapRepo } from "./memory";
 
 const plan: NewPlan = {
   title: "Linear algebra",
@@ -24,12 +24,18 @@ const plan: NewPlan = {
   schedule: [{ week: 1, nodeIds: ["vectors", "matrices"], minutes: 120 }],
 };
 
+const roadmap: NewRoadmap = {
+  title: "Rust roadmap",
+  goal: "learn rust",
+  graph: { title: "Rust roadmap", nodes: [], edges: [] },
+};
+
 // Written against the interfaces so the Drizzle implementations can run the same suite.
-function contract(name: string, onboarding: OnboardingRepo, plans: PlanRepo) {
+function contract(name: string, onboarding: OnboardingRepo, plans: PlanRepo, roadmaps: RoadmapRepo) {
   describe(`${name} repo contract`, () => {
     it("returns a fresh questionnaire state for a new user", async () => {
       const state = await onboarding.get("u-new");
-      expect(state).toEqual({ step: "questionnaire", profile: {}, draftGraph: null, messages: [] });
+      expect(state).toEqual({ step: "questionnaire", profile: {}, draftGraph: null, activeRoadmapId: null, messages: [] });
     });
 
     it("merges profile patches, including nested preferences", async () => {
@@ -77,10 +83,31 @@ function contract(name: string, onboarding: OnboardingRepo, plans: PlanRepo) {
     it("rejects updates to unknown plans", async () => {
       await expect(plans.update("missing", "u-x", { title: "x" })).rejects.toThrow();
     });
+
+    it("keeps roadmap records per user, newest first", async () => {
+      const first = await roadmaps.create("u-maps", roadmap);
+      const second = await roadmaps.create("u-maps", { ...roadmap, title: "Newer" });
+      const list = await roadmaps.list("u-maps");
+      expect(list.map((r) => r.id)).toEqual([second.id, first.id]);
+      // Summaries omit the graph payload.
+      expect(list[0]).not.toHaveProperty("graph");
+      expect(await roadmaps.list("u-other")).toEqual([]);
+      expect(await roadmaps.get(first.id, "u-maps")).toMatchObject({ title: "Rust roadmap" });
+      expect(await roadmaps.get(first.id, "u-other")).toBeNull();
+    });
+
+    it("updates a roadmap only for its owner", async () => {
+      const record = await roadmaps.create("u-own", roadmap);
+      const next = { ...roadmap.graph, title: "Edited" };
+      const updated = await roadmaps.update(record.id, "u-own", { graph: next });
+      expect(updated?.graph.title).toBe("Edited");
+      expect(await roadmaps.update(record.id, "u-other", { graph: next })).toBeNull();
+      expect(await roadmaps.get(record.id, "u-own")).toMatchObject({ graph: { title: "Edited" } });
+    });
   });
 }
 
-contract("memory", memoryOnboardingRepo, memoryPlanRepo);
+contract("memory", memoryOnboardingRepo, memoryPlanRepo, memoryRoadmapRepo);
 
 // The Drizzle implementations run only when DATABASE_URL points at a local
 // database — tests must never write to a shared remote one.
@@ -91,6 +118,7 @@ if (localDb) {
   const { user } = await import("@/db/schema");
   const { drizzleOnboardingRepo } = await import("./onboarding.drizzle");
   const { drizzlePlanRepo } = await import("./plans.drizzle");
+  const { drizzleRoadmapRepo } = await import("./roadmaps.drizzle");
 
   // userIds get a `user` row first: onboarding_sessions and study_plans FK to it.
   const seededIds = new Set<string>();
@@ -114,10 +142,17 @@ if (localDb) {
     update: (id, u, p) => seedUser(u).then(() => drizzlePlanRepo.update(id, u, p)),
   };
 
-  // Rows cascade to onboarding_sessions and study_plans when users are removed.
+  const roadmaps: RoadmapRepo = {
+    list: (u) => seedUser(u).then(() => drizzleRoadmapRepo.list(u)),
+    get: (id, u) => seedUser(u).then(() => drizzleRoadmapRepo.get(id, u)),
+    create: (u, r) => seedUser(u).then(() => drizzleRoadmapRepo.create(u, r)),
+    update: (id, u, p) => seedUser(u).then(() => drizzleRoadmapRepo.update(id, u, p)),
+  };
+
+  // Rows cascade to onboarding_sessions, study_plans and roadmaps when users are removed.
   afterAll(async () => {
     if (seededIds.size) await getDb().delete(user).where(inArray(user.id, [...seededIds]));
   });
 
-  contract("drizzle", onboarding, plans);
+  contract("drizzle", onboarding, plans, roadmaps);
 }

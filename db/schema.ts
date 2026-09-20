@@ -68,6 +68,8 @@ export const onboardingSessions = pgTable("onboarding_sessions", {
   step: text("step").$type<OnboardingStep>().default("questionnaire").notNull(),
   profile: jsonb("profile").$type<OnboardingProfile>().default({}).notNull(),
   draftGraph: jsonb("draft_graph").$type<DraftGraph>(),
+  /** The past-roadmaps record this draft was resumed from; saves write through to it. */
+  activeRoadmapId: uuid("active_roadmap_id").references(() => roadmaps.id, { onDelete: "set null" }),
   messages: jsonb("messages").$type<WorkshopMessage[]>().default([]).notNull(),
   updatedAt: updatedAt(),
 }, (table) => [
@@ -120,7 +122,22 @@ export const nodeContent = pgTable("node_content", {
   check("node_content_kind_nonempty", sql`length(btrim(${table.kind})) > 0`),
 ]).enableRLS();
 
+/** One record per generated draft roadmap — the "past roadmaps" list on onboarding. */
+export const roadmaps = pgTable("roadmaps", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  goal: text("goal").notNull(),
+  graph: jsonb("graph").$type<DraftGraph>().notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  index("roadmaps_user_created_idx").on(table.userId, table.createdAt.desc()),
+  check("roadmaps_graph_object", sql`jsonb_typeof(${table.graph}) = 'object'`),
+]).enableRLS();
+
 export type StudyPlan = typeof studyPlans.$inferSelect;
+export type Roadmap = typeof roadmaps.$inferSelect;
 export type NewStudyPlan = typeof studyPlans.$inferInsert;
 export type OnboardingSession = typeof onboardingSessions.$inferSelect;
 export type TopicProgress = typeof topicProgress.$inferSelect;

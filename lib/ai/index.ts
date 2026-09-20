@@ -37,6 +37,7 @@ import type { AiCallOptions } from "./withRetry";
 
 export { AiValidationError, type AiCallOptions, type AttemptReport, type ToolClient } from "./withRetry";
 export { fallbackObjectives } from "./functions/enrichModule";
+export { generateConceptsWithProvider, generateGraphWithProvider, pickProvider } from "./provider";
 export type { EditGraphInput, EditGraphResult, EnrichModuleInput, EnrichModuleResult };
 
 // Mocks succeed on the first try; report that so observers behave the same in both modes.

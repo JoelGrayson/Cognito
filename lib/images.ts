@@ -1,5 +1,5 @@
 /** Wikimedia asks API clients to identify themselves. */
-const UA = "StructuredLearning.ai/0.1 (educational whiteboard)";
+const UA = "Cognition/0.1 (educational whiteboard)";
 const USABLE = new Set(["image/png", "image/jpeg", "image/svg+xml", "image/webp"]);
 
 /**

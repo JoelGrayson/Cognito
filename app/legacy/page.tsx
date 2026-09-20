@@ -569,7 +569,7 @@ export default function Home() {
             Settings
           </Link>
         </nav>
-        <h1 className="text-3xl font-normal tracking-tight sm:text-4xl">StructuredLearning.ai</h1>
+        <h1 className="text-3xl font-normal tracking-tight sm:text-4xl">Cognition</h1>
 
         <form onSubmit={onSubmitTopic} className="mt-[12vh] w-full max-w-3xl">
           <div className="relative">
@@ -692,7 +692,7 @@ export default function Home() {
           onClick={reset}
           className="text-sm text-neutral-500 hover:text-neutral-900"
         >
-          StructuredLearning.ai
+          Cognition
         </button>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Link href="/about" className="text-sm text-neutral-500 hover:text-neutral-900">

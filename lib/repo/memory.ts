@@ -1,16 +1,19 @@
 import type { OnboardingProfile, OnboardingState, StudyPlan } from "@/types/learning";
-import type { OnboardingPatch, OnboardingRepo, PlanRepo } from "./types";
+import type { OnboardingPatch, OnboardingRepo, PlanRepo, RoadmapRecord, RoadmapRepo } from "./types";
 
 // Held on globalThis so dev hot reloads don't wipe the data.
 const g = globalThis as typeof globalThis & {
-  __memoryRepo?: { onboarding: Map<string, OnboardingState>; plans: Map<string, StudyPlan> };
+  __memoryRepo?: { onboarding: Map<string, OnboardingState>; plans: Map<string, StudyPlan>; roadmaps: Map<string, RoadmapRecord> };
 };
-const store = (g.__memoryRepo ??= { onboarding: new Map(), plans: new Map() });
+const store = (g.__memoryRepo ??= { onboarding: new Map(), plans: new Map(), roadmaps: new Map() });
+// A store created by an older module version may lack newer maps.
+store.roadmaps ??= new Map();
 
 const emptyState = (): OnboardingState => ({
   step: "questionnaire",
   profile: {},
   draftGraph: null,
+  activeRoadmapId: null,
   messages: [],
 });
 
@@ -75,6 +78,38 @@ export const memoryPlanRepo: PlanRepo = {
       updatedAt: new Date().toISOString(),
     };
     store.plans.set(planId, next);
+    return structuredClone(next);
+  },
+};
+
+export const memoryRoadmapRepo: RoadmapRepo = {
+  async list(userId) {
+    return [...store.roadmaps.values()]
+      .filter((r) => r.userId === userId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(({ id, title, goal, createdAt, updatedAt }) => ({ id, title, goal, createdAt, updatedAt }));
+  },
+  async get(id, userId) {
+    const record = store.roadmaps.get(id);
+    return record && record.userId === userId ? structuredClone(record) : null;
+  },
+  async create(userId, roadmap) {
+    const now = new Date().toISOString();
+    const created: RoadmapRecord = {
+      ...structuredClone(roadmap),
+      id: crypto.randomUUID(),
+      userId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    store.roadmaps.set(created.id, created);
+    return structuredClone(created);
+  },
+  async update(id, userId, patch) {
+    const record = store.roadmaps.get(id);
+    if (!record || record.userId !== userId) return null;
+    const next: RoadmapRecord = { ...record, ...structuredClone(patch), updatedAt: new Date().toISOString() };
+    store.roadmaps.set(id, next);
     return structuredClone(next);
   },
 };

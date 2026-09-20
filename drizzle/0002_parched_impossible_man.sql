@@ -1,0 +1,2 @@
+ALTER TABLE "onboarding_sessions" ADD COLUMN "active_roadmap_id" uuid;--> statement-breakpoint
+ALTER TABLE "onboarding_sessions" ADD CONSTRAINT "onboarding_sessions_active_roadmap_id_roadmaps_id_fk" FOREIGN KEY ("active_roadmap_id") REFERENCES "public"."roadmaps"("id") ON DELETE set null ON UPDATE no action;

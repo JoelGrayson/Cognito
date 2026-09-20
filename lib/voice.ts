@@ -377,7 +377,7 @@ function deepgramImplementation(): Voice {
         void fallback.done.then(finish);
       };
 
-      void fetch("/api/voice/speak", {
+      void fetch("/api/voice/tts", {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },

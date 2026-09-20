@@ -22,7 +22,7 @@ describe("GET /api/onboarding", () => {
   it("returns a fresh questionnaire state for a new user", async () => {
     const res = await GET();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ step: "questionnaire", profile: {}, draftGraph: null, messages: [] });
+    expect(await res.json()).toEqual({ step: "questionnaire", profile: {}, draftGraph: null, activeRoadmapId: null, messages: [] });
   });
 });
 

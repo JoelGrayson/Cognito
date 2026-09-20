@@ -30,13 +30,15 @@ interface OnboardingStore {
   saveError: string | null;
   concepts: ConceptsState;
 
-  hydrate: (options?: { edit?: boolean }) => Promise<void>;
+  hydrate: (options?: { edit?: boolean; fresh?: boolean }) => Promise<void>;
   /** Updates answers locally; persisted on the next step change. */
   setProfile: (patch: OnboardingProfile) => void;
   advance: (patch?: OnboardingProfile) => void;
   back: () => void;
   /** Final screen: saves and moves the flow to the workshop. Resolves false when saving failed. */
   finish: (patch?: OnboardingProfile) => Promise<boolean>;
+  /** Saves, then asks the server to start generating the draft graph in the background. */
+  prefetchGraph: () => void;
   retryConcepts: () => void;
 }
 
@@ -106,13 +108,15 @@ export const useOnboarding = create<OnboardingStore>()((set, get) => {
     fetch("/api/onboarding/concepts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ goal }),
+      body: JSON.stringify({ goal, provider: get().profile.provider }),
       signal: controller.signal,
     })
       .then(async (res) => {
         if (!res.ok) throw new Error("concepts request failed");
         const { concepts: items } = ConceptsResponse.parse(await res.json());
         settle({ status: "ready", goal, items });
+        // Persist the list so the same concepts (and their ratings) return on revisit.
+        if (conceptsAbort === controller) set({ profile: mergeProfile(get().profile, { concepts: items }) });
       })
       .catch(() => settle({ status: "error", goal, items: [] }))
       .finally(() => clearTimeout(timer));
@@ -127,7 +131,7 @@ export const useOnboarding = create<OnboardingStore>()((set, get) => {
     saveError: null,
     concepts: idleConcepts,
 
-    async hydrate({ edit = false } = {}) {
+    async hydrate({ edit = false, fresh = false } = {}) {
       set({ status: "loading" });
       try {
         const res = await fetch("/api/onboarding");
@@ -140,9 +144,17 @@ export const useOnboarding = create<OnboardingStore>()((set, get) => {
           status: "ready",
           profile,
           serverStep: saved.step,
-          step: edit ? STEP_COUNT : (resume ?? STEP_COUNT),
+          // A finished questionnaire lands on screen 1 — that's where the past-roadmaps
+          // history lives. `edit` jumps to the last screen; `fresh` always starts at 1.
+          step: fresh ? 1 : edit ? STEP_COUNT : (resume ?? 1),
         });
-        if (goalIsValid(profile.goal)) startConcepts(profile.goal.trim());
+        const goal = profile.goal?.trim();
+        // The persisted concept list keeps earlier ratings matching by name.
+        if (goalIsValid(goal) && profile.concepts?.length) {
+          set({ concepts: { status: "ready", goal, items: profile.concepts } });
+        } else if (goalIsValid(goal)) {
+          startConcepts(goal);
+        }
       } catch {
         set({ status: "error" });
       }
@@ -158,8 +170,9 @@ export const useOnboarding = create<OnboardingStore>()((set, get) => {
       if (state.step === 1 && goalIsValid(profile.goal)) {
         const goal = profile.goal.trim();
         profile = { ...profile, goal };
-        // Ratings belong to the old goal's concepts once the goal changes.
-        if (state.concepts.goal !== null && state.concepts.goal !== goal) profile = { ...profile, priorKnowledge: [] };
+        // Ratings and the concept list belong to the old goal's concepts once the goal changes.
+        if (state.concepts.goal !== null && state.concepts.goal !== goal)
+          profile = { ...profile, priorKnowledge: [], concepts: undefined };
         startConcepts(goal);
       }
       set({ profile, step: Math.min(state.step + 1, STEP_COUNT) as UiStep });
@@ -176,6 +189,16 @@ export const useOnboarding = create<OnboardingStore>()((set, get) => {
       const ok = await enqueueSave("workshop");
       if (ok) set({ serverStep: "workshop" });
       return ok;
+    },
+
+    prefetchGraph() {
+      const { profile, concepts } = get();
+      if (concepts.status !== "ready") return;
+      if (!goalIsValid(profile.goal) || !profile.preferences?.formats?.length) return;
+      void enqueueSave().then((ok) => {
+        // The workshop route shares in-flight work, so a later fetch just waits on this.
+        if (ok) fetch("/api/workshop/generate", { method: "POST" }).catch(() => {});
+      });
     },
 
     retryConcepts() {
