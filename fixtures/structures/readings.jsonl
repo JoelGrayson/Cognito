@@ -7,3 +7,6 @@
 {"ts":"2026-09-20T07-33-00-993Z","smiles":"CC(=O)O","structuresSeen":1,"confidence":0.9849059268667588,"text":"<smiles>CC(=O)O</smiles>","ms":366,"intended":""}
 {"ts":"2026-09-20T07-33-57-491Z","smiles":"OC1CCCCC1","structuresSeen":1,"confidence":0.99951171875,"text":"<smiles>OC1CCCCC1</smiles>","ms":244,"intended":""}
 {"ts":"2026-09-20T07-33-57-553Z","smiles":"C1CCCCCC1","structuresSeen":1,"confidence":0.8178491592407227,"text":"<smiles>C1CCCCCC1</smiles>","ms":316,"intended":""}
+{"ts":"2026-09-20T07-35-17-014Z","smiles":"CCC(C)(C)Br","structuresSeen":1,"confidence":0.6440164389744132,"text":"<smiles>CCC(C)(C)Br</smiles>","ms":362,"intended":""}
+{"ts":"2026-09-20T07-35-17-025Z","smiles":"O=C1CCCCC1","structuresSeen":1,"confidence":1,"text":"<smiles>O=C1CCCCC1</smiles>","ms":384,"intended":""}
+{"ts":"2026-09-20T07-35-17-036Z","smiles":"CCCC=O","structuresSeen":1,"confidence":0.9980480668600649,"text":"<smiles>CCCC=O</smiles>","ms":385,"intended":""}
