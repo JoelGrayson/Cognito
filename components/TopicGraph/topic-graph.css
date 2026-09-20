@@ -3,12 +3,12 @@
 .tg-root {
   --tg-ink: #1c1b2e;
   --tg-focus: #111111;
-  --tg-select: #4f6ff2;
+  --tg-select: #3b2a1f;
   --tg-pulse: #f59e0b;
   --tg-edge: #6b6b66;
   --tg-edge-soft: #9a9a95;
   font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
-  background: #fbfbf9;
+  background: #fffdfa;
 }
 
 .tg-root .react-flow__attribution {
@@ -364,8 +364,8 @@
   cursor: default;
 }
 .tg-btn[data-variant="primary"] {
-  border-color: #3a55d9;
-  background: #3a55d9;
+  border-color: #3b2a1f;
+  background: #3b2a1f;
   color: #fff;
 }
 .tg-btn[data-variant="primary"]:hover:not(:disabled) {
@@ -399,7 +399,7 @@
   border-left: 1.5px solid #cfcdc6;
 }
 .tg-seg button[aria-checked="true"] {
-  background: #3a55d9;
+  background: #3b2a1f;
   color: #fff;
 }
 .tg-seg button:focus-visible {

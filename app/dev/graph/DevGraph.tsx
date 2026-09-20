@@ -91,7 +91,7 @@ export function DevGraph() {
 
   const button = "rounded-md border px-3 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black";
   const idle = "border-[#cfcdc6] bg-white hover:bg-[#f3f3ef]";
-  const active = "border-[#3a55d9] bg-[#3a55d9] text-white hover:bg-[#2f47bd]";
+  const active = "border-(--wb-primary) bg-(--wb-primary) text-(--wb-card) hover:opacity-90";
 
   return (
     <main className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 px-4 py-5">
