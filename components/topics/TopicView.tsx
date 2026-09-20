@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Wand2 } from "lucide-react";
+import { ArrowLeft, PenLine, Wand2 } from "lucide-react";
 import { TopicGraph } from "@/components/TopicGraph";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { countModules, findNode, modulePath } from "@/lib/modules";
+import { practiceHref } from "@/lib/subjects";
 import type { RoadmapRecord } from "@/lib/repo";
 import { ModuleList } from "./ModuleList";
 
@@ -20,6 +21,7 @@ interface Props {
 export function TopicView({ roadmap, written }: Props) {
   const router = useRouter();
   const total = countModules(roadmap.graph);
+  const practice = practiceHref(roadmap.goal, roadmap.title);
 
   return (
     <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-4 py-6 sm:px-8">
@@ -41,12 +43,22 @@ export function TopicView({ roadmap, written }: Props) {
             &ldquo;{roadmap.goal}&rdquo; · click a topic to open its lesson.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href={`/onboarding/workshop?from=${roadmap.id}`}>
-            <Wand2 aria-hidden="true" />
-            Refine in the workshop
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {practice && (
+            <Button asChild>
+              <Link href={practice}>
+                <PenLine aria-hidden="true" />
+                Practice on the whiteboard
+              </Link>
+            </Button>
+          )}
+          <Button asChild variant="outline">
+            <Link href={`/onboarding/workshop?from=${roadmap.id}`}>
+              <Wand2 aria-hidden="true" />
+              Refine in the workshop
+            </Link>
+          </Button>
+        </div>
       </header>
 
       <div className="h-[65vh] min-h-[480px] overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">

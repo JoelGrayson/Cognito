@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { AlertCircle, ArrowLeft, ExternalLink, Lightbulb, MessageCircle, Play, Search, Video } from "lucide-react";
+import { AlertCircle, ArrowLeft, ExternalLink, Lightbulb, MessageCircle, PenLine, Play, Search, Video } from "lucide-react";
 import { draftFromLesson, type LessonDraft } from "@/lib/drafts";
 import type { ProviderId } from "@/lib/providers/types";
 import type { Lesson, MapNode, Phase } from "@/lib/schema";
@@ -40,6 +40,8 @@ interface Props {
   onLessonChange: (lesson: Lesson) => void;
   /** Address of the tutor's own page. Given one, the aside links there instead of holding the chat. */
   chatHref?: string;
+  /** Where "practice by hand" goes — set for roadmaps a whiteboard subject can check. */
+  practiceHref?: string;
 }
 
 export function LessonView({
@@ -53,6 +55,7 @@ export function LessonView({
   onRetry,
   onLessonChange,
   chatHref,
+  practiceHref,
 }: Props) {
   const [calling, setCalling] = useState(false);
   const [watching, setWatching] = useState(false);
@@ -120,6 +123,19 @@ export function LessonView({
                 {lesson ? "A narrated explainer that draws itself, with an article version" : "Available once the lesson is written"}
               </TooltipContent>
             </Tooltip>
+            {practiceHref && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button asChild size="lg" variant="outline">
+                    <Link href={practiceHref}>
+                      <PenLine aria-hidden="true" />
+                      Practice on the whiteboard
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Work problems by hand and get each step checked</TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </header>
 
