@@ -21,9 +21,29 @@ import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
-import type { HintLevel } from "@/lib/whiteboard/policy";
+import { assessExplanation, replyTo } from "@/lib/whiteboard/explanation";
+import { createSpeaker, createPushToTalk, spokenFor, ASK_WHY, type Speaker, type PushToTalk } from "@/lib/whiteboard/voice";
+
+/** Free-tier-safe voices, verified against this account. Library voices return 402. */
+const VOICE_OPTIONS = [
+  ["XrExE9yKIg1WjnnlVkGX", "Matilda"],
+  ["EXAVITQu4vr4xnSDxMaL", "Sarah"],
+  ["FGY2WhTYpPnrIDTdsKH5", "Laura"],
+  ["cgSgspJ2msm6clMCkdW9", "Jessica"],
+  ["Xb7hH8MSUJpSbSDYk0k2", "Alice"],
+  ["pFZP5JQG7iQjIQuC4Bku", "Lily"],
+  ["JBFqnCBsd6RMkjVDRZzb", "George"],
+  ["IKne3meq5aSn9XLyUdCD", "Charlie"],
+  ["N2lVS1w4EtoT3dr4eOWO", "Callum"],
+  ["bIHbv24MWmeRgasZH58o", "Will"],
+  ["iP95p4xoKVk53GoZ742B", "Chris"],
+  ["onwK4e9ZLuTAKqWW03F9", "Daniel"],
+] as const;
+import { DEFAULT_CONFIG, type HintLevel } from "@/lib/whiteboard/policy";
+import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
 import {
   recordStrokes,
+  type TimedStroke,
   mergeBounds,
   type Bounds,
   toStrokePayload,
@@ -31,7 +51,6 @@ import {
   type Commit,
   type StrokeRecorder,
 } from "@/lib/whiteboard/strokes";
-import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
 
 interface Reading {
   lineId: number;
@@ -78,6 +97,60 @@ export default function SpikePage() {
   // Readings mirrored into a ref: the commit callback is registered once at mount
   // and would otherwise close over a stale array.
   const recorderRef = useRef<StrokeRecorder | null>(null);
+  const speakerRef = useRef<Speaker | null>(null);
+  const [voiceOn, setVoiceOn] = useState(true);
+  const voiceOnRef = useRef(voiceOn);
+  useEffect(() => {
+    voiceOnRef.current = voiceOn;
+  }, [voiceOn]);
+  const [said, setSaid] = useState<string | null>(null);
+  /** Utterance for a line that was read provisionally and hasn't been spoken yet. */
+  const pendingSpeechRef = useRef<{ lineId: number; text: string } | null>(null);
+  /** Lines already settled by a line break. Kept separately because the two halves
+   *  race: the idle OCR request is async, so a fast next line can finalize before
+   *  the reading even exists. Whichever arrives second speaks. */
+  const finalizedRef = useRef<Set<number>>(new Set());
+  /** Every read and every reply is stamped with a generation. Anything that resumes
+   *  after an await checks its stamp before touching shared state - otherwise a
+   *  response that arrives 800ms late redraws a mark the learner has already fixed,
+   *  or speaks about a line they have since rewritten. */
+  const genRef = useRef(0);
+  const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
+  const pttRef = useRef<PushToTalk | null>(null);
+  const [listening, setListening] = useState(false);
+  /** What the learner said, newest last. This is the artifact that matters: the
+   *  point of asking "why" is that they articulate it, not that we grade it. */
+  const [explanations, setExplanations] = useState<{ text: string; ms: number; outcome: string }[]>([]);
+  /** Last few turns, so the tutor can avoid repeating itself. */
+  const historyRef = useRef<{ who: "tutor" | "learner"; text: string }[]>([]);
+  /** The step currently under discussion. Set when a mark is drawn, cleared once the
+   *  learner names the error - that is what makes "speaking is the hint request"
+   *  possible without a button. */
+  const openRef = useRef<{
+    verdict: Equivalence;
+    lineId: number;
+    strokes: TimedStroke[];
+    raw: string;
+    parsedStep: string;
+    /** The exact step the checker judged against. The reply request must use THIS,
+     *  not re-derive it - a low-confidence line is skipped by the checker but was
+     *  still being picked as the model's premise, so the verdict and the explanation
+     *  described different pairs of steps. */
+    premise: string | null;
+    /** Hint depth belongs to THIS step. Page-wide depth leaked into later errors:
+     *  climb to rung 4 on one mistake, and the next mistake opened at rung 4
+     *  unasked - which breaks the invariant that help is only ever requested. */
+    rung: HintLevel;
+    /** Which read opened this discussion. */
+    gen: number;
+    /** Idle commits are provisional; the learner may still be writing. Don't let a
+     *  half-read line become a spoken accusation. */
+    provisional: boolean;
+  } | null>(null);
+  const voiceIdRef = useRef(voiceId);
+  useEffect(() => {
+    voiceIdRef.current = voiceId;
+  }, [voiceId]);
   const annotatorRef = useRef<Annotator | null>(null);
   /** lineId -> where that line sits on the canvas. This is what lets marks be placed
    *  without anyone computing coordinates. */
@@ -98,8 +171,29 @@ export default function SpikePage() {
   }, [rung]);
 
   const submitLine = useCallback(async ({ strokes, lineId, reason }: Commit) => {
+    // "finalized" carries no strokes: a line read on idle has now been settled by a
+    // line break. Nothing new to read - just say what we held back.
+    if (reason === "finalized") {
+      finalizedRef.current.add(lineId);
+      // The reading is no longer provisional, whether or not there was speech held.
+      setReadings((r) =>
+        r.map((x) => (x.lineId === lineId ? { ...x, provisional: false } : x)),
+      );
+      const pending = pendingSpeechRef.current;
+      if (pending?.lineId === lineId) {
+        pendingSpeechRef.current = null;
+        finalizedRef.current.delete(lineId);
+        if (voiceOnRef.current) {
+          speakerRef.current?.say(pending.text, voiceIdRef.current).catch(() => {});
+        }
+      }
+      return;
+    }
+
     const payload = toStrokePayload(strokes);
     if (!payload) return;
+
+    const gen = ++genRef.current;
 
     // Remember where this line is before anything async happens.
     const lineBounds = strokes.length
@@ -132,28 +226,106 @@ export default function SpikePage() {
 
       // The previous STEP is the newest reading from an earlier line -- not simply
       // the last array entry, which may be this same line's provisional reading.
-      const previous =
-        [...readingsRef.current].reverse().find((r) => r.lineId < lineId)?.parsed ?? null;
+      // Both ENDS of the transition have to be trustworthy. Judging a clean line
+      // against a misread premise produces a confident accusation caused entirely by
+      // our own OCR error, so a low-confidence reading is not eligible as `previous`.
+      const prevReading = [...readingsRef.current]
+        .reverse()
+        .find(
+          (r) =>
+            r.lineId < lineId &&
+            (typeof r.confidence !== "number" ||
+              r.confidence >= DEFAULT_CONFIG.recognitionConfidenceFloor),
+        );
+      const previous = prevReading?.parsed ?? null;
 
       const { checkStep } = await import("@/lib/whiteboard/checker/numeric");
       const t0 = performance.now();
       const verdict = previous ? checkStep(previous, parsed) : null;
       const checkMs = previous ? performance.now() - t0 : null;
 
+      // This read is done: whatever finalization was waiting on it is spent, whether
+      // the line turned out wrong, correct, untrusted or unparseable. Leaving the
+      // marker behind let a LATER provisional read of a resumed line consume it and
+      // speak while the learner was still writing.
+      const wasFinalized = finalizedRef.current.delete(lineId);
+
+      // A re-read of the same line supersedes whatever we said about it. Without
+      // this, a bad provisional read leaves an obsolete accusation open: the learner
+      // finishes the line correctly and the tutor still discusses the broken version.
+      if (openRef.current?.lineId === lineId) {
+        openRef.current = null;
+        pendingSpeechRef.current = null;
+        finalizedRef.current.delete(lineId);
+        annotatorRef.current?.clear();
+        setSaid(null);
+        historyRef.current = [];
+      }
+
+      // policy.ts has always carried this rule; the page simply never asked. Below
+      // the recognition floor we assume WE misread rather than that they erred --
+      // accusing someone of a mistake they did not make costs more trust than
+      // missing one costs learning, and it is doubly true out loud.
+      const trusted =
+        typeof data.confidence !== "number" ||
+        data.confidence >= DEFAULT_CONFIG.recognitionConfidenceFloor;
+
       // Draw on the learner's work. Marks are tagged, so redrawing never touches ink.
-      if (verdict) {
+      if (verdict && trusted) {
         // Locate the offending symbol so the higher rungs can point AT it.
         const symbol = locateOperator(strokes, raw);
         const marks = marksFor(verdict, lineId, rungRef.current, symbol);
         if (marks.length > 0) {
           annotatorRef.current?.draw(marks, (id) => boundsRef.current.get(id));
+
+          // Open the discussion regardless of whether we speak: push-to-talk needs a
+          // step to talk ABOUT, and it must work with the voice toggle off.
+          openRef.current = {
+            verdict,
+            lineId,
+            strokes,
+            raw,
+            parsedStep: parsed,
+            premise: previous,
+            gen,
+            rung: rungRef.current,
+            provisional: reason === "idle",
+          };
+
+          const line = spokenFor(rungRef.current, verdict.kind);
+          const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
+          const utterance = `${line} ${why}`;
+          historyRef.current = [{ who: "tutor", text: utterance }];
+          setSaid(utterance);
+
+          // Speak only once the line is FINAL. A mark is glanceable and self-corrects
+          // on the next read; a spoken accusation cannot be taken back, and an idle
+          // commit is explicitly provisional - the learner may still be writing.
+          if (reason === "line-break") {
+            if (voiceOnRef.current) {
+              speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
+                setError(e instanceof Error ? e.message : "Voice failed.");
+              });
+            }
+          } else if (wasFinalized) {
+            // Finalization won the race and arrived before this reading existed.
+            // Consume it now rather than waiting for an event that already passed.
+            if (voiceOnRef.current) {
+              speakerRef.current?.say(utterance, voiceIdRef.current).catch(() => {});
+            }
+          } else {
+            // Provisional: hold the words until the line is settled, so a half-read
+            // line never becomes a spoken accusation - but the step is not silenced
+            // forever either, which is what happened before "finalized" existed.
+            pendingSpeechRef.current = { lineId, text: utterance };
+          }
         }
       }
 
       const next: Reading = {
         lineId,
         bounds: lineBounds,
-        provisional: reason === "idle",
+        provisional: reason === "idle" && !wasFinalized,
         raw,
         parsed,
         ms: data.ms,
@@ -177,11 +349,161 @@ export default function SpikePage() {
     }
   }, []);
 
+  const beginTalking = useCallback(async () => {
+    if (pttRef.current?.recording) return;
+    // The learner always outranks the tutor: talking cuts it off mid-sentence.
+    speakerRef.current?.stop();
+    pttRef.current ??= createPushToTalk();
+    try {
+      await pttRef.current.start();
+      setListening(true);
+    } catch {
+      setError("Couldn't reach the microphone — check the browser permission.");
+    }
+  }, []);
+
+  const endTalking = useCallback(async () => {
+    const ptt = pttRef.current;
+    if (!ptt?.recording) return;
+    setListening(false);
+    try {
+      const { transcript, ms } = await ptt.stopAndTranscribe();
+      if (!transcript) return;
+
+      const open = openRef.current;
+      if (!open) {
+        setExplanations((e) => [...e, { text: transcript, ms, outcome: "" }]);
+        return;
+      }
+
+      // Explaining and not getting there IS the request for more help, so the
+      // learner never has to press anything to ask. The system still never
+      // volunteers a rung unprompted - this IS the prompt.
+      historyRef.current.push({ who: "learner", text: transcript });
+
+      // Ask the model what to say. It is handed the verdict as ground truth and the
+      // rung as a ceiling on what it may reveal -- it decides the WORDS, never the
+      // maths. Falls back to the canned lines if it is unavailable, so a missing key
+      // or a flaky network degrades instead of breaking mid-demo.
+      let outcome = assessExplanation(transcript, open.verdict);
+      let line = replyTo(outcome, open.verdict);
+      let fromModel = false;
+
+      try {
+        const r = await fetch("/api/whiteboard/reply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            // reverse first: find() walks forwards and would return the OLDEST earlier
+            // line, so with three or more steps the model would be shown a different
+            // transition than the checker actually judged.
+            // The premise the checker actually used - see openRef.premise.
+            previousStep: open.premise,
+            currentStep: open.parsedStep,
+            verdictKind: open.verdict.kind,
+            verdictDetail:
+              open.verdict.kind === "direction"
+                ? open.verdict.expected
+                : open.verdict.kind === "rescaled"
+                  ? String(open.verdict.by.toFixed(2))
+                  : "",
+            rung: open.rung,
+            said: transcript,
+            history: historyRef.current.slice(-6),
+          }),
+        });
+        if (r.ok) {
+          const d = await r.json();
+          // Discard a reply whose discussion has been superseded - the learner may
+          // have fixed the line while the model was thinking.
+          if (openRef.current !== open) return;
+          if (d.reply) {
+            line = d.reply;
+            fromModel = true;
+            // Take the model's WORDS, not its judgement. At rungs 1-2 it is
+            // deliberately not told the verdict or shown the working, so its
+            // foundIt is a guess - and a wrong guess closes a real error because
+            // the learner happened to name some other plausible mistake. Whether
+            // they found it stays with the deterministic check, which knows.
+            if (open.rung >= 3 && d.foundIt && outcome.kind !== "found-it") {
+              outcome = { kind: "not-yet" };
+              // The model wrote `reply` and `foundIt` together, so its words are a
+              // congratulation. Keeping them while escalating would tell the learner
+              // "exactly, nice catch" and then hand them a bigger hint.
+              line = replyTo(outcome, open.verdict);
+              fromModel = false;
+            }
+          }
+        }
+      } catch {
+        // keep the canned line
+      }
+
+      setExplanations((e) => [...e, { text: transcript, ms, outcome: outcome.kind }]);
+
+      if (outcome.kind === "found-it") {
+        openRef.current = null; // they did the work; get out of the way
+      } else {
+        const next = Math.min(open.rung + 1, 5) as HintLevel;
+        open.rung = next;
+        annotatorRef.current?.clear();
+        const symbol = locateOperator(open.strokes, open.raw);
+        annotatorRef.current?.draw(
+          marksFor(open.verdict, open.lineId, next, symbol),
+          (id) => boundsRef.current.get(id),
+        );
+        // Only bolt the canned rung line on when the model didn't write one.
+        if (!fromModel) line = `${line} ${spokenFor(next, open.verdict.kind)}`.trim();
+      }
+
+      historyRef.current.push({ who: "tutor", text: line });
+
+      setSaid(line);
+      if (voiceOnRef.current) {
+        speakerRef.current?.say(line, voiceIdRef.current).catch(() => {});
+      }
+    } catch {
+      setError("Transcription failed.");
+    }
+  }, []);
+
+  // Hold SPACE to talk. A key rather than a button because the learner's hand is
+  // already on a pen -- reaching for a target on screen breaks the thought.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      const el = e.target as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      e.preventDefault();
+      void beginTalking();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      e.preventDefault();
+      void endTalking();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [beginTalking, endTalking]);
+
+  useEffect(() => () => pttRef.current?.dispose(), []);
+
   const reset = () => {
     setReadings([]);
     setError(null);
     recorderRef.current?.clear();
     annotatorRef.current?.clear();
+    speakerRef.current?.stop();
+    setSaid(null);
+    pendingSpeechRef.current = null;
+    finalizedRef.current.clear();
+    setExplanations([]);
+    openRef.current = null;
+    historyRef.current = [];
     boundsRef.current.clear();
     const editor = editorRef.current;
     if (editor) {
@@ -215,11 +537,50 @@ export default function SpikePage() {
             <option value={5}>5 — + arrow to prior step</option>
           </select>
         </label>
+        <label className="flex items-center gap-1 text-[11px] text-neutral-500">
+          <input type="checkbox" checked={voiceOn} onChange={(e) => setVoiceOn(e.target.checked)} />
+          voice
+        </label>
+        <select
+          value={voiceId}
+          onChange={(e) => {
+            setVoiceId(e.target.value);
+            // Speak on change so the voice can be auditioned without writing anything.
+            speakerRef.current
+              ?.say("Something in there doesn't hold up. Want to take another look?", e.target.value)
+              .catch(() => {});
+          }}
+          className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-[11px] text-neutral-200"
+        >
+          {VOICE_OPTIONS.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+        </select>
         <span className="font-mono text-[10px] text-neutral-600">
           idle {idleMs}ms
         </span>
         <div className="ml-auto flex gap-2">
           {busy && <span className="text-xs text-neutral-400">reading…</span>}
+          <button
+            onMouseDown={beginTalking}
+            onMouseUp={endTalking}
+            onMouseLeave={endTalking}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              void beginTalking();
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              void endTalking();
+            }}
+            className={`select-none rounded px-4 py-2 text-sm font-medium ${
+              listening ? "bg-red-500 text-white" : "border border-neutral-700 text-neutral-200"
+            }`}
+          >
+            {listening ? "listening…" : "hold to talk"}
+          </button>
           <button onClick={reset} className="rounded border border-neutral-700 px-3 py-2 text-sm">
             Reset
           </button>
@@ -253,6 +614,7 @@ export default function SpikePage() {
               if (existing.length > 0) editor.deleteShapes(existing);
 
               annotatorRef.current = createAnnotator(editor);
+              speakerRef.current ??= createSpeaker();
               // React dev-mode mounts twice. Without this, two store listeners end up
               // registered and every line is submitted twice.
               recorderRef.current?.stop();
@@ -269,6 +631,27 @@ export default function SpikePage() {
         <aside className="max-h-[38dvh] shrink-0 overflow-y-auto border-t border-neutral-800 p-3 lg:max-h-none lg:w-96 lg:border-l lg:border-t-0 lg:p-4">
           {error && (
             <p className="mb-3 rounded border border-red-900 bg-red-950/50 p-2 text-xs text-red-300">{error}</p>
+          )}
+          {explanations.length > 0 && (
+            <div className="mb-3 space-y-1">
+              {explanations.map((x, i) => (
+                <p key={i} className="rounded border border-sky-900 bg-sky-950/40 p-2 text-xs text-sky-200">
+                  you: “{x.text}”
+                  {x.outcome && (
+                    <span
+                      className={`ml-1 ${x.outcome === "found-it" ? "text-green-400" : "text-neutral-500"}`}
+                    >
+                      · {x.outcome}
+                    </span>
+                  )}
+                </p>
+              ))}
+            </div>
+          )}
+          {said && (
+            <p className="mb-3 rounded border border-neutral-700 bg-neutral-900 p-2 text-xs italic text-neutral-300">
+              “{said}”
+            </p>
           )}
           {readings.length === 0 && !error && (
             <p className="text-xs text-neutral-500">
