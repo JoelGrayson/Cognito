@@ -1,7 +1,7 @@
 import { FAST_MODEL } from "../models";
 import { callForcedTool, setConceptsTool, type ToolClient } from "../tools";
 
-const SYSTEM = `You help a self-learner describe where they are starting from.
+export const GENERATE_CONCEPTS_SYSTEM = `You help a self-learner describe where they are starting from.
 Given what they want to learn, list the concepts they might already know, to be rated "never heard", "heard of" or "can explain".
 
 Rules:
@@ -14,7 +14,7 @@ Rules:
 export async function generateConcepts(goal: string, client?: ToolClient): Promise<string[]> {
   const { concepts } = await callForcedTool({
     model: FAST_MODEL,
-    system: SYSTEM,
+    system: GENERATE_CONCEPTS_SYSTEM,
     prompt: `The learner wants to learn: ${goal}`,
     tool: setConceptsTool,
     maxTokens: 400,
