@@ -2,9 +2,17 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { AlertCircle, ArrowLeft, ExternalLink, Lightbulb, MessageCircle, Play, Search, Video } from "lucide-react";
 import { draftFromLesson, type LessonDraft } from "@/lib/drafts";
 import type { ProviderId } from "@/lib/providers/types";
 import type { Lesson, MapNode, Phase } from "@/lib/schema";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { LessonChat } from "./LessonChat";
 import { QuizPanel } from "./Quiz";
 import { RichText } from "./RichText";
@@ -24,9 +32,9 @@ interface Props {
   phase: Phase;
   state: LessonState;
   providerId: ProviderId;
-  /** Where the expand button in the corner goes: the whole roadmap. */
+  /** Where the back link goes: the whole roadmap. */
   backHref: string;
-  /** A compact view of the roadmap, shown beside the expand button. */
+  /** A compact view of the roadmap, shown in the sidebar. */
   minimap?: ReactNode;
   onRetry: () => void;
   onLessonChange: (lesson: Lesson) => void;
@@ -58,65 +66,74 @@ export function LessonView({
         : lesson
           ? draftFromLesson(lesson)
           : null;
+  const streaming = state.status === "streaming" || state.status === "loading";
 
   return (
-    <div className="lesson-layout">
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
       <div className="min-w-0">
-        <div className="lesson-top">
-          <div className="minimap">
-            {minimap}
-            <Link href={backHref} className="minimap-expand" title="Back to the roadmap" aria-label="Back to the roadmap">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-              </svg>
-            </Link>
+        <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground">
+          <Link href={backHref}>
+            <ArrowLeft aria-hidden="true" />
+            Back to the roadmap
+          </Link>
+        </Button>
+
+        <header className="mt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="capitalize">
+              {phase}
+            </Badge>
+            <span className="text-sm text-muted-foreground">{node.subtitle}</span>
+            {streaming && (
+              <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+                Writing
+              </Badge>
+            )}
           </div>
-          <div className="lesson-heading">
-            <p className="text-sm text-neutral-500">
-              <span className="capitalize">{phase}</span> · {node.subtitle}
-            </p>
-            <h1 className="mt-1 text-3xl font-medium tracking-tight sm:text-4xl">{draft?.title || node.name}</h1>
-            <p className="mt-2 text-neutral-600">{draft?.summary || node.description}</p>
-            <button
-              type="button"
-              className="call-start"
-              onClick={() => setCalling(true)}
-              disabled={!lesson}
-              title={lesson ? "Learn this with a tutor who talks and draws on a whiteboard" : "Available once the lesson is written"}
-            >
-              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="2" y="6" width="14" height="12" rx="2" />
-                <path d="M16 10l6-3v10l-6-3z" />
-              </svg>
-              Start video lesson
-            </button>
-            <button
-              type="button"
-              className="call-start call-start-ghost"
-              onClick={() => setWatching(true)}
-              disabled={!lesson}
-              title={lesson ? "A narrated explainer that draws itself, with an article version" : "Available once the lesson is written"}
-            >
-              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M10 8.5l6 3.5-6 3.5z" />
-              </svg>
-              Watch explainer
-            </button>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{draft?.title || node.name}</h1>
+          <p className="mt-3 max-w-2xl text-[17px] leading-relaxed text-muted-foreground">{draft?.summary || node.description}</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button type="button" size="lg" onClick={() => setCalling(true)} disabled={!lesson}>
+                    <Video aria-hidden="true" />
+                    Start video lesson
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {lesson ? "Learn this with a tutor who talks and draws on a whiteboard" : "Available once the lesson is written"}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button type="button" size="lg" variant="outline" onClick={() => setWatching(true)} disabled={!lesson}>
+                    <Play aria-hidden="true" />
+                    Watch explainer
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {lesson ? "A narrated explainer that draws itself, with an article version" : "Available once the lesson is written"}
+              </TooltipContent>
+            </Tooltip>
           </div>
-        </div>
+        </header>
 
         {state.status === "error" && (
-          <div className="panel mt-10 px-6 py-8 text-center">
-            <p className="text-red-600">{state.message}</p>
-            <button
-              type="button"
-              className="mt-4 text-sm text-neutral-600 underline underline-offset-4 hover:text-neutral-900"
-              onClick={onRetry}
-            >
-              Try again
-            </button>
-          </div>
+          <Alert variant="destructive" className="mt-8">
+            <AlertCircle />
+            <AlertTitle>The lesson could not be written</AlertTitle>
+            <AlertDescription>{state.message}</AlertDescription>
+            <AlertAction>
+              <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                Try again
+              </Button>
+            </AlertAction>
+          </Alert>
         )}
 
         {!draft && state.status !== "error" && <LessonSkeleton />}
@@ -125,56 +142,73 @@ export function LessonView({
           <>
             {/* Lessons written before TL;DRs existed have none; only show the placeholder while writing. */}
             {(draft.tldr || state.status === "streaming") && (
-              <section className="panel mt-8 px-6 py-5" aria-label="TL;DR">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">TL;DR</h2>
-                {draft.tldr ? (
-                  <p className="mt-2 text-[17px] leading-relaxed text-neutral-800">{draft.tldr}</p>
-                ) : (
-                  <div className="mt-3 space-y-2" aria-busy="true">
-                    <div className="skeleton-line w-full" />
-                    <div className="skeleton-line w-3/4" />
-                  </div>
-                )}
-              </section>
+              <Card className="mt-8 bg-brand-soft/60 ring-brand/15" aria-label="TL;DR">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+                    <Lightbulb className="size-3.5" aria-hidden="true" />
+                    TL;DR
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {draft.tldr ? (
+                    <p className="text-[17px] leading-relaxed text-foreground">{draft.tldr}</p>
+                  ) : (
+                    <div className="space-y-2" aria-busy="true">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
-            <div className={draft.video && !draft.video.id ? "lesson-hero lesson-hero-single" : "lesson-hero"}>
-              <section>
-                <h2 className="lesson-h2">Useful resources</h2>
-                {draft.resources === null ? (
-                  <div className="mt-3 space-y-2" aria-busy="true" aria-label="Checking links">
-                    <div className="skeleton-line w-52" />
-                    <div className="skeleton-line w-64" />
-                    <div className="skeleton-line w-44" />
-                    <p className="pt-1 text-xs text-neutral-400">Checking links…</p>
-                  </div>
-                ) : draft.resources.length > 0 ? (
-                  <ul className="mt-3 space-y-2">
-                    {draft.resources.map((r) => (
-                      <li key={r.url}>
-                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="lesson-link">
-                          {r.title}
-                        </a>
-                        <span className="text-sm text-neutral-500"> · {r.why}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-3 text-sm text-neutral-500">
-                    None of the suggested links checked out.{" "}
-                    <a
-                      className="lesson-link"
-                      href={`https://www.google.com/search?q=${encodeURIComponent(`${node.name} ${topic}`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Search the web
-                    </a>
-                    .
-                  </p>
-                )}
-              </section>
+
+            <div className={`mt-8 grid gap-6 ${draft.video && !draft.video.id ? "" : "md:grid-cols-2 md:items-start"}`}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Useful resources</CardTitle>
+                  <CardDescription>Hand-picked reading and references for this module.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {draft.resources === null ? (
+                    <div className="space-y-2.5" aria-busy="true" aria-label="Checking links">
+                      <Skeleton className="h-4 w-52" />
+                      <Skeleton className="h-4 w-64" />
+                      <Skeleton className="h-4 w-44" />
+                      <p className="pt-1 text-xs text-muted-foreground">Checking links…</p>
+                    </div>
+                  ) : draft.resources.length > 0 ? (
+                    <ul className="space-y-3">
+                      {draft.resources.map((r) => (
+                        <li key={r.url} className="flex gap-2.5">
+                          <ExternalLink className="mt-1 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <a href={r.url} target="_blank" rel="noopener noreferrer" className="lesson-link font-medium">
+                              {r.title}
+                            </a>
+                            <p className="text-sm text-muted-foreground">{r.why}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      None of the suggested links checked out.{" "}
+                      <a
+                        className="lesson-link inline-flex items-center gap-1"
+                        href={`https://www.google.com/search?q=${encodeURIComponent(`${node.name} ${topic}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Search className="size-3.5" aria-hidden="true" />
+                        Search the web
+                      </a>
+                      .
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
               {draft.video === null ? (
-                <div className="video video-pending" aria-busy="true">
+                <div className="video flex items-center justify-center text-sm text-muted-foreground" aria-busy="true">
                   Finding a video…
                 </div>
               ) : draft.video.id ? (
@@ -182,35 +216,46 @@ export function LessonView({
               ) : null}
             </div>
 
-            {draft.sections.length === 0
-              ? [0, 1, 2].map((i) => <SectionSkeleton key={i} />)
-              : draft.sections.map((s, i) => (
-                  <section key={i} className="mt-10">
-                    <h2 className="lesson-h2">{s.heading}</h2>
-                    {s.body ? (
-                      <div className="mt-3 text-[17px] leading-relaxed text-neutral-800">
-                        <RichText text={s.body} />
-                        {!s.done && <span className="stream-cursor" aria-hidden="true" />}
-                      </div>
-                    ) : s.done ? null : (
-                      <div className="mt-3 space-y-2" aria-busy="true">
-                        <div className="skeleton-line w-full" />
-                        <div className="skeleton-line w-11/12" />
-                        <div className="skeleton-line w-4/5" />
-                      </div>
-                    )}
-                  </section>
-                ))}
+            <article className="mt-4">
+              {draft.sections.length === 0
+                ? [0, 1, 2].map((i) => <SectionSkeleton key={i} />)
+                : draft.sections.map((s, i) => (
+                    <section key={i} className="mt-10">
+                      <h2 className="lesson-h2">{s.heading}</h2>
+                      {s.body ? (
+                        <div className="mt-3 text-[17px] leading-relaxed text-foreground/90">
+                          <RichText text={s.body} />
+                          {!s.done && <span className="stream-cursor" aria-hidden="true" />}
+                        </div>
+                      ) : s.done ? null : (
+                        <div className="mt-3 space-y-2.5" aria-busy="true">
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-11/12" />
+                          <Skeleton className="h-4 w-4/5" />
+                        </div>
+                      )}
+                    </section>
+                  ))}
+            </article>
 
             {draft.keyTakeaways.length > 0 && (
-              <section className="panel mt-10 px-6 py-5">
-                <h2 className="lesson-h2">Key takeaways</h2>
-                <ul className="mt-3 list-disc space-y-1 pl-5 text-neutral-800">
-                  {draft.keyTakeaways.map((t, i) => (
-                    <li key={i}>{t}</li>
-                  ))}
-                </ul>
-              </section>
+              <Card className="mt-10 bg-muted/40">
+                <CardHeader>
+                  <CardTitle className="text-lg">Key takeaways</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-[15px] leading-relaxed">
+                    {draft.keyTakeaways.map((t, i) => (
+                      <li key={i} className="flex gap-3">
+                        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                          {i + 1}
+                        </span>
+                        <span>{t}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
             )}
 
             {lesson && lessonWantsCode(lesson) && (
@@ -221,31 +266,52 @@ export function LessonView({
         )}
       </div>
 
-      <aside className="lesson-aside">
+      <aside className="min-w-0 space-y-4 lg:sticky lg:top-20 lg:self-start">
+        {minimap && (
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>Roadmap</CardTitle>
+              <CardAction>
+                <Button asChild variant="ghost" size="xs" className="text-muted-foreground">
+                  <Link href={backHref}>View all</Link>
+                </Button>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="px-1.5">
+              <ScrollArea className="max-h-56 [&>[data-slot=scroll-area-viewport]]:max-h-56">{minimap}</ScrollArea>
+            </CardContent>
+          </Card>
+        )}
+
         {chatHref ? (
-          <div className="chat-panel items-center justify-center">
-            {lesson ? (
-              <Link href={chatHref} className="lesson-link px-6 text-center text-sm">
-                Ask the tutor about this lesson →
-              </Link>
-            ) : (
-              <p className="px-6 text-center text-sm text-neutral-500">The tutor joins once the lesson is ready.</p>
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="size-4 text-primary" aria-hidden="true" />
+                Tutor
+              </CardTitle>
+              <CardDescription>
+                {lesson ? "Ask questions or have the lesson rewritten." : "The tutor joins once the lesson is ready."}
+              </CardDescription>
+            </CardHeader>
+            {lesson && (
+              <CardContent>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href={chatHref}>Ask the tutor about this lesson</Link>
+                </Button>
+              </CardContent>
             )}
-          </div>
+          </Card>
         ) : lesson ? (
           <LessonChat topic={topic} lesson={lesson} providerId={providerId} onLessonChange={onLessonChange} />
         ) : (
-          <div className="chat-panel items-center justify-center">
-            <p className="px-6 text-center text-sm text-neutral-500">The tutor joins once the lesson is ready.</p>
-          </div>
+          <Card size="sm">
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">The tutor joins once the lesson is ready.</CardContent>
+          </Card>
         )}
       </aside>
-      {calling && lesson && (
-        <VideoCall topic={topic} lesson={lesson} onClose={() => setCalling(false)} />
-      )}
-      {watching && lesson && (
-        <Explainer topic={topic} lesson={lesson} providerId={providerId} onClose={() => setWatching(false)} />
-      )}
+      {calling && lesson && <VideoCall topic={topic} lesson={lesson} onClose={() => setCalling(false)} />}
+      {watching && lesson && <Explainer topic={topic} lesson={lesson} providerId={providerId} onClose={() => setWatching(false)} />}
     </div>
   );
 }
@@ -254,7 +320,7 @@ export function LessonView({
 function VideoBox({ id, title }: { id: string; title: string | null }) {
   return (
     <div>
-      <div className="video">
+      <div className="video ring-1 ring-foreground/10">
         <iframe
           src={`https://www.youtube-nocookie.com/embed/${id}`}
           title={title ?? "Lesson video"}
@@ -263,7 +329,7 @@ function VideoBox({ id, title }: { id: string; title: string | null }) {
           allowFullScreen
         />
       </div>
-      {title && <p className="mt-2 truncate text-sm text-neutral-500">{title}</p>}
+      {title && <p className="mt-2 truncate text-sm text-muted-foreground">{title}</p>}
     </div>
   );
 }
@@ -271,10 +337,10 @@ function VideoBox({ id, title }: { id: string; title: string | null }) {
 function SectionSkeleton() {
   return (
     <div className="mt-10 space-y-3" aria-busy="true">
-      <div className="skeleton-line h-6 w-52" />
-      <div className="skeleton-line w-full" />
-      <div className="skeleton-line w-11/12" />
-      <div className="skeleton-line w-4/5" />
+      <Skeleton className="h-6 w-52" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-11/12" />
+      <Skeleton className="h-4 w-4/5" />
     </div>
   );
 }
@@ -282,19 +348,23 @@ function SectionSkeleton() {
 function LessonSkeleton() {
   return (
     <div className="mt-8" aria-busy="true" aria-label="Writing the lesson">
-      <div className="panel space-y-2 px-6 py-5">
-        <div className="skeleton-line h-3 w-12" />
-        <div className="skeleton-line w-full" />
-        <div className="skeleton-line w-3/4" />
-      </div>
-      <div className="lesson-hero">
-        <div className="space-y-3">
-          <div className="skeleton-line h-5 w-40" />
-          <div className="skeleton-line w-64" />
-          <div className="skeleton-line w-56" />
-          <div className="skeleton-line w-60" />
-        </div>
-        <div className="skeleton video" />
+      <Card>
+        <CardContent className="space-y-2.5">
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+        </CardContent>
+      </Card>
+      <div className="mt-8 grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-64" />
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="h-4 w-60" />
+          </CardContent>
+        </Card>
+        <Skeleton className="aspect-video w-full rounded-xl" />
       </div>
       {[0, 1, 2].map((i) => (
         <SectionSkeleton key={i} />

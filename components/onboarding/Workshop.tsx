@@ -4,10 +4,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TopicGraph } from "@/components/TopicGraph";
+import { Info, Pencil, RefreshCw } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { findNode, modulePath, topicPath } from "@/lib/modules";
 import type { DraftGraph } from "@/types/learning";
 
-const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]";
 
 type Status =
   | { kind: "loading" }
@@ -66,58 +80,71 @@ export function Workshop({ draftGraph, roadmapId }: Props) {
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Your roadmap</h1>
-          <p className="mt-1 text-[15px] text-[#6b6b6b]">
+          <p className="mt-1 text-[15px] text-muted-foreground">
             Click a topic to open its lesson. Topics you marked &ldquo;can explain&rdquo; are grayed out — we&rsquo;ll skip them.
           </p>
         </div>
         <div className="flex items-center gap-2">
           {status.kind === "ready" && status.roadmapId && (
-            <Link
-              href={topicPath(status.roadmapId)}
-              className={`inline-flex min-h-10 items-center rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-white ${focus}`}
-            >
-              Start learning
-            </Link>
+            <Button asChild>
+              <Link href={topicPath(status.roadmapId)}>Start learning</Link>
+            </Button>
           )}
           {status.kind === "ready" && (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm("Generate a new roadmap? Your current one will be replaced.")) {
-                  setStatus({ kind: "loading" });
-                  generate(true);
-                }
-              }}
-              className={`inline-flex min-h-10 items-center rounded-full border border-[#d5d5d1] bg-white px-4 text-sm font-medium text-[#333] hover:border-[#b9b9b4] ${focus}`}
-            >
-              Regenerate
-            </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="outline">
+                  <RefreshCw aria-hidden="true" />
+                  Regenerate
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Generate a new roadmap?</AlertDialogTitle>
+                  <AlertDialogDescription>Your current roadmap will be replaced.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      setStatus({ kind: "loading" });
+                      generate(true);
+                    }}
+                  >
+                    Regenerate
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
-          <Link
-            href="/onboarding?edit=1"
-            className={`inline-flex min-h-10 items-center rounded-full px-4 text-sm font-medium text-[var(--accent)] hover:bg-[#f0f0ee] ${focus}`}
-          >
-            Edit answers
-          </Link>
+          <Button asChild variant="ghost" className="text-primary">
+            <Link href="/onboarding?edit=1">
+              <Pencil aria-hidden="true" />
+              Edit answers
+            </Link>
+          </Button>
         </div>
       </header>
 
       {status.kind === "ready" && status.usedFallback && !bannerDismissed && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-[#e8e4c8] bg-[#fbf7e8] px-4 py-3 text-sm text-[#6b5d1f]">
-          <p>We built a simple roadmap from your answers. Tell us what to change.</p>
-          <button type="button" onClick={() => setBannerDismissed(true)} className={`rounded-full px-2 font-medium ${focus}`}>
-            Dismiss
-          </button>
-        </div>
+        <Alert className="mb-4 border-amber-500/40 bg-amber-50 text-amber-900">
+          <Info />
+          <AlertTitle>We built a simple roadmap from your answers. Tell us what to change.</AlertTitle>
+          <AlertAction>
+            <Button type="button" variant="ghost" size="sm" className="text-amber-900" onClick={() => setBannerDismissed(true)}>
+              Dismiss
+            </Button>
+          </AlertAction>
+        </Alert>
       )}
 
-      <div className="h-[75vh] min-h-[540px] overflow-hidden rounded-2xl border border-[#e4e3de]">
+      <div className="h-[75vh] min-h-[540px] overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
         {status.kind === "loading" && (
           <div aria-busy="true" aria-label="Generating roadmap" className="flex h-full flex-col items-center justify-center gap-4">
-            <p className="text-[15px] font-medium text-[#6b6b6b]">Mapping your roadmap...</p>
+            <p className="text-[15px] font-medium text-muted-foreground">Mapping your roadmap...</p>
             <div className="grid w-full max-w-md grid-cols-3 gap-3 px-6">
               {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} className="skeleton !min-h-16" />
+                <Skeleton key={i} className="h-16 w-full rounded-xl" />
               ))}
             </div>
           </div>
@@ -125,17 +152,16 @@ export function Workshop({ draftGraph, roadmapId }: Props) {
         {status.kind === "error" && (
           <div role="alert" className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
             <p className="text-lg font-semibold">{status.message}</p>
-            <button
+            <Button
               type="button"
+              size="xl"
               onClick={() => {
                 setStatus({ kind: "loading" });
                 generate();
               }}
-
-              className={`min-h-12 rounded-full bg-[var(--accent)] px-7 text-[15px] font-semibold text-white ${focus}`}
             >
               Try again
-            </button>
+            </Button>
           </div>
         )}
         {status.kind === "ready" && (

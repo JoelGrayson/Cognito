@@ -7,6 +7,10 @@ import { HOURS_MAX, HOURS_MIN } from "@/lib/onboarding/schemas";
 import { OnboardingState } from "@/types/learning";
 import type { LearnerProfile } from "@/types/learning";
 import { Choice, ChoiceGroup } from "@/components/onboarding/ui";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Slider } from "@/components/ui/slider";
 
 type Pace = LearnerProfile["preferences"]["pace"];
 type Tutor = NonNullable<LearnerProfile["tutorStyle"]>;
@@ -94,55 +98,53 @@ export function LearningPrefs() {
   if (status === "loading") {
     return (
       <div aria-busy="true" aria-label="Loading learning preferences" className="mt-8 space-y-3">
-        <div className="skeleton !min-h-3 w-1/3" />
-        <div className="skeleton !min-h-12" />
-        <div className="skeleton !min-h-12" />
+        <Skeleton className="h-3 w-1/3" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
       </div>
     );
   }
 
   if (status === "error") {
-    return <p className="mt-8 text-sm text-neutral-500">Could not load learning preferences.</p>;
+    return <p className="mt-8 text-sm text-muted-foreground">Could not load learning preferences.</p>;
   }
 
   return (
-    <section aria-labelledby="learning-prefs" className="mt-10 border-t border-neutral-200 pt-8">
-      <div className="flex items-baseline justify-between">
-        <h2 id="learning-prefs" className="text-lg font-medium text-neutral-900">
+    <section aria-labelledby="learning-prefs" className="mt-10 border-t border-border pt-8">
+      <div className="flex items-center justify-between">
+        <h2 id="learning-prefs" className="text-lg font-semibold">
           Learning preferences
         </h2>
-        <span aria-live="polite" className="text-xs text-neutral-500">
-          {saved ? "Saved" : ""}
-        </span>
+        <span aria-live="polite">{saved && <Badge variant="secondary">Saved</Badge>}</span>
       </div>
-      <p className="mt-1 text-sm text-neutral-500">Used by your roadmap schedule and tutor. Saved to your profile.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Used by your roadmap schedule and tutor. Saved to your profile.</p>
 
       <div className="mt-6">
-        <div className="mb-2 flex items-baseline justify-between">
-          <label htmlFor="pref-hours" className="text-sm font-medium text-neutral-700">
+        <div className="mb-3 flex items-baseline justify-between">
+          <Label htmlFor="pref-hours" className="text-foreground/80">
             Hours per week
-          </label>
+          </Label>
           <output htmlFor="pref-hours" className="text-base font-semibold tabular-nums">
             {prefs.hoursPerWeek} {prefs.hoursPerWeek === 1 ? "hr" : "hrs"}
           </output>
         </div>
-        <input
+        <Slider
           id="pref-hours"
-          type="range"
+          aria-label="Hours per week"
           min={HOURS_MIN}
           max={HOURS_MAX}
           step={1}
-          value={prefs.hoursPerWeek}
-          onChange={(e) => update({ hoursPerWeek: Number(e.target.value) })}
-          className="h-12 w-full cursor-pointer accent-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
+          value={[prefs.hoursPerWeek]}
+          onValueChange={([value]) => update({ hoursPerWeek: value })}
+          className="py-2"
         />
-        <div className="flex justify-between text-xs text-neutral-400">
+        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
           <span>{HOURS_MIN} hr</span>
           <span>{HOURS_MAX} hrs</span>
         </div>
       </div>
 
-      <p className="mt-6 mb-2 text-sm font-medium text-neutral-700">Pace</p>
+      <p className="mt-6 mb-2 text-sm font-medium text-foreground/80">Pace</p>
       <ChoiceGroup label="Pace" className="flex flex-wrap gap-2">
         {PACES.map((option) => (
           <Choice
@@ -158,7 +160,7 @@ export function LearningPrefs() {
         ))}
       </ChoiceGroup>
 
-      <p className="mt-6 mb-2 text-sm font-medium text-neutral-700">Days per week</p>
+      <p className="mt-6 mb-2 text-sm font-medium text-foreground/80">Days per week</p>
       <ChoiceGroup label="Days per week" className="grid grid-cols-7 gap-1.5 sm:gap-2">
         {[1, 2, 3, 4, 5, 6, 7].map((n) => (
           <Choice
@@ -175,7 +177,7 @@ export function LearningPrefs() {
         ))}
       </ChoiceGroup>
 
-      <p className="mt-6 mb-2 text-sm font-medium text-neutral-700">Tutor style</p>
+      <p className="mt-6 mb-2 text-sm font-medium text-foreground/80">Tutor style</p>
       <ChoiceGroup label="Tutor style" className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-3">
         {TUTORS.map((tutor) => (
           <Choice

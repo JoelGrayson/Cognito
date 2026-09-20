@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { useOnboarding } from "@/lib/stores/onboarding";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ProgressBar } from "./ProgressBar";
 import { Step1Goal } from "./Step1Goal";
 import { Step2Start } from "./Step2Start";
@@ -35,19 +37,15 @@ export function OnboardingFlow({ edit = false, fresh = false }: { edit?: boolean
       {status === "error" ? (
         <div role="alert" className="my-auto text-center">
           <p className="text-lg font-semibold">We could not load your answers.</p>
-          <button
-            type="button"
-            onClick={() => void hydrate({ edit, fresh })}
-            className="mt-4 min-h-12 rounded-full bg-[var(--accent)] px-7 text-[15px] font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
-          >
+          <Button type="button" size="xl" className="mt-4" onClick={() => void hydrate({ edit, fresh })}>
             Try again
-          </button>
+          </Button>
         </div>
       ) : status === "loading" ? (
         <div aria-busy="true" aria-label="Loading" className="space-y-4">
-          <div className="skeleton !min-h-3" />
-          <div className="skeleton !min-h-12 w-3/4" />
-          <div className="skeleton !min-h-24" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-12 w-3/4" />
+          <Skeleton className="h-24 w-full" />
         </div>
       ) : (
         <>
