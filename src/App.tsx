@@ -28,6 +28,7 @@ export default function App() {
   });
 
   const fileInput = useRef<HTMLInputElement>(null);
+  const checkSeq = useRef(0);
 
   const resetInk = ink.reset;
   const openSample = useCallback(
@@ -42,6 +43,8 @@ export default function App() {
     [resetInk],
   );
 
+  const docRef = useRef(doc);
+  docRef.current = doc;
   useEffect(() => {
     if (!doc) openSample(0);
   }, [doc, openSample]);
@@ -70,6 +73,9 @@ export default function App() {
 
   const check = async () => {
     if (!doc) return;
+    const seq = ++checkSeq.current;
+    const docId = doc.id;
+    const stillCurrent = () => seq === checkSeq.current && docRef.current?.id === docId;
     setChecking(true);
     setError(null);
     try {
@@ -82,13 +88,14 @@ export default function App() {
       });
       const json = (await res.json()) as CheckResponse | { error: string };
       if (!res.ok || "error" in json) throw new Error("error" in json ? json.error : `HTTP ${res.status}`);
+      if (!stillCurrent()) return;
       setMarks(json.marks.map(markToPage));
       setAttempts((a) => [{ ...json, at: Date.now() }, ...a]);
       setLayers((l) => ({ ...l, marks: { visible: true } }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Check failed");
+      if (stillCurrent()) setError(e instanceof Error ? e.message : "Check failed");
     } finally {
-      setChecking(false);
+      if (seq === checkSeq.current) setChecking(false);
     }
   };
 
@@ -152,7 +159,15 @@ export default function App() {
 
         <div className="canvas-wrap">
           <div className="page" style={{ aspectRatio: `${PAGE_W} / ${PAGE_H}` }}>
-            {doc && layers.document.visible && <img className="layer" src={doc.src} alt={doc.title} draggable={false} />}
+            {doc && layers.document.visible && (
+              <img
+                className="layer"
+                src={doc.src}
+                alt={doc.title}
+                draggable={false}
+                style={{ objectFit: "contain", objectPosition: "top center" }}
+              />
+            )}
             <InkLayer
               strokes={ink.value}
               tool={tool}

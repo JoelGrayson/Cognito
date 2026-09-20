@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { MARK_GRID, type CheckResponse } from "../shared/types.ts";
 
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
+const model = () => process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
 
 const coord = z.number().min(0).max(MARK_GRID);
 const markSchema = z.discriminatedUnion("kind", [
@@ -47,7 +47,7 @@ function getClient() {
 export async function check(imageDataUrl: string, question?: string): Promise<CheckResponse> {
   const data = imageDataUrl.slice(imageDataUrl.indexOf(",") + 1);
   const res = await getClient().messages.create({
-    model: MODEL,
+    model: model(),
     max_tokens: 1500,
     system: SYSTEM,
     tools: [
