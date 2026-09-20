@@ -3,7 +3,7 @@
 @source "../node_modules/streamdown/dist/*.js";
 
 @theme inline {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-wb-sans), var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --color-accent: var(--accent);
   --color-accent-strong: var(--accent-strong);
   /* Tokens Streamdown's components expect (shadcn names). */
@@ -18,16 +18,16 @@
 }
 
 :root {
-  --bg: #ffffff;
-  --fg: #111111;
-  --muted: #8a8a8a;
+  --bg: #f5eee8;
+  --fg: #2b1d14;
+  --muted: #7d6e63;
   --pill: #d9d9d9;
   --pill-placeholder: #8c8c8c;
-  --panel: #f8f8f6;
+  --panel: #fffdfa;
   --arrow: #9a9a9a;
-  --accent: #4f6ff2;
-  /* Filled buttons with white text (about 6:1 contrast). */
-  --accent-strong: #3a55d9;
+  /* One brown for links, focus rings and filled buttons; the old blue is gone. */
+  --accent: #3b2a1f;
+  --accent-strong: #3b2a1f;
 
   /* Warm notebook palette: the landing page, the nav and the whiteboard. */
   --wb-bg: #f5eee8;

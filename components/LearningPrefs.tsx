@@ -102,27 +102,27 @@ export function LearningPrefs() {
   }
 
   if (status === "error") {
-    return <p className="mt-8 text-sm text-neutral-500">Could not load learning preferences.</p>;
+    return <p className="mt-8 text-sm text-(--wb-muted)">Could not load learning preferences.</p>;
   }
 
   return (
-    <section aria-labelledby="learning-prefs" className="mt-10 border-t border-neutral-200 pt-8">
+    <section aria-labelledby="learning-prefs" className="mt-10 border-t border-(--wb-line) pt-8">
       <div className="flex items-baseline justify-between">
-        <h2 id="learning-prefs" className="text-lg font-medium text-neutral-900">
+        <h2 id="learning-prefs" className="text-lg font-medium text-(--wb-ink)">
           Learning preferences
         </h2>
-        <span aria-live="polite" className="text-xs text-neutral-500">
+        <span aria-live="polite" className="text-xs text-(--wb-muted)">
           {saved ? "Saved" : ""}
         </span>
       </div>
-      <p className="mt-1 text-sm text-neutral-500">Used by your roadmap schedule and tutor. Saved to your profile.</p>
+      <p className="mt-1 text-sm text-(--wb-muted)">Used by your roadmap schedule and tutor. Saved to your profile.</p>
 
       <div className="mt-6">
         <div className="mb-2 flex items-baseline justify-between">
-          <label htmlFor="pref-hours" className="text-sm font-medium text-neutral-700">
+          <label htmlFor="pref-hours" className="text-sm font-medium text-(--wb-muted)">
             Hours per week
           </label>
-          <output htmlFor="pref-hours" className="text-base font-semibold tabular-nums">
+          <output htmlFor="pref-hours" className="text-base font-medium tabular-nums">
             {prefs.hoursPerWeek} {prefs.hoursPerWeek === 1 ? "hr" : "hrs"}
           </output>
         </div>
@@ -136,13 +136,13 @@ export function LearningPrefs() {
           onChange={(e) => update({ hoursPerWeek: Number(e.target.value) })}
           className="h-12 w-full cursor-pointer accent-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
         />
-        <div className="flex justify-between text-xs text-neutral-400">
+        <div className="flex justify-between text-xs text-(--wb-muted)">
           <span>{HOURS_MIN} hr</span>
           <span>{HOURS_MAX} hrs</span>
         </div>
       </div>
 
-      <p className="mt-6 mb-2 text-sm font-medium text-neutral-700">Pace</p>
+      <p className="mt-6 mb-2 text-sm font-medium text-(--wb-muted)">Pace</p>
       <ChoiceGroup label="Pace" className="flex flex-wrap gap-2">
         {PACES.map((option) => (
           <Choice
@@ -158,7 +158,7 @@ export function LearningPrefs() {
         ))}
       </ChoiceGroup>
 
-      <p className="mt-6 mb-2 text-sm font-medium text-neutral-700">Days per week</p>
+      <p className="mt-6 mb-2 text-sm font-medium text-(--wb-muted)">Days per week</p>
       <ChoiceGroup label="Days per week" className="grid grid-cols-7 gap-1.5 sm:gap-2">
         {[1, 2, 3, 4, 5, 6, 7].map((n) => (
           <Choice
@@ -175,7 +175,7 @@ export function LearningPrefs() {
         ))}
       </ChoiceGroup>
 
-      <p className="mt-6 mb-2 text-sm font-medium text-neutral-700">Tutor style</p>
+      <p className="mt-6 mb-2 text-sm font-medium text-(--wb-muted)">Tutor style</p>
       <ChoiceGroup label="Tutor style" className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-3">
         {TUTORS.map((tutor) => (
           <Choice
