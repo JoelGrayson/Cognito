@@ -6,7 +6,7 @@ import { module } from "../../../data";
 export async function generateMetadata({ params }: PageProps<"/topics/[id]/module/[nodeId]/chat">) {
   const { id, nodeId } = await params;
   const found = await module(id, nodeId);
-  return { title: found ? `Tutor: ${found.lesson?.title ?? found.node.title} | Cognition` : "Tutor | Cognition" };
+  return { title: found ? `Tutor: ${found.lesson?.title ?? found.node.title} | Cognito` : "Tutor | Cognito" };
 }
 
 export default async function ModuleChatPage({ params }: PageProps<"/topics/[id]/module/[nodeId]/chat">) {
