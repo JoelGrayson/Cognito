@@ -271,19 +271,34 @@ export function exercisePrompt(req: { topic: string; lesson: LessonContent }): s
     .join("\n");
 }
 
-export const CODE_REVIEW_SYSTEM_PROMPT = `You review a learner's answer to a coding exercise. You see the task, their code, and, when the language can run in the browser, what running it printed and which tests passed. For languages that did not run, trace the code yourself against the tests.
+const CODE_REVIEW_INTRO = `You review a learner's answer to a coding exercise. You see the task, their code, and, when the language can run in the browser, what running it printed and which tests passed. For languages that did not run, trace the code yourself against the tests.`;
+
+const CODE_REVIEW_PROSE = `- feedback: specific and fact-dense, citing lines or values. Mention one improvement to style or idiom only if it matters.
+- hint: the single next step toward a fix, without writing the solution for them.`;
+
+export const CODE_REVIEW_SYSTEM_PROMPT = `${CODE_REVIEW_INTRO}
 
 - verdict: correct if it solves the task (failing only on something the task never asked for is still correct); almost if one small fix remains; incorrect otherwise.
-- feedback: specific and fact-dense, citing lines or values. Mention one improvement to style or idiom only if it matters.
-- hint: the single next step toward a fix, without writing the solution for them.
+${CODE_REVIEW_PROSE}
 
 ${PLAIN_STYLE}`;
 
-export function codeReviewPrompt(req: {
-  exercise: { title: string; language: string; task: string; tests: { name: string; expression: string }[] };
-  code: string;
-  run: { output: string[]; error: string | null; results: { name: string; pass: boolean; error?: string }[] } | null;
-}): string {
+export const CODE_REVIEW_FEEDBACK_SYSTEM_PROMPT = `${CODE_REVIEW_INTRO}
+
+The verdict is already decided and is given to you. Write to it: explain that verdict, do not argue with it.
+
+${CODE_REVIEW_PROSE}
+
+${PLAIN_STYLE}`;
+
+export function codeReviewPrompt(
+  req: {
+    exercise: { title: string; language: string; task: string; tests: { name: string; expression: string }[] };
+    code: string;
+    run: { output: string[]; error: string | null; results: { name: string; pass: boolean; error?: string }[] } | null;
+  },
+  verdict?: string | null,
+): string {
   const ran = req.run
     ? [
         `Output:`,
@@ -303,6 +318,7 @@ export function codeReviewPrompt(req: {
     "```",
     ``,
     ...ran,
+    verdict ? `\nThe verdict is "${verdict}". Write the feedback and the hint for it.` : "",
   ]
     .filter((line) => line !== "")
     .join("\n");
