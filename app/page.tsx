@@ -34,10 +34,6 @@ export default async function Home() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-(--fg)">
-      <header className="mx-auto flex w-full max-w-6xl items-center px-5 py-5 sm:px-8">
-        <span className="text-base font-semibold tracking-tight">StructuredLearning.ai</span>
-      </header>
-
       <main className="flex-1">
         <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-5 pb-14 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:pb-24 lg:pt-14">
           <div>
