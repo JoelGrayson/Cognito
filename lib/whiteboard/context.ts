@@ -15,7 +15,7 @@
  * verdict at rung 1, the model said "look at how the inequality sign behaves" -
  * which names the rule three rungs early.)
  */
-import type { Equivalence } from "./checker/numeric.ts";
+import type { Verdict } from "./checker/circuit.ts";
 import type { HintLevel } from "./policy.ts";
 
 /** What the tutor may say at each rung. Sent verbatim; the prompt says obey it. */
@@ -28,8 +28,14 @@ export const RUNG_LIMITS: Record<number, string> = {
   5: "You may explain the error fully, but still do not write the corrected line for them.",
 };
 
-export function describeVerdict(verdict: Equivalence): string {
+export function describeVerdict(verdict: Verdict): string {
   switch (verdict.kind) {
+    case "sign":
+      return `Their equation would hold if the sign of the term "${verdict.term}" were flipped: a voltage drop written as a rise, or a current counted into a node instead of out of it. The circuit itself, not the line above, is the premise.`;
+    case "wrong-value":
+      return `They wrote ${verdict.variable} = ${verdict.got}; the circuit gives ${verdict.variable} = ${verdict.expected.toFixed(3)}. The setup may be right and the arithmetic wrong. Do not tell them the correct number.`;
+    case "not-holding":
+      return `Substituting the circuit's true currents and voltages, their left side is ${verdict.lhs.toFixed(3)} and their right side ${verdict.rhs.toFixed(3)}. The equation is not one this circuit satisfies: a term is missing, extra, or refers to the wrong element.`;
     case "direction":
       return `They divided or multiplied by a negative and kept the inequality pointing the same way. It should have flipped to "${verdict.expected}".`;
     case "rescaled":
@@ -53,7 +59,7 @@ export interface OpenStep {
   position: number;
   premise: string;
   step: string;
-  verdict: Equivalence;
+  verdict: Verdict;
   rung: HintLevel;
 }
 

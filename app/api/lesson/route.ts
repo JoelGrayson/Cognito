@@ -38,7 +38,7 @@ export const POST = apiHandler(async (request) => {
   const node = findNode(roadmap.graph, body.nodeId);
   if (!node) return NextResponse.json({ error: "That module is not in the roadmap." }, { status: 404 });
 
-  const provider = PROVIDERS[isProviderId(profile.provider) ? profile.provider : "anthropic"];
+  const provider = PROVIDERS[isProviderId(profile.provider) ? profile.provider : "cerebras"];
   const ctx = lessonRequest(roadmap.goal, roadmap.graph, node);
   const started = Date.now();
 

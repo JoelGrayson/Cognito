@@ -41,6 +41,18 @@ export function spokenFor(rung: number, verdictKind: string): string {
       return rung >= 5
         ? "You can scale both sides of an equation, but not a lone expression — its value changed."
         : "That changed the value, not just the form. What did you multiply through by?";
+    case "sign":
+      return rung >= 5
+        ? "One term in that equation has the wrong sign — a drop written as a rise, or a current counted the wrong way through the node."
+        : "Check the sign on each term there. Which way does the current go through it?";
+    case "wrong-value":
+      return rung >= 5
+        ? "Your equations were fine; the number at the end isn't what the circuit gives. Redo the arithmetic."
+        : "Put that value back into the circuit. Does it satisfy the loop?";
+    case "not-holding":
+      return rung >= 5
+        ? "That equation isn't true of this circuit — a term is missing or doesn't belong. Walk the loop or the node once more."
+        : "Trace it against the diagram — does every term correspond to an element there?";
     default:
       return rung >= 5
         ? "That step doesn't follow from the one above it."

@@ -3,7 +3,7 @@
  * already holds. Pure: nothing here is stored, so it describes this session only. A
  * saved history (for spaced repetition) would persist these records, not replace them.
  */
-import type { Equivalence } from "./checker/numeric";
+import type { Verdict } from "./checker/circuit";
 import type { ProblemAnchor } from "./worksheet";
 
 export type StepMark = "followed" | "flagged" | "unjudged";
@@ -25,7 +25,7 @@ export interface Mastery {
 
 interface JudgedLine {
   problemId: number | null;
-  verdict: Equivalence | null;
+  verdict: Verdict | null;
   /** Held back until the learner asks: shown as written, never as right or wrong. */
   hidden: boolean;
 }
