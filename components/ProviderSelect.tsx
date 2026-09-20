@@ -11,10 +11,10 @@ interface Props {
 export function ProviderSelect({ providers, value, onChange, disabled }: Props) {
   const current = providers.find((p) => p.id === value);
   return (
-    <label className="inline-flex items-center gap-2 text-sm text-(--wb-muted)">
+    <label className="inline-flex min-w-0 items-center gap-2 text-sm text-(--wb-muted)">
       <span>Model</span>
       <select
-        className="cursor-pointer rounded-xl bg-(--wb-hover) px-3 py-1.5 text-sm text-(--wb-ink) outline-none hover:bg-(--wb-line) focus:bg-(--wb-line) disabled:cursor-default disabled:opacity-60"
+        className="min-w-0 cursor-pointer truncate rounded-xl bg-(--wb-hover) px-3 py-1.5 text-sm text-(--wb-ink) outline-none hover:bg-(--wb-line) focus:bg-(--wb-line) disabled:cursor-default disabled:opacity-60"
         value={value}
         disabled={disabled || providers.length === 0}
         onChange={(e) => onChange(e.target.value as ProviderId)}

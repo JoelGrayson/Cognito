@@ -8,10 +8,22 @@ import { trpc } from "@/lib/trpc";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import type { LearnerProfile } from "@/types/learning";
 import { ProviderSelect } from "@/components/ProviderSelect";
+import { SubjectIcon, type SubjectIconName } from "@/components/SubjectIcon";
 import { Choice, ChoiceGroup, FieldLabel, inputClass, StepShell } from "./ui";
 import { PastRoadmaps } from "./PastRoadmaps";
 
-const EXAMPLES = ["Linear algebra for machine learning", "Conversational Spanish", "Personal finance basics", "Rust for backend work"];
+/** Each tile fills the goal with a specific, editable example rather than a bare subject name. */
+const IDEAS: { label: string; goal: string; icon: SubjectIconName }[] = [
+  { label: "Math", goal: "Linear algebra for machine learning", icon: "math" },
+  { label: "Chemistry", goal: "Organic chemistry reaction mechanisms", icon: "chemistry" },
+  { label: "Physics", goal: "Classical mechanics from the ground up", icon: "physics" },
+  { label: "Coding", goal: "Rust for backend work", icon: "code" },
+  { label: "AI", goal: "How large language models work", icon: "ai" },
+  { label: "Languages", goal: "Conversational Spanish", icon: "language" },
+  { label: "Money", goal: "Personal finance basics", icon: "money" },
+  { label: "History", goal: "World history since 1900", icon: "history" },
+  { label: "Writing", goal: "Writing clear technical essays", icon: "writing" },
+];
 
 const REASONS: { value: NonNullable<LearnerProfile["goalType"]>; label: string }[] = [
   { value: "career", label: "Career" },
@@ -71,7 +83,7 @@ export function Step1Goal() {
           value={provider as ProviderId}
           onChange={(id) => setProfile({ provider: id })}
         />
-        <p id="goal-count" className="text-xs text-(--wb-muted)">
+        <p id="goal-count" className="shrink-0 text-xs text-(--wb-muted)">
           {goal.trim().length}/{GOAL_MAX}
         </p>
       </div>
@@ -139,16 +151,17 @@ export function Step1Goal() {
 
       {!typing && (
         <>
-          <p className="mt-4 mb-2 text-sm font-medium text-(--wb-muted)">Need ideas?</p>
-          <div className="flex flex-wrap gap-2">
-            {EXAMPLES.map((example) => (
+          <p className="mt-6 mb-2 text-sm font-medium text-(--wb-muted)">Or pick something to start from</p>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {IDEAS.map((idea) => (
               <button
-                key={example}
+                key={idea.label}
                 type="button"
-                onClick={() => setProfile({ goal: example })}
-                className="min-h-10 rounded-xl border border-(--wb-line) bg-(--wb-card) px-4 text-sm text-(--wb-ink) hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--wb-primary)]"
+                onClick={() => setProfile({ goal: idea.goal })}
+                className="flex min-h-16 items-center gap-3 rounded-2xl border border-(--wb-line) bg-(--wb-card) p-2.5 text-left text-[15px] leading-tight text-(--wb-ink) transition-colors hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--wb-primary)]"
               >
-                {example}
+                <SubjectIcon name={idea.icon} size={40} />
+                {idea.label}
               </button>
             ))}
           </div>
