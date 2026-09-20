@@ -56,6 +56,14 @@ describe("grading", () => {
     expect(classSummary(all).trouble).toEqual([{ label: "1 (p2)", missed: 1, of: 1, notes: ["slip on 1"] }]);
   });
 
+  it("keeps one column per problem when only some students' pages repeat a label", () => {
+    let all = reduce([], { type: "add", submissions: [queued("a", "two pages"), queued("b", "missed page two")] });
+    all = reduce(all, { type: "graded", id: "a", pages: [page("", ["correct"]), page("", ["wrong"])] });
+    all = reduce(all, { type: "graded", id: "b", pages: [page("", ["wrong"]), page("", [])] });
+    expect(toCsv(all).split("\n")[0]).toBe("Student,Score,Out of,Percent,Q1 (p1),Q1 (p2),Feedback");
+    expect(classSummary(all).trouble.map((t) => [t.label, t.missed, t.of])).toEqual([["1 (p2)", 1, 1], ["1 (p1)", 1, 2]]);
+  });
+
   it("cycles a click through every status, blank included", () => {
     const seen = new Set<string>();
     for (let status: keyof typeof NEXT_STATUS = "correct"; !seen.has(status); status = NEXT_STATUS[status]) seen.add(status);

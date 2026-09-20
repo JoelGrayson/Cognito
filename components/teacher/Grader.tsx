@@ -67,7 +67,7 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
     try {
       const added: Submission[] = [];
       for (const file of files) {
-        const pages = await pagesOf(file, MAX_STACK_PAGES);
+        const pages = await pagesOf(file, { maxPages: MAX_STACK_PAGES, overflow: "reject" });
         const name = studentFromFile(file.name);
         const groups = stacked ? splitPages(pages, perStudent) : [pages];
         groups.forEach((group, i) =>
@@ -159,7 +159,7 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
               max={8}
               value={perStudent}
               disabled={!stacked}
-              onChange={(e) => setPerStudent(Math.max(1, Number(e.target.value) || 1))}
+              onChange={(e) => setPerStudent(Math.min(8, Math.max(1, Math.floor(Number(e.target.value) || 1))))}
               className="h-8 w-14 rounded-lg border border-(--wb-line) bg-(--wb-card) px-2 disabled:opacity-50"
               aria-label="Pages per student"
             />

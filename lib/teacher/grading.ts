@@ -133,12 +133,22 @@ export function percent(score: Score): number {
 
 /**
  * What identifies a problem across students. The model's labels are only unique within a
- * page, so a label that repeats across a submission's pages is qualified with its page:
- * "1" on a one-page sheet, "1 (p2)" when both pages print a problem 1.
+ * page, so a label that repeats across pages is qualified with its page: "1" on a one-page
+ * sheet, "1 (p2)" when both pages print a problem 1. The class decides together: if the
+ * label repeats for any student it is qualified for all of them, or one worksheet problem
+ * would land in two columns.
  */
-export function problemKey(problems: GradedProblem[], p: GradedProblem): string {
-  const repeated = problems.some((q) => q !== p && q.label === p.label && q.page !== p.page);
-  return repeated ? `${p.label} (p${p.page + 1})` : p.label;
+export function problemKeyer(all: Submission[]): (p: GradedProblem) => string {
+  const repeated = new Set<string>();
+  for (const s of all) {
+    if (s.state.kind !== "graded") continue;
+    const pageOf = new Map<string, number>();
+    for (const p of s.state.problems) {
+      if ((pageOf.get(p.label) ?? p.page) !== p.page) repeated.add(p.label);
+      pageOf.set(p.label, p.page);
+    }
+  }
+  return (p) => (repeated.has(p.label) ? `${p.label} (p${p.page + 1})` : p.label);
 }
 
 export interface ProblemStat {
@@ -160,13 +170,13 @@ export interface ClassSummary {
 export function classSummary(all: Submission[]): ClassSummary {
   const stats = new Map<string, ProblemStat>();
   const percents: number[] = [];
+  const keyOf = problemKeyer(all);
   for (const s of all) {
     if (s.state.kind !== "graded") continue;
     const score = scoreOf(s.state);
     if (score) percents.push(percent(score));
-    const problems = finalProblems(s.state);
-    for (const p of problems) {
-      const key = problemKey(problems, p);
+    for (const p of finalProblems(s.state)) {
+      const key = keyOf(p);
       const stat = stats.get(key) ?? { label: key, missed: 0, of: 0, notes: [] };
       stat.of += 1;
       if (p.status !== "correct") {
@@ -190,10 +200,10 @@ function cell(value: string | number): string {
 
 /** A gradebook: one row per graded student, one column per problem. */
 export function toCsv(all: Submission[]): string {
+  const keyOf = problemKeyer(all);
   const rows = all.flatMap((s) => {
     if (s.state.kind !== "graded") return [];
-    const problems = finalProblems(s.state);
-    return [{ s, state: s.state, byKey: new Map(problems.map((p) => [problemKey(problems, p), p.status])) }];
+    return [{ s, state: s.state, byKey: new Map(finalProblems(s.state).map((p) => [keyOf(p), p.status])) }];
   });
   const keys = [...new Set(rows.flatMap(({ byKey }) => [...byKey.keys()]))];
   const header = ["Student", "Score", "Out of", "Percent", ...keys.map((k) => `Q${k}`), "Feedback"];
