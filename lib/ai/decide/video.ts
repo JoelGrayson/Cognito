@@ -28,10 +28,20 @@ export interface JevVideoPick {
   reason: string;
 }
 
+/**
+ * FIT_FLOOR replaces the "strong" label, so this must carry the whole of what
+ * strong meant in VIDEO_PICK_SYSTEM_PROMPT — credibility and view count included,
+ * not just topic and depth.
+ */
 const QUESTION =
-  "Would `video` genuinely help someone studying this lesson? Yes only if it teaches this lesson's " +
-  "material at this level; no if it is off-topic, a trailer, a course advert, a playlist teaser, or " +
-  "too shallow to add anything.";
+  "Would `video` genuinely help someone studying this lesson — would you put it in a textbook's " +
+  "\"watch this\" box? Yes only if it teaches this lesson's actual subject, in this field and era, " +
+  "at a sensible depth, and comes from a credible educational source: educators, universities, " +
+  "established explainer channels. No if it is off-topic (a different subject sharing words with " +
+  "the lesson), clickbait, opinion, news, a reaction, a vlog, a trailer, a course advert, a " +
+  "playlist teaser, a product, a screen recording reading pages aloud, generic, shallow, low " +
+  "production, or from an unclear source. `views` is a quality signal: a few thousand views from " +
+  "a channel you do not recognise is a no, however good the title sounds.";
 
 /** Null when Jev cannot answer, so the caller keeps its own path. */
 export async function pickVideoWithJev(
@@ -45,7 +55,10 @@ export async function pickVideoWithJev(
       key(i),
       noul(
         { question: QUESTION, video: describe(c) },
-        { true: "The video teaches this lesson's material.", false: "Off-topic, promotional, or too shallow." },
+        {
+          true: "A credible source teaching this lesson's material well.",
+          false: "Off-topic, promotional, shallow, or from an unclear source.",
+        },
       ),
     ]),
   );
