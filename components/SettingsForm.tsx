@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { LearningPrefs } from "@/components/LearningPrefs";
+import { PastRoadmaps } from "@/components/onboarding/PastRoadmaps";
 import { readSettings, serverSettings, subscribeSettings, writeSettings } from "@/lib/settings";
 
 export function SettingsForm() {
@@ -36,6 +37,8 @@ export function SettingsForm() {
       </div>
 
       <LearningPrefs />
+
+      <PastRoadmaps heading="My learning plans" emptyText="No plans yet — start one from New learning plan." />
     </main>
   );
 }
