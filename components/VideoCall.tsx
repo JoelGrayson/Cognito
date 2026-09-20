@@ -62,7 +62,8 @@ function CallSession({ topic, lesson, onClose, micOn, setMicOn, error, setError 
   const [pending, setPending] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const elementsRef = useRef<BoardElement[]>([]);
-  const pendingRef = useRef(0);
+  /** Ids of the strokes the tutor has not been asked to read yet. */
+  const pendingRef = useRef(new Set<string>());
   const strokeCount = useRef(0);
   const boardRequest = useRef<AbortController | null>(null);
   const lessonStarted = useRef(false);
@@ -80,7 +81,7 @@ function CallSession({ topic, lesson, onClose, micOn, setMicOn, error, setError 
   const captionSpeaker = latest?.role === "learner" ? "You" : "Tutor";
 
   function setBoard(next: BoardElement[]) { elementsRef.current = next; setElements(next); }
-  function setPendingStrokes(n: number) { pendingRef.current = n; setPending(n); }
+  function setPendingStrokes(ids: Set<string>) { pendingRef.current = ids; setPending(ids.size); }
 
   useAgentClientTool("read_whiteboard", () => JSON.stringify({ board: describeBoard(elementsRef.current) }));
   useAgentClientTool("update_whiteboard", async (fn) => {
@@ -145,10 +146,10 @@ function CallSession({ topic, lesson, onClose, micOn, setMicOn, error, setError 
     setTyped("");
   }
   function sendDrawing() {
-    if (!pendingRef.current || !connected) return;
+    if (!pendingRef.current.size || !connected) return;
     lessonStarted.current = true;
-    sendUserMessage(`I'm done drawing. Please use read_whiteboard to review my ${pendingRef.current} new strokes.`);
-    setPendingStrokes(0);
+    sendUserMessage(`I'm done drawing. Please use read_whiteboard to review my ${pendingRef.current.size} new strokes.`);
+    setPendingStrokes(new Set());
   }
   function onStroke(points: number[], erased: boolean) {
     strokeCount.current += 1;
@@ -161,23 +162,29 @@ function CallSession({ topic, lesson, onClose, micOn, setMicOn, error, setError 
       setBoard(kept);
       // Rubbing out work the tutor has not seen yet unsays it: otherwise the board
       // can be empty and still offer to send strokes that are no longer there.
-      const rubbedOut = drawn(els) - drawn(kept);
-      setPendingStrokes(Math.max(0, pendingRef.current - rubbedOut));
+      keepPending(kept);
       return;
     }
-    setBoard([...elementsRef.current, learnerStroke(points, penColor, strokeCount.current)]);
-    setPendingStrokes(pendingRef.current + 1);
+    const stroke = learnerStroke(points, penColor, strokeCount.current);
+    setBoard([...elementsRef.current, stroke]);
+    setPendingStrokes(new Set([...pendingRef.current, ...strokeIds([stroke])]));
   }
-  /** How many of these elements are the learner's own strokes. */
-  function drawn(elements: BoardElement[]): number {
-    return elements.filter((el) => el.type === "stroke").length;
+  /** The ids of the learner's own strokes among these elements. */
+  function strokeIds(elements: BoardElement[]): string[] {
+    return elements.filter((el) => el.type === "stroke").map((el) => el.id);
+  }
+  /** Forgets the unread strokes that are no longer on the board. */
+  function keepPending(kept: BoardElement[]) {
+    const onBoard = new Set(strokeIds(kept));
+    setPendingStrokes(new Set([...pendingRef.current].filter((id) => onBoard.has(id))));
   }
   function undoStroke() {
     const els = elementsRef.current;
     for (let i = els.length - 1; i >= 0; i--) {
       if (els[i].type === "stroke") {
-        setBoard([...els.slice(0, i), ...els.slice(i + 1)]);
-        setPendingStrokes(Math.max(0, pendingRef.current - 1));
+        const kept = [...els.slice(0, i), ...els.slice(i + 1)];
+        setBoard(kept);
+        keepPending(kept);
         return;
       }
     }
