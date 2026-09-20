@@ -11,6 +11,7 @@ import type { ProviderId } from "@/lib/providers/types";
 import type { RoadmapRecord } from "@/lib/repo";
 import type { Lesson, Resource, Video } from "@/lib/schema";
 import { trpc } from "@/lib/trpc";
+import type { VideoJudging } from "@/lib/video";
 import type { DraftNode } from "@/types/learning";
 import { ModuleList } from "./ModuleList";
 
@@ -29,6 +30,8 @@ export function ModulePane({ roadmap, node, lesson, written, providerId }: Props
   const router = useRouter();
   const [state, setState] = useState<LessonState>(lesson ? { status: "ready", lesson } : { status: "loading" });
   const abort = useRef<AbortController | null>(null);
+  /** Outlives the draft: once the lesson is ready the state holds only the saved lesson. */
+  const [videoJudging, setVideoJudging] = useState<VideoJudging>();
   // The same framing the server writes from: name, subtitle, description and phase.
   const { node: heading, phase } = lessonRequest(roadmap.goal, roadmap.graph, node);
 
@@ -85,6 +88,10 @@ export function ModulePane({ roadmap, node, lesson, written, providerId }: Props
             case "resources":
               show({ ...draft, resources: event.resources as Resource[] });
               break;
+            case "videoJudging":
+              setVideoJudging(event.judging as VideoJudging);
+              show({ ...draft, videoJudging: event.judging as VideoJudging });
+              break;
             case "video":
               show({ ...draft, video: event.video as Video });
               break;
@@ -130,6 +137,7 @@ export function ModulePane({ roadmap, node, lesson, written, providerId }: Props
       node={heading}
       phase={phase}
       state={state}
+      videoJudging={videoJudging}
       providerId={providerId}
       backHref={topicPath(roadmap.id)}
       minimap={<ModuleList roadmapId={roadmap.id} graph={roadmap.graph} written={written} currentId={node.id} compact />}

@@ -1,4 +1,5 @@
 import type { Lesson, MapNode, QuizQuestion, Resource, Video } from "@/lib/schema";
+import type { VideoJudging } from "@/lib/video";
 
 /* Shapes of things while they are still streaming in, plus the sanitisers
    that turn a half-parsed JSON object into one of them. Client-safe. */
@@ -16,6 +17,8 @@ export interface LessonDraft {
   resources: Resource[] | null;
   /** null while a video is still being looked up. */
   video: Video | null;
+  /** How the video was chosen. Only known while the lesson is being written. */
+  videoJudging?: VideoJudging;
 }
 
 export function emptyDraft(node: MapNode): LessonDraft {

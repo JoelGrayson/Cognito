@@ -18,6 +18,8 @@ import { QuizPanel } from "./Quiz";
 import { RichText } from "./RichText";
 import { Explainer } from "./Explainer";
 import { VideoCall } from "./VideoCall";
+import type { VideoJudging as Judging } from "@/lib/video";
+import { VideoJudging } from "./VideoJudging";
 import { CodeExercise, lessonWantsCode } from "./CodeExercise";
 
 export type LessonState =
@@ -40,6 +42,9 @@ interface Props {
   onLessonChange: (lesson: Lesson) => void;
   /** Address of the tutor's own page. Given one, the aside links there instead of holding the chat. */
   chatHref?: string;
+  /** How this lesson's video was chosen. Kept by the caller, because the saved lesson
+   *  has no room for it and the panel should outlive the writing of the lesson. */
+  videoJudging?: Judging;
   /** Where "practice by hand" goes — set for roadmaps a whiteboard subject can check. */
   practiceHref?: string;
 }
@@ -56,6 +61,7 @@ export function LessonView({
   onLessonChange,
   chatHref,
   practiceHref,
+  videoJudging,
 }: Props) {
   const [calling, setCalling] = useState(false);
   const [watching, setWatching] = useState(false);
@@ -69,6 +75,7 @@ export function LessonView({
         : lesson
           ? draftFromLesson(lesson)
           : null;
+  const judging = draft?.videoJudging ?? videoJudging;
   const streaming = state.status === "streaming" || state.status === "loading";
 
   return (
@@ -231,6 +238,12 @@ export function LessonView({
                 <VideoBox id={draft.video.id} title={draft.video.title} />
               ) : null}
             </div>
+
+            {judging && (
+              <div className="mt-6">
+                <VideoJudging judging={judging} />
+              </div>
+            )}
 
             <article className="mt-4">
               {draft.sections.length === 0

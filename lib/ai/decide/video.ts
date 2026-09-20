@@ -26,6 +26,33 @@ export interface JevVideoPick {
   /** Index into `candidates`, or null when nothing clears FIT_FLOOR. */
   index: number | null;
   reason: string;
+  /** The numbers behind the pick, for showing the learner how it was made. */
+  judgement: VideoJudgement;
+}
+
+/**
+ * QUESTION, taken apart. The pick rests on QUESTION alone; these are the same
+ * criteria asked one at a time, so the page can show WHY a video scored as it did.
+ * They go out as their own request, so a failure here never costs the pick.
+ */
+export const VIDEO_FACETS = [
+  { id: "onTopic", label: "On topic", ask: "Does `video` teach this lesson's actual subject, in this field and era, rather than a different subject that shares words with it?" },
+  { id: "depth", label: "Right depth", ask: "Is `video` pitched at a sensible depth for someone studying this lesson, rather than generic, shallow, or far too advanced?" },
+  { id: "credible", label: "Credible source", ask: "Does `video` come from a credible educational source: an educator, a university, or an established explainer channel? `views` is a quality signal." },
+  { id: "teaching", label: "Real teaching", ask: "Is `video` a genuine lesson, rather than clickbait, opinion, news, a reaction, a vlog, a trailer, a course advert, a playlist teaser or a product?" },
+] as const;
+
+export type VideoFacetId = (typeof VIDEO_FACETS)[number]["id"];
+
+export interface VideoJudgement {
+  /** The versioned Jev model that answered. */
+  model: string;
+  /** Round trip for the deciding request. */
+  ms: number;
+  floor: number;
+  /** One per candidate, in candidate order. */
+  scores: { fit: number; facets: Partial<Record<VideoFacetId, number>> }[];
+  picked: number | null;
 }
 
 /**
@@ -62,14 +89,40 @@ export async function pickVideoWithJev(
       ),
     ]),
   );
-  const result = await tryAsk({ topic: about.topic, lesson: about.lesson, summary: about.summary }, questions);
+  const state = { topic: about.topic, lesson: about.lesson, summary: about.summary };
+  const [result, facets] = await Promise.all([tryAsk(state, questions), askFacets(state, candidates)]);
   if (!result) return null;
 
   // Results arrive in search-relevance order, so ties go to the earlier result.
   const fits = candidates.map((_, i) => result.answers[key(i)]?.noul ?? 0);
   const best = fits.reduce((top, fit, i) => (fit > fits[top] ? i : top), 0);
   const reason = `jev ${result.model}: ${fits.map((f, i) => `${i}:${f.toFixed(2)}`).join(", ")}`;
-  return fits[best] >= FIT_FLOOR ? { index: best, reason } : { index: null, reason: `${reason} (all below ${FIT_FLOOR})` };
+  const index = fits[best] >= FIT_FLOOR ? best : null;
+  const judgement: VideoJudgement = {
+    model: result.model,
+    ms: result.ms,
+    floor: FIT_FLOOR,
+    scores: fits.map((fit, i) => ({ fit, facets: facets[i] ?? {} })),
+    picked: index,
+  };
+  return { index, reason: index === null ? `${reason} (all below ${FIT_FLOOR})` : reason, judgement };
+}
+
+/** Per-candidate facet probabilities, or an empty list when Jev does not answer. */
+async function askFacets(
+  state: Record<string, string>,
+  candidates: VideoCandidate[],
+): Promise<Partial<Record<VideoFacetId, number>>[]> {
+  const questions = Object.fromEntries(
+    candidates.flatMap((c, i) =>
+      VIDEO_FACETS.map((facet) => [`${key(i)}_${facet.id}`, noul({ question: facet.ask, video: describe(c) })]),
+    ),
+  );
+  const result = await tryAsk(state, questions);
+  if (!result) return [];
+  return candidates.map((_, i) =>
+    Object.fromEntries(VIDEO_FACETS.map((facet) => [facet.id, result.answers[`${key(i)}_${facet.id}`]?.noul])),
+  );
 }
 
 const key = (i: number) => `v${i}`;

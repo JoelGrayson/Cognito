@@ -23,6 +23,7 @@ import { findHelpfulVideo } from "@/lib/video";
  *   {type:"outline", outline}              the plan, as it is written
  *   {type:"section", index, body, done}    each section, streamed in parallel
  *   {type:"resources", resources}          further reading, searched and checked
+ *   {type:"videoJudging", judging}         the search results, then Jev's scores for them
  *   {type:"video", video}
  * Pass a no-op to just wait for the finished lesson.
  */
@@ -53,7 +54,9 @@ export async function writeLesson(
           emit({ type: "resources", resources });
           return resources;
         }),
-        findHelpfulVideo(provider, about, output.videoQuery, model, providerContext).then((video) => {
+        findHelpfulVideo(provider, about, output.videoQuery, model, providerContext, (judging) =>
+          emit({ type: "videoJudging", judging }),
+        ).then((video) => {
           emit({ type: "video", video });
           return video;
         }),

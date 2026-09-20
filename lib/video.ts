@@ -1,4 +1,4 @@
-import { pickVideoWithJev } from "@/lib/ai/decide/video";
+import { pickVideoWithJev, type VideoJudgement } from "@/lib/ai/decide/video";
 import { VIDEO_PICK_SYSTEM_PROMPT, videoPickPrompt } from "@/lib/prompt";
 import type { Provider, ProviderContext } from "@/lib/providers";
 import { VideoPickSchema, type Video } from "@/lib/schema";
@@ -17,6 +17,13 @@ export interface VideoContext {
   summary: string;
 }
 
+/** What the learner is shown while a video is chosen: the results, then the scores. */
+export interface VideoJudging {
+  candidates: Pick<VideoCandidate, "id" | "title" | "channel" | "seconds" | "views">[];
+  /** Null until Jev has answered; stays null when the generative picker chose instead. */
+  judgement: VideoJudgement | null;
+}
+
 /**
  * Search YouTube and let the model choose the one result that would genuinely
  * help with this lesson, or none. No video is better than an off-topic one, so
@@ -28,13 +35,17 @@ export async function findHelpfulVideo(
   query: string,
   model?: string,
   providerContext?: ProviderContext,
+  onJudging?: (judging: VideoJudging) => void,
 ): Promise<Video> {
   const none = noVideo(query);
   if (!query.trim()) return none;
   const candidates = (await searchVideos(query)).filter(
     (c) => c.seconds === null || (c.seconds >= MIN_SECONDS && c.seconds <= MAX_SECONDS),
   );
-  const { chosen } = await chooseVideo(provider, about, candidates, model, providerContext);
+  const shown = candidates.map(({ id, title, channel, seconds, views }) => ({ id, title, channel, seconds, views }));
+  if (shown.length > 0) onJudging?.({ candidates: shown, judgement: null });
+  const { chosen, judgement } = await chooseVideo(provider, about, candidates, model, providerContext);
+  if (judgement) onJudging?.({ candidates: shown, judgement });
   return chosen ? { id: chosen.id, title: chosen.title, searchUrl: none.searchUrl } : none;
 }
 
@@ -49,13 +60,19 @@ export async function chooseVideo(
   candidates: VideoCandidate[],
   model?: string,
   providerContext?: ProviderContext,
-): Promise<{ chosen: VideoCandidate | null; reason: string }> {
+): Promise<{ chosen: VideoCandidate | null; reason: string; judgement?: VideoJudgement }> {
   if (candidates.length === 0) return { chosen: null, reason: "No usable search results." };
 
   // A decision Jev did make stands, including "none of these fit": that is an
   // answer, not a failure, so it is not worth a second opinion from the LLM.
   const decided = await pickVideoWithJev(about, candidates);
-  if (decided) return { chosen: decided.index === null ? null : candidates[decided.index], reason: decided.reason };
+  if (decided) {
+    return {
+      chosen: decided.index === null ? null : candidates[decided.index],
+      reason: decided.reason,
+      judgement: decided.judgement,
+    };
+  }
 
   try {
     const { output } = await provider.structured(
