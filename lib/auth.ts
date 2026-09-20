@@ -28,6 +28,11 @@ function createAuth() {
       .split(",")
       .map((origin) => origin.trim())
       .filter(Boolean),
+    session: {
+      // getSession runs on every request; a signed cookie copy saves the session and
+      // user lookups (two database round trips) between refreshes.
+      cookieCache: { enabled: true, maxAge: 5 * 60 },
+    },
     database: drizzleAdapter(getDb(), {
       provider: "pg",
       schema: { user, session, account, verification },
