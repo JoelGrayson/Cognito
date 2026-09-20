@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ModeSwitch } from "@/components/ModeSwitch";
 import { Grader } from "@/components/teacher/Grader";
+import { Library } from "@/components/teacher/Library";
 import { listProviders } from "@/lib/providers";
 
 export const metadata: Metadata = { title: "Grade a class set · Cognito" };
@@ -19,6 +20,7 @@ export default async function TeacherPage() {
           the mistakes your class keeps making. You have the last word on every mark.
         </p>
         <Grader providers={await listProviders()} mock={process.env.MOCK_AI === "true"} />
+        <Library />
       </main>
     </div>
   );
