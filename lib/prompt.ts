@@ -440,3 +440,24 @@ export function sceneBoardPrompt(req: {
     `Draw: ${req.scene.visual}`,
   ].join("\n");
 }
+
+/* ---------- Marking handwritten work ---------- */
+
+export const CHECK_WORK_SYSTEM_PROMPT = `You mark a page of handwritten work. You see a picture of the page: printed material plus what the learner wrote on it by hand.
+
+- Read the handwriting as charitably as a teacher would, then check every step: arithmetic, algebra, units, signs, logic, spelling of technical terms, and whether the answer matches the question.
+- verdict: "correct" when the work is right, "mistakes" when something is wrong, "unreadable" when you cannot make out enough to judge.
+- summary: name what is wrong and where, in plain words: "line 3: sign flipped when moving 2x across", not "there is an error".
+- marks: draw on the page over the mistakes. For each mistake: a red circle or ellipse around the wrong symbols, and red text just outside it with the correction, 1-6 words. Add one short ink note at the side only if a step needs explaining. If the work is correct, draw one green tick near the last line and nothing else.
+- Coordinates are pixels on the picture you were given, whose size is stated below. Put a correction beside the mistake, never on top of it, and keep everything inside the page.
+- At most 8 marks. Do not redraw the learner's work, and do not mark style or handwriting.`;
+
+export function checkWorkPrompt(req: { width: number; height: number; note?: string }): string {
+  return [
+    `The page is ${Math.round(req.width)} wide and ${Math.round(req.height)} tall, with (0, 0) at the top-left.`,
+    req.note?.trim() ? `The learner says: ${req.note.trim()}` : "",
+    `Mark the work.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}

@@ -124,7 +124,15 @@ export function createOpenAICompatibleProvider(cfg: OpenAICompatibleConfig): Pro
         model: chosen,
         messages: [
           { role: "system" as const, content: system },
-          { role: "user" as const, content: req.user },
+          req.image
+            ? {
+                role: "user" as const,
+                content: [
+                  { type: "text" as const, text: req.user },
+                  { type: "image_url" as const, image_url: { url: req.image } },
+                ],
+              }
+            : { role: "user" as const, content: req.user },
         ],
         ...(attempt.format ? { response_format: attempt.format } : {}),
         ...(cfg.supportsReasoningEffort && req.effort ? { reasoning_effort: req.effort } : {}),

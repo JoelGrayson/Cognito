@@ -16,13 +16,20 @@ const FONT = { small: 18, medium: 24, large: 34 };
 
 interface Props {
   elements: BoardElement[];
+  /** Board size; the default is the 1000x600 whiteboard. */
+  width?: number;
+  height?: number;
+  /** A page (a PDF page or a photo) drawn behind everything. */
+  background?: string;
+  /** Hide the faint grid, e.g. when a page is behind the ink. */
+  plain?: boolean;
   /** The learner can draw with the pen. */
   canDraw: boolean;
   penColor: BoardColor;
   onStroke: (points: number[]) => void;
 }
 /** The shared whiteboard: the tutor's drawings animate in, and the learner can draw on top. */
-export function Board({ elements, canDraw, penColor, onStroke }: Props) {
+export function Board({ elements, canDraw, penColor, onStroke, width = BOARD_W, height = BOARD_H, background, plain }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [current, setCurrent] = useState<number[] | null>(null);
 
@@ -38,7 +45,8 @@ export function Board({ elements, canDraw, penColor, onStroke }: Props) {
     <svg
       ref={svgRef}
       className="board"
-      viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ aspectRatio: `${width} / ${height}` }}
       data-drawing={canDraw ? "true" : undefined}
       role="img"
       aria-label="Whiteboard"
@@ -72,7 +80,10 @@ export function Board({ elements, canDraw, penColor, onStroke }: Props) {
           </marker>
         ))}
       </defs>
-      <rect width={BOARD_W} height={BOARD_H} fill="url(#board-grid)" />
+      {background ? (
+        <image href={background} x={0} y={0} width={width} height={height} preserveAspectRatio="xMidYMid slice" />
+      ) : null}
+      {!plain && <rect width={width} height={height} fill="url(#board-grid)" />}
       {elements.map(renderElement)}
       {current && <polyline points={current.join(" ")} {...pen(penColor)} />}
     </svg>

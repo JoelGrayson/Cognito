@@ -28,6 +28,8 @@ export interface StructuredRequest<T> {
   maxTokens?: number;
   /** How hard a reasoning model should think. Unset means the model's default. */
   effort?: "minimal" | "low" | "medium" | "high";
+  /** A picture the model should look at, as a data URL. Only OpenAI and Claude read these. */
+  image?: string;
   /**
    * When given, the reply is streamed and this is called with the raw JSON
    * text accumulated so far, each time more arrives.
