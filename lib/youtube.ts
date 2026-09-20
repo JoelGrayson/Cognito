@@ -1,3 +1,4 @@
+import { searchWeb } from "@/lib/firecrawl";
 import type { Video } from "@/lib/schema";
 
 const UA =
@@ -25,13 +26,70 @@ export function noVideo(query: string): Video {
 }
 
 /**
- * Up to `limit` embeddable videos for a query. Uses the YouTube Data API when
- * YOUTUBE_API_KEY is set, otherwise reads the public results page.
+ * Up to `limit` videos for a query. Uses the YouTube Data API when
+ * YOUTUBE_API_KEY is set, then Firecrawl's web search scoped to YouTube when
+ * FIRECRAWL_API_KEY is set, otherwise reads the public results page.
  */
 export async function searchVideos(query: string, limit = 6): Promise<VideoCandidate[]> {
   const q = query.trim();
   if (!q) return [];
-  return (await viaApi(q, limit)) ?? (await viaResultsPage(q, limit));
+  const fromApi = await viaApi(q, limit);
+  if (fromApi) return fromApi;
+  const fromFirecrawl = await viaFirecrawl(q, limit);
+  return fromFirecrawl.length > 0 ? fromFirecrawl : viaResultsPage(q, limit);
+}
+
+/** Video ids from YouTube watch URLs in web search results; lengths come from each watch page. */
+async function viaFirecrawl(q: string, limit: number): Promise<VideoCandidate[]> {
+  const results = await searchWeb(q, { limit: limit * 2, includeDomains: ["youtube.com", "www.youtube.com"] });
+  const found: VideoCandidate[] = [];
+  const seen = new Set<string>();
+  for (const r of results) {
+    const id = videoIdFrom(r.url);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    found.push({
+      id,
+      title: r.title.replace(/\s*-\s*YouTube\s*$/i, ""),
+      channel: null,
+      seconds: null,
+      views: null,
+      description: r.description,
+    });
+    if (found.length >= limit) break;
+  }
+  await Promise.all(found.map(async (v) => (v.seconds = await watchPageLength(v.id))));
+  return found;
+}
+
+/** The player config on a watch page carries "lengthSeconds"; null when the page cannot be read. */
+async function watchPageLength(id: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=en`, {
+      headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const seconds = Number(/"lengthSeconds":"(\d+)"/.exec(await res.text())?.[1]);
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+  } catch {
+    return null;
+  }
+}
+
+/** "https://www.youtube.com/watch?v=ID&t=1" or "https://youtu.be/ID" -> "ID"; playlists, channels and shorts give null. */
+export function videoIdFrom(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.replace(/^(www|m)\./, "");
+  const id =
+    host === "youtu.be" ? parsed.pathname.slice(1) : host === "youtube.com" && parsed.pathname === "/watch" ? parsed.searchParams.get("v") : null;
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
 }
 
 async function viaApi(q: string, limit: number): Promise<VideoCandidate[] | null> {
