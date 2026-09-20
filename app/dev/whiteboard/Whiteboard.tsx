@@ -1276,7 +1276,11 @@ function Notebook({
             </div>
           )}
 
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[300] flex items-center justify-center gap-2 sm:bottom-4">
+          {/* wrap-reverse: on a tablet the dock and the check button are wider than the
+              canvas together, and a single row pushed the pen off one edge and the button
+              off the other. When they do not fit, the button takes its own row ABOVE the
+              dock, so the dock stays where the hand expects it. */}
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[300] flex flex-wrap-reverse items-center justify-center gap-2 sm:bottom-4">
             <div className="pointer-events-auto max-w-full">
               <Dock
                 editor={editor}
