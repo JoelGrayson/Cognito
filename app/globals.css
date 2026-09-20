@@ -1548,3 +1548,81 @@ a.card:focus-visible {
 .edit-field textarea:focus {
   border-color: var(--accent);
 }
+
+/* ---------- Marking a worksheet ---------- */
+.worksheet {
+  display: flex;
+  width: 100%;
+  max-width: 1200px;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+}
+.worksheet-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+}
+.worksheet-model {
+  height: 34px;
+  border: 1px solid #d4d3ce;
+  border-radius: 9999px;
+  padding: 0 12px;
+  background: #fff;
+  font-size: 14px;
+}
+.worksheet-page {
+  overflow: hidden;
+  border: 1px solid #e3e2dd;
+  border-radius: 12px;
+  background: #fff;
+}
+.worksheet-page .board {
+  aspect-ratio: auto;
+  width: 100%;
+  border-radius: 0;
+}
+.worksheet-drop {
+  display: flex;
+  min-height: 420px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #8c8b86;
+  font-size: 15px;
+}
+.worksheet-drop:hover {
+  background: #faf9f7;
+}
+.worksheet-error {
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #fdf0f0;
+  color: #b91c1c;
+  font-size: 14px;
+}
+.worksheet-verdict {
+  border-left: 3px solid #d4d3ce;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #fafaf8;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.worksheet-verdict[data-verdict="correct"] {
+  border-color: #16a34a;
+}
+.worksheet-verdict[data-verdict="mistakes"] {
+  border-color: #dc2626;
+}
+.worksheet-verdict[data-verdict="unreadable"] {
+  border-color: #ea580c;
+}

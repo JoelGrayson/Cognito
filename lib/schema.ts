@@ -463,3 +463,19 @@ export const SceneBoardSchema = z.object({
 
 export type ExplainerPlan = z.infer<typeof ExplainerPlanSchema>;
 export type ExplainerScene = ExplainerPlan["scenes"][number];
+
+/* ---------- Marking a page of handwritten work ---------- */
+
+export const WorkCheckSchema = z.object({
+  verdict: z.enum(["correct", "mistakes", "unreadable"]),
+  summary: z
+    .string()
+    .describe("One or two plain sentences: what the work does, and what is wrong. Name the line or step"),
+  marks: z
+    .array(BoardActionSchema)
+    .describe(
+      "What to draw on the page: circle each mistake, write the correction next to it, and add a short note. Red for mistakes, green for a tick, ink for notes. Nothing when the work is correct except a tick",
+    ),
+});
+
+export type WorkCheck = z.infer<typeof WorkCheckSchema>;

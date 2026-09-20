@@ -50,7 +50,12 @@ async function structured<T>(
       format: zodOutputFormat(req.schema),
       effort,
     },
-    messages: [{ role: "user" as const, content: req.user }],
+    messages: [
+      {
+        role: "user" as const,
+        content: req.image ? [{ type: "text" as const, text: req.user }, imageBlock(req.image)] : req.user,
+      },
+    ],
   };
   let stopReason: string | null;
   let explanation: string | null | undefined;
@@ -112,3 +117,13 @@ export const anthropicProvider: Provider = {
   info,
   structured,
 };
+
+/** A data URL as an image block Claude accepts. */
+function imageBlock(dataUrl: string) {
+  const match = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.+)$/.exec(dataUrl);
+  if (!match) throw new ProviderError("That picture is not a PNG, JPEG, GIF or WebP data URL.", 400);
+  return {
+    type: "image" as const,
+    source: { type: "base64" as const, media_type: match[1] as "image/png" | "image/jpeg" | "image/gif" | "image/webp", data: match[2] },
+  };
+}
