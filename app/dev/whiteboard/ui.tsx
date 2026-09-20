@@ -251,7 +251,13 @@ export function TutorBubble({ text, onDismiss }: { text: string; onDismiss?: () 
         </button>
       )}
       {text}
-      <span className="absolute -left-1.5 top-4 h-3.5 w-3.5 rotate-45 rounded-[3px] bg-(--wb-primary)" />
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 14 16"
+        className="pointer-events-none absolute -left-2.5 top-4 h-4 w-3.5 fill-(--wb-primary)"
+      >
+        <path d="M14 0 1.5 6.3Q0 8 1.5 9.7L14 16Z" />
+      </svg>
     </div>
   );
 }
