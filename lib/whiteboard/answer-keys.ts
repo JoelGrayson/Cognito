@@ -6,6 +6,8 @@
  * no key here is still a notebook, and the tutor says so rather than guessing.
  */
 import ochemPractice from "../../fixtures/structures/ochem-practice.key.json" with { type: "json" };
+import circuitsPractice from "../../fixtures/circuits/circuits-practice.key.json" with { type: "json" };
+import type { Circuit } from "./checker/circuit.ts";
 
 export interface RawKeyEntry {
   problem: number;
@@ -21,4 +23,19 @@ const KEYS: Record<string, RawKeyEntry[]> = {
 
 export function answerKeyFor(sheetName: string | null | undefined): RawKeyEntry[] | null {
   return (sheetName && KEYS[sheetName]) || null;
+}
+
+/** A circuit sheet's key is the circuits themselves, one per printed question number;
+ *  the page solves them (checker/circuit.ts) rather than storing answers. */
+export interface CircuitKeyEntry extends Circuit {
+  problem: number;
+  title: string;
+}
+
+const CIRCUIT_KEYS: Record<string, CircuitKeyEntry[]> = {
+  [circuitsPractice.sheet]: circuitsPractice.circuits as CircuitKeyEntry[],
+};
+
+export function circuitKeyFor(sheetName: string | null | undefined): CircuitKeyEntry[] | null {
+  return (sheetName && CIRCUIT_KEYS[sheetName]) || null;
 }
