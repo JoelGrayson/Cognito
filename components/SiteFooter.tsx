@@ -11,7 +11,7 @@ export function SiteFooter() {
       Created by{" "}
       {PEOPLE.map((person, i) => (
         <span key={person.name}>
-          {i === PEOPLE.length - 1 && "& "}
+          {i === PEOPLE.length - 1 && " & "}
           <a
             href={person.href}
             target="_blank"
