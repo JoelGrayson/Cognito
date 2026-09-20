@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { applyActions, learnerStroke, type BoardElement, type ResolvedAction } from "@/lib/board";
+import { applyActions, learnerStroke, rubOut, rubStroke, type BoardElement, type ResolvedAction } from "@/lib/board";
 import { ensureOk } from "@/lib/ndjson";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import type { BoardColor } from "@/lib/schema";
@@ -36,6 +36,9 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
   const [checks, setChecks] = useState<Record<number, Check>>({});
   const [checking, setChecking] = useState(false);
   const [penColor, setPenColor] = useState<BoardColor>("blue");
+  const [erasing, setErasing] = useState(false);
+  // One undo stack for both pens and the eraser, so a rubbed-out mark comes back.
+  const [past, setPast] = useState<{ index: number; ink: BoardElement[]; marks: BoardElement[] }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<ProviderId | null>(null);
   const strokeCount = useRef(0);
@@ -48,7 +51,8 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
   const page = pages[index];
   const elements = [...(ink[index] ?? []), ...(marks[index] ?? [])];
   const check = checks[index];
-  const canCheck = Boolean(page) && (ink[index]?.length ?? 0) > 0 && !checking;
+  // The uploaded page may already hold the learner's answers, so do not demand fresh ink.
+  const canCheck = Boolean(page) && !checking;
 
   async function openFile(file: File) {
     setError(null);
@@ -59,6 +63,7 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
       setInk({});
       setMarks({});
       setChecks({});
+      setPast([]);
       setIndex(0);
       setName(file.name);
       // Show each page the moment it is ready; a long PDF should not block page 1.
@@ -70,17 +75,44 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
     }
   }
 
+  /** Save the page as it is now, so Undo can put it back. */
+  function remember() {
+    const entry = { index, ink: ink[index] ?? [], marks: marks[index] ?? [] };
+    setPast((stack) => [...stack.slice(-39), entry]);
+  }
+
   function onStroke(points: number[]) {
     strokeCount.current += 1;
-    const stroke = learnerStroke(points, penColor, strokeCount.current);
-    setInk((all) => ({ ...all, [index]: [...(all[index] ?? []), stroke] }));
+    remember();
+    if (!erasing) {
+      const stroke = learnerStroke(points, penColor, strokeCount.current);
+      setInk((all) => ({ ...all, [index]: [...(all[index] ?? []), stroke] }));
+      return;
+    }
+    const keptInk = rubOut(ink[index] ?? [], points);
+    const keptMarks = rubOut(marks[index] ?? [], points);
+    const removed = (ink[index]?.length ?? 0) - keptInk.length + ((marks[index]?.length ?? 0) - keptMarks.length);
+    if (removed > 0) {
+      // Drawn annotations come off cleanly.
+      setInk((all) => ({ ...all, [index]: keptInk }));
+      setMarks((all) => ({ ...all, [index]: keptMarks }));
+      return;
+    }
+    // Nothing drawn was under the eraser, so the ink belongs to the page itself:
+    // the only way to take it off is to paint over it.
+    setInk((all) => ({ ...all, [index]: [...(all[index] ?? []), rubStroke(points, strokeCount.current)] }));
   }
 
   function undo() {
-    setInk((all) => ({ ...all, [index]: (all[index] ?? []).slice(0, -1) }));
+    const last = past.at(-1);
+    if (!last) return;
+    setInk((all) => ({ ...all, [last.index]: last.ink }));
+    setMarks((all) => ({ ...all, [last.index]: last.marks }));
+    setPast(past.slice(0, -1));
   }
 
   function clearPage() {
+    remember();
     setInk((all) => ({ ...all, [index]: [] }));
     setMarks((all) => ({ ...all, [index]: [] }));
     setChecks((all) => ({ ...all, [index]: undefined as unknown as Check }));
@@ -98,18 +130,28 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    // A touch heavier than on screen, so thin pen lines survive the model's downscaling.
-    ctx.lineWidth = 5;
-    for (const element of ink[index] ?? []) {
-      if (element.type !== "stroke") continue;
-      ctx.strokeStyle = INK[element.color];
+    const trace = (points: number[]) => {
       ctx.beginPath();
-      for (let i = 0; i + 1 < element.points.length; i += 2) {
-        const [x, y] = [element.points[i], element.points[i + 1]];
+      for (let i = 0; i + 1 < points.length; i += 2) {
+        const [x, y] = [points[i], points[i + 1]];
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
+    };
+    // In drawing order, so an eraser stroke hides the pen strokes made before it.
+    for (const element of ink[index] ?? []) {
+      if (element.type === "rub") {
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = element.size;
+        trace(element.points);
+        continue;
+      }
+      if (element.type !== "stroke") continue;
+      ctx.strokeStyle = INK[element.color];
+      // A touch heavier than on screen, so thin pen lines survive the model's downscaling.
+      ctx.lineWidth = 5;
+      trace(element.points);
     }
     return canvas.toDataURL("image/jpeg", 0.85);
   }
@@ -173,20 +215,37 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="call-pens" role="group" aria-label="Pen colour">
+          <span className="call-pens" role="group" aria-label="Pen and eraser">
             {PENS.map((c) => (
               <button
                 key={c}
                 type="button"
                 className="pen-dot"
-                style={{ background: INK[c], borderColor: penColor === c ? "#111" : "transparent" }}
-                data-on={penColor === c ? "true" : undefined}
-                onClick={() => setPenColor(c)}
+                style={{ background: INK[c] }}
+                aria-pressed={!erasing && penColor === c}
+                onClick={() => {
+                  setPenColor(c);
+                  setErasing(false);
+                }}
                 aria-label={`${c} pen`}
               />
             ))}
+            <button
+              type="button"
+              className="pen-dot pen-eraser"
+              aria-pressed={erasing}
+              onClick={() => setErasing(!erasing)}
+              title="Eraser: rubs out marks you drew, and whites out ink printed on the page"
+              aria-label="Eraser"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M8.5 20.5 3.9 15.9a2 2 0 0 1 0-2.8l8.6-8.6a2 2 0 0 1 2.8 0l4.6 4.6a2 2 0 0 1 0 2.8l-8.6 8.6z" />
+                <path d="M9.5 8.5 16 15" />
+                <path d="M8.5 20.5H20" />
+              </svg>
+            </button>
           </span>
-          <button type="button" className="code-btn" onClick={undo} disabled={!(ink[index]?.length ?? 0)}>
+          <button type="button" className="code-btn" onClick={undo} disabled={past.length === 0}>
             Undo
           </button>
           <button type="button" className="code-btn" onClick={clearPage} disabled={!page}>
@@ -232,6 +291,7 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
             plain
             canDraw
             penColor={penColor}
+            erasing={erasing}
             onStroke={onStroke}
           />
         ) : (
@@ -246,7 +306,7 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
                 e.target.value = "";
               }}
             />
-            <span>{loading ? "Opening…" : "Upload a PDF, a Goodnotes .note file, or a photo of your work. Write on it, then press Check My Work."}</span>
+            <span>{loading ? "Opening…" : "Upload a PDF, a Goodnotes .note file, or a photo of your work. Write on it, rub bits out with the eraser, then press Check My Work."}</span>
           </label>
         )}
       </div>

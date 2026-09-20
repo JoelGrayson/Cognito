@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type PointerEvent, type ReactNode } from "react";
-import { BOARD_H, BOARD_W, compileFn, type BoardElement } from "@/lib/board";
+import { BOARD_H, BOARD_W, RUB_SIZE, compileFn, type BoardElement } from "@/lib/board";
 import type { BoardColor } from "@/lib/schema";
 
 export const INK: Record<BoardColor, string> = {
@@ -26,10 +26,12 @@ interface Props {
   /** The learner can draw with the pen. */
   canDraw: boolean;
   penColor: BoardColor;
+  /** Draw with the eraser instead of a pen. */
+  erasing?: boolean;
   onStroke: (points: number[]) => void;
 }
 /** The shared whiteboard: the tutor's drawings animate in, and the learner can draw on top. */
-export function Board({ elements, canDraw, penColor, onStroke, width = BOARD_W, height = BOARD_H, background, plain }: Props) {
+export function Board({ elements, canDraw, penColor, erasing, onStroke, width = BOARD_W, height = BOARD_H, background, plain }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [current, setCurrent] = useState<number[] | null>(null);
 
@@ -48,6 +50,7 @@ export function Board({ elements, canDraw, penColor, onStroke, width = BOARD_W, 
       viewBox={`0 0 ${width} ${height}`}
       style={{ aspectRatio: `${width} / ${height}` }}
       data-drawing={canDraw ? "true" : undefined}
+      data-erasing={canDraw && erasing ? "true" : undefined}
       role="img"
       aria-label="Whiteboard"
       onPointerDown={(e) => {
@@ -85,13 +88,18 @@ export function Board({ elements, canDraw, penColor, onStroke, width = BOARD_W, 
       ) : null}
       {!plain && <rect width={width} height={height} fill="url(#board-grid)" />}
       {elements.map(renderElement)}
-      {current && <polyline points={current.join(" ")} {...pen(penColor)} />}
+      {current && (erasing ? <polyline points={current.join(" ")} {...rub(RUB_SIZE)} /> : <polyline points={current.join(" ")} {...pen(penColor)} />)}
     </svg>
   );
 }
 
 function pen(color: BoardColor) {
   return { fill: "none", stroke: INK[color], strokeWidth: 3.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+}
+
+/** The eraser paints opaque white, so whatever is printed underneath disappears. */
+function rub(size: number) {
+  return { fill: "none", stroke: "#ffffff", strokeWidth: size, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 }
 
 function renderElement(e: BoardElement): ReactNode {
@@ -141,6 +149,8 @@ function renderElement(e: BoardElement): ReactNode {
     }
     case "stroke":
       return <polyline key={e.key} points={e.points.join(" ")} {...pen(e.color)} />;
+    case "rub":
+      return <polyline key={e.key} points={e.points.join(" ")} {...rub(e.size)} />;
     case "image":
       return (
         <g key={e.key} {...fade}>
