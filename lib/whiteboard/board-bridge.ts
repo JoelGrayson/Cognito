@@ -147,3 +147,52 @@ export function describeLearnerWork(readings: readonly LineReading[]): string {
     ...lines,
   ].join("\n");
 }
+
+/**
+ * Read and check everything the learner has written. Client-side: one recognition
+ * request per line, run together, then each line checked against the one above it.
+ *
+ * Returns [] when nothing is legible rather than throwing, because this runs inside
+ * the tutor's turn loop — a recognition failure should cost the tutor its READING,
+ * not the turn.
+ */
+export async function readLearnerWork(strokes: readonly FlatStroke[]): Promise<LineReading[]> {
+  const lines = groupIntoLines(strokes);
+  if (lines.length === 0) return [];
+
+  const recognised = await Promise.all(
+    lines.map(async (line): Promise<{ latex: string; confidence: number | null } | null> => {
+      const payload = payloadFor(line);
+      if (!payload) return null;
+      try {
+        const res = await fetch("/api/whiteboard/strokes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const latex: string = data.latex || data.text || "";
+        // Several lines read as one means the grouping was wrong; a multi-line blob
+        // must never become the premise for the next line's check.
+        if (!latex || isMultiLineReading(latex)) return null;
+        return { latex, confidence: data.confidence ?? null };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const readings: LineReading[] = [];
+  let previous: string | null = null;
+  for (const [index, r] of recognised.entries()) {
+    if (!r) continue;
+    const parsed = latexToMathjs(r.latex);
+    const { verdict, detail } = checkLine(previous, parsed);
+    readings.push({ index, latex: r.latex, parsed, confidence: r.confidence, verdict, detail });
+    // Only a line we trust becomes the premise for the next one. Judging good work
+    // against a misread line produces an accusation caused by our own OCR.
+    if (r.confidence === null || r.confidence >= 0.6) previous = parsed;
+  }
+  return readings;
+}
