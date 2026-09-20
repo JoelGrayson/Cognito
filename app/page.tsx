@@ -63,9 +63,9 @@ export default async function Home() {
           </div>
 
           <div className="relative mt-8 rounded-3xl border sm:mt-24 border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-8">
-            <div className="absolute -left-5 -top-12 hidden items-end gap-1 sm:flex">
+            <div className="absolute -left-5 -top-9 hidden items-end gap-1 sm:flex">
               <Mascot size={72} />
-              <span className="relative mb-6 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
+              <span className="relative mb-11 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
                 What should we dig into today?
                 <span className="absolute -left-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
               </span>
