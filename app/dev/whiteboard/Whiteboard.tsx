@@ -220,6 +220,9 @@ export function Whiteboard({ subject }: { subject: Subject }) {
   const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
   const pttRef = useRef<PushToTalk | null>(null);
   const [listening, setListening] = useState(false);
+  /** Between releasing the mic and the tutor answering: a transcription and a model
+   *  call, several seconds in which the page otherwise shows nothing at all. */
+  const [thinking, setThinking] = useState(false);
   /** Last few turns, so the tutor can avoid repeating itself. */
   const historyRef = useRef<{ who: "tutor" | "learner"; text: string }[]>([]);
   /** The step currently under discussion. Set when a mark is drawn, cleared once the
@@ -540,13 +543,20 @@ export function Whiteboard({ subject }: { subject: Subject }) {
     const ptt = pttRef.current;
     if (!ptt?.recording) return;
     setListening(false);
+    setThinking(true);
     try {
       const { transcript } = await ptt.stopAndTranscribe();
-      if (!transcript) return;
+      if (!transcript) {
+        setSaid("I didn't catch that. Hold the mic, say it again, then let go.");
+        return;
+      }
 
       const open = openRef.current;
       // Nothing is under discussion, so there is nothing to explain.
-      if (!open) return;
+      if (!open) {
+        setSaid("I heard you, but there's no step marked to talk about yet.");
+        return;
+      }
 
       // Explaining and not getting there IS the request for more help, so the
       // learner never has to press anything to ask. The system still never
@@ -637,6 +647,8 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       }
     } catch {
       setError("Transcription failed.");
+    } finally {
+      setThinking(false);
     }
   }, [redrawMarks, revealedFindings]);
 
@@ -1093,6 +1105,8 @@ export function Whiteboard({ subject }: { subject: Subject }) {
             <div className="min-w-0 flex-1 pt-1">
               {listening ? (
                 <TutorBubble text="I'm listening…" />
+              ) : thinking ? (
+                <TutorBubble text="Let me think…" />
               ) : said ? (
                 <TutorBubble text={said} onDismiss={() => setSaid(null)} />
               ) : (
