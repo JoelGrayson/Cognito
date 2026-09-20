@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AssetRecordType,
   DefaultColorStyle,
+  DefaultSizeStyle,
   Tldraw,
   createShapeId,
   type Editor,
@@ -93,6 +94,14 @@ const PEN_COLORS = [
   ["green", "bg-emerald-600"],
 ] as const;
 type PenColor = (typeof PEN_COLORS)[number][0];
+/** tldraw size token -> dot diameter (px) for the picker. */
+const PEN_SIZES = [
+  ["s", 4],
+  ["m", 7],
+  ["l", 11],
+  ["xl", 15],
+] as const;
+type PenSize = (typeof PEN_SIZES)[number][0];
 
 /** A step the checker has judged wrong. Everything the tutor later needs to mark it,
  *  talk about it, and escalate on it. */
@@ -232,6 +241,7 @@ export default function SpikePage() {
   const [worksheet, setWorksheet] = useState<{ name: string; pages: number; problems: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [penColor, setPenColor] = useState<PenColor>("black");
+  const [penSize, setPenSize] = useState<PenSize>("m");
   const fileRef = useRef<HTMLInputElement | null>(null);
   const voiceIdRef = useRef(voiceId);
   useEffect(() => {
@@ -896,6 +906,30 @@ export default function SpikePage() {
                 penColor === color ? "ring-2 ring-neutral-200 ring-offset-1 ring-offset-neutral-950" : ""
               }`}
             />
+          ))}
+        </div>
+        <div className="flex items-center gap-1" role="radiogroup" aria-label="Pen thickness">
+          {PEN_SIZES.map(([size, px]) => (
+            <button
+              key={size}
+              role="radio"
+              aria-checked={penSize === size}
+              aria-label={`thickness ${size}`}
+              title={`Thickness ${size}`}
+              onClick={() => {
+                setPenSize(size);
+                editorRef.current?.setStyleForNextShapes(DefaultSizeStyle, size);
+                editorRef.current?.setCurrentTool("draw");
+              }}
+              className={`flex h-5 w-5 items-center justify-center rounded ${
+                penSize === size ? "bg-neutral-700" : "hover:bg-neutral-800"
+              }`}
+            >
+              <span
+                className="block rounded-full bg-neutral-200"
+                style={{ width: px, height: px }}
+              />
+            </button>
           ))}
         </div>
         <input
