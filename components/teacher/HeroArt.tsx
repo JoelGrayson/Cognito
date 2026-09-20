@@ -1,4 +1,5 @@
 import { Mascot } from "@/components/Mascot";
+import { SpeechBubbleTail } from "@/components/SpeechBubbleTail";
 
 const ROWS = [
   { y: 58, w: 118, right: true },
@@ -17,9 +18,9 @@ export function HeroArt() {
       <div className="relative rounded-3xl border border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-5">
         <div className="absolute -right-5 -top-9 hidden flex-row-reverse items-start gap-1 sm:flex">
           <Mascot size={72} />
-          <span className="relative mt-3 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
+          <span className="relative mt-3 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) drop-shadow-lg">
             28 papers? Back in minutes.
-            <span className="absolute -right-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
+            <SpeechBubbleTail side="right" />
           </span>
         </div>
         <svg viewBox="0 0 300 230" role="img" aria-label="A worksheet marked with ticks, one circled mistake and a score" className="mx-auto mt-4 block h-auto w-full max-w-105">
