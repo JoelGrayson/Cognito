@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { isProviderId, type ProviderId } from "@/lib/providers";
+import { defaultProviderId, isProviderId, type ProviderId } from "@/lib/providers";
 import { onboardingRepo, roadmapRepo } from "@/lib/repo";
 import { LessonSchema } from "@/lib/schema";
 import { findNode } from "@/lib/modules";
@@ -10,7 +10,7 @@ import { protectedProcedure, router } from "./trpc";
 /** The provider chosen on onboarding screen 1 writes and tutors every lesson. */
 async function providerFor(userId: string): Promise<ProviderId> {
   const { profile } = await onboardingRepo.get(userId);
-  return isProviderId(profile.provider) ? profile.provider : "anthropic";
+  return isProviderId(profile.provider) ? profile.provider : defaultProviderId({ userId });
 }
 
 const roadmapInput = z.object({ id: z.string().uuid() });

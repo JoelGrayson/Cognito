@@ -5,16 +5,28 @@
  */
 import { validateGraph } from "@/lib/graph/validate";
 import { ConceptsResponse } from "@/lib/onboarding/schemas";
-import { PROVIDERS, isProviderId, type ProviderContext, type ProviderId } from "@/lib/providers";
+import {
+  PROVIDERS,
+  ProviderError,
+  defaultProviderId,
+  isProviderId,
+  type ProviderContext,
+  type ProviderId,
+} from "@/lib/providers";
 import { DraftGraph, type LearnerProfile } from "@/types/learning";
 import { GENERATE_CONCEPTS_SYSTEM } from "./functions/generateConcepts";
 import { GENERATE_GRAPH_SYSTEM, buildGenerateGraphPrompt } from "./functions/generateGraph";
 import { isMockAi } from "./client";
 import { AiValidationError } from "./withRetry";
 
-/** The provider the call should go through, or null for the default Anthropic path. */
-export function pickProvider(id: unknown): ProviderId | null {
-  return !isMockAi() && isProviderId(id) && id !== "anthropic" ? id : null;
+/**
+ * The provider the call should go through, or null for the default Anthropic path.
+ * A profile without a provider uses the first configured one.
+ */
+export async function pickProvider(id: unknown, ctx?: ProviderContext): Promise<ProviderId | null> {
+  if (isMockAi()) return null;
+  const chosen = isProviderId(id) ? id : await defaultProviderId(ctx);
+  return chosen !== "anthropic" ? chosen : null;
 }
 
 /** Generates the draft graph via the chosen provider; one retry with errors, like callForcedTool. */
@@ -27,19 +39,30 @@ export async function generateGraphWithProvider(
   const prompt = buildGenerateGraphPrompt(profile);
   const request = (user: string) =>
     provider.structured(
-      { name: "draft_graph", schema: DraftGraph, system: GENERATE_GRAPH_SYSTEM, user, maxTokens: 8000 },
+      { name: "draft_graph", schema: DraftGraph, system: GENERATE_GRAPH_SYSTEM, user, maxTokens: 8000, effort: "low" },
       undefined,
       ctx,
     );
 
-  const first = await request(prompt);
-  let errors = validateGraph(first.output);
-  if (errors.ok) return first.output;
+  // A schema miss (e.g. more than 30 nodes) gets the same one retry as a failed graph check.
+  const firstErrors: string[] = [];
+  const first = await request(prompt).catch((error: unknown) => {
+    if (error instanceof ProviderError && error.status === 502) {
+      firstErrors.push(error.message);
+      return null;
+    }
+    throw error;
+  });
+  if (first) {
+    const checks = validateGraph(first.output);
+    if (checks.ok) return first.output;
+    firstErrors.push(...checks.errors);
+  }
 
   const retry = await request(
-    `${prompt}\n\nThe previous draft failed these checks: ${errors.errors.join("; ")}. Return a corrected roadmap.`,
+    `${prompt}\n\nThe previous draft failed these checks: ${firstErrors.join("; ")}. Return a corrected roadmap.`,
   );
-  errors = validateGraph(retry.output);
+  const errors = validateGraph(retry.output);
   if (!errors.ok) throw new AiValidationError(errors.errors);
   return retry.output;
 }
@@ -57,6 +80,7 @@ export async function generateConceptsWithProvider(
       system: GENERATE_CONCEPTS_SYSTEM,
       user: `The learner wants to learn: ${goal}`,
       maxTokens: 400,
+      effort: "minimal",
     },
     undefined,
     ctx,
