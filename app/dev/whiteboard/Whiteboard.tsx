@@ -42,10 +42,11 @@ import {
   premiseFor,
   problemFor,
   questionsFrom,
+  type Premise,
   type PrintedLine,
   type ProblemAnchor,
 } from "@/lib/whiteboard/worksheet";
-import { answerKeyFor } from "@/lib/whiteboard/answer-keys";
+import { answerKeyFor, circuitKeyFor, type CircuitKeyEntry } from "@/lib/whiteboard/answer-keys";
 import { canonicalKey, loadRDKit } from "@/lib/whiteboard/rdkit";
 import { readStructures, verdictLine, type StructureReading } from "@/lib/whiteboard/structures";
 import { assessExplanation } from "@/lib/whiteboard/explanation";
@@ -56,7 +57,7 @@ import { GraphsPanel, type DesmosState } from "./Graphs";
 import { PLOT_GRAPH, READ_WORK, TUTOR_VOICES, TUTOR_VOICE_MODEL, whiteboardAgentSettings } from "@/lib/ai/whiteboard-agent";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { DEFAULT_CONFIG, type HintLevel } from "@/lib/whiteboard/policy";
-import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
+import type { Verdict } from "@/lib/whiteboard/checker/circuit";
 import {
   recordStrokes,
   type TimedStroke,
@@ -113,7 +114,7 @@ const MODE_OPTIONS = [
 /** A step the checker has judged wrong. Everything the tutor later needs to mark it,
  *  talk about it, and escalate on it. */
 interface Finding {
-  verdict: Equivalence;
+  verdict: Verdict;
   lineId: number;
   strokes: TimedStroke[];
   raw: string;
@@ -152,7 +153,7 @@ interface Reading {
   ms: number;
   confidence: number | null;
   strokeCount: number;
-  verdict: Equivalence | null;
+  verdict: Verdict | null;
   checkMs: number | null;
 }
 
@@ -314,10 +315,11 @@ function Notebook({
   const findingsRef = useRef<Map<number, Finding>>(new Map());
   /** Steps judged to follow, by lineId, and whether the learner may see that yet.
    *  Drawn as ticks by redrawMarks, alongside the findings. */
-  const followedRef = useRef<Map<number, { verdict: Equivalence; revealed: boolean }>>(new Map());
+  const followedRef = useRef<Map<number, { verdict: Verdict; revealed: boolean }>>(new Map());
   /** A drawing has no "next line" to say it is finished, so structures are only ever
-   *  checked when asked. */
-  const checksSteps = subject.checker === "algebra-steps";
+   *  checked when asked. Written lines - algebra steps, circuit equations - can be. */
+  const checksSteps = subject.checker === "algebra-steps" || subject.checker === "circuit-laws";
+  const checksCircuits = subject.checker === "circuit-laws";
   const [mode, setMode] = useState<CheckMode>(checksSteps ? "live" : "when-done");
   /** Numbered questions on the sheet, for subjects whose questions are prose. */
   const questionsRef = useRef<ProblemAnchor[]>([]);
@@ -334,6 +336,9 @@ function Notebook({
    *  is judged after the verdict has already been announced. */
   const inflightRef = useRef<Set<Promise<void>>>(new Set());
   const anchorsRef = useRef<ProblemAnchor[]>([]);
+  /** The sheet's circuits by anchor id (the negated question number), for subjects
+   *  whose lines are judged against a circuit rather than the line above. */
+  const circuitsRef = useRef<Map<number, CircuitKeyEntry>>(new Map());
   const [worksheet, setWorksheet] = useState<{ id: string; name: string; pages: number; problems: number } | null>(
     null,
   );
@@ -466,9 +471,9 @@ function Notebook({
       return;
     }
 
-    // The only checker there is reads algebra. Running it over a drawn molecule would
-    // produce confident nonsense, so a subject without a checker is just a notebook.
-    if (subject.checker !== "algebra-steps") return;
+    // The line checkers read equations. Running one over a drawn molecule would
+    // produce confident nonsense, so a subject without one is just a notebook.
+    if (!checksSteps) return;
 
     const payload = toStrokePayload(strokes);
     if (!payload) return;
@@ -502,23 +507,34 @@ function Notebook({
         setError("Read several lines at once — press Reset and write one line at a time.");
         return;
       }
-      const parsed = latexToMathjs(raw);
-
-      // The previous STEP is the newest trusted earlier line of the same problem, or
-      // the printed problem itself -- see premiseFor.
+      let parsed = latexToMathjs(raw);
       const problem = lineBounds ? problemFor(lineBounds, anchorsRef.current) : null;
-      const premise = premiseFor(
-        readingsRef.current,
-        lineId,
-        problem,
-        DEFAULT_CONFIG.recognitionConfidenceFloor,
-      );
-      const previous = premise?.text ?? null;
 
-      const { checkStep } = await import("@/lib/whiteboard/checker/numeric");
-      const t0 = performance.now();
-      const verdict = previous ? checkStep(previous, parsed) : null;
-      const checkMs = previous ? performance.now() - t0 : null;
+      let premise: Premise | null;
+      let judged: { verdict: Verdict; checkMs: number } | null = null;
+      if (checksCircuits) {
+        // The premise of a circuit line is the circuit it is written under, never the
+        // line above: every KVL sum, KCL sum and value is judged against the solution.
+        const { checkCircuitLine, solveCircuit, stripUnits } = await import("@/lib/whiteboard/checker/circuit");
+        parsed = stripUnits(parsed);
+        const circuit = problem ? circuitsRef.current.get(problem.id) : undefined;
+        premise = problem && circuit ? { text: `the circuit of question ${-problem.id}`, lineId: problem.id } : null;
+        if (circuit) {
+          const t0 = performance.now();
+          judged = { verdict: checkCircuitLine(parsed, solveCircuit(circuit)), checkMs: performance.now() - t0 };
+        }
+      } else {
+        // The previous STEP is the newest trusted earlier line of the same problem, or
+        // the printed problem itself -- see premiseFor.
+        premise = premiseFor(readingsRef.current, lineId, problem, DEFAULT_CONFIG.recognitionConfidenceFloor);
+        const { checkStep } = await import("@/lib/whiteboard/checker/numeric");
+        if (premise) {
+          const t0 = performance.now();
+          judged = { verdict: checkStep(premise.text, parsed), checkMs: performance.now() - t0 };
+        }
+      }
+      const verdict = judged?.verdict ?? null;
+      const checkMs = judged?.checkMs ?? null;
 
       // This read is done: whatever finalization was waiting on it is spent, whether
       // the line turned out wrong, correct, untrusted or unparseable. Leaving the
@@ -628,7 +644,7 @@ function Notebook({
     } finally {
       setBusy(false);
     }
-  }, [redrawMarks, speak, subject.checker]);
+  }, [checksCircuits, checksSteps, redrawMarks, speak]);
 
   /** Chemistry's "check my work": read every drawn structure, judge each against the
    *  sheet's answer key, tick the right ones and circle the rest. */
@@ -717,7 +733,11 @@ function Notebook({
       utterance =
         readingsRef.current.length === 0
           ? "There's nothing written yet."
-          : "I didn't find a step that doesn't follow.";
+          : checksCircuits && circuitsRef.current.size === 0
+            ? "I can't check these without the circuit. Open the circuits practice sheet from your worksheets."
+            : checksCircuits
+              ? "Every equation I could read holds for the circuit."
+              : "I didn't find a step that doesn't follow.";
     } else {
       const first = fresh[0];
       openRef.current = first;
@@ -727,7 +747,7 @@ function Notebook({
     }
     setSaid(utterance);
     speak(utterance);
-  }, [checkStructures, redrawMarks, speak, subject.checker]);
+  }, [checkStructures, checksCircuits, redrawMarks, speak, subject.checker]);
 
   /** The learner just named the error, and the agent has not been told yet. */
   const justFoundRef = useRef(false);
@@ -856,6 +876,7 @@ function Notebook({
 
   const removeWorksheet = useCallback(() => {
     anchorsRef.current = [];
+    circuitsRef.current = new Map();
     setProblems([]);
     setWorksheet(null);
     const editor = editorRef.current;
@@ -979,14 +1000,30 @@ function Notebook({
             }
           }),
         );
-        anchorsRef.current = anchorsFrom(printed);
         questionsRef.current = questionsFrom(printed);
+        if (checksCircuits) {
+          // A circuit question poses no statement to step from, so its anchor only says
+          // which circuit the line beneath belongs to. Ids are negated like the algebra
+          // anchors' so they never collide with a lineId; -id is the printed number.
+          anchorsRef.current = questionsRef.current.map((q) => ({ ...q, id: -q.id }));
+          circuitsRef.current = new Map(
+            (circuitKeyFor(file.name) ?? [])
+              .filter((c) => anchorsRef.current.some((a) => a.id === -c.problem))
+              .map((c) => [-c.problem, c]),
+          );
+        } else {
+          anchorsRef.current = anchorsFrom(printed);
+        }
         setProblems(anchorsRef.current);
         setWorksheet({
           id: sheetId(file),
           name: file.name,
           pages: pages.length,
-          problems: checksSteps ? anchorsRef.current.filter((a) => a.parsed).length : questionsRef.current.length,
+          problems: checksCircuits
+            ? circuitsRef.current.size
+            : checksSteps
+              ? anchorsRef.current.filter((a) => a.parsed).length
+              : questionsRef.current.length,
         });
         if (unread > 0) {
           setError(
@@ -999,7 +1036,7 @@ function Notebook({
         setUploading(false);
       }
     },
-    [checksSteps, reset, removeWorksheet, refreshSheets],
+    [checksCircuits, checksSteps, reset, removeWorksheet, refreshSheets],
   );
 
   /** The subject's bundled sheet, fetched as a File so it goes through the same load path as an upload. */
@@ -1300,7 +1337,9 @@ function Notebook({
                 <TutorBubble text={said} onDismiss={() => setSaid(null)} />
               ) : (
                 <p className="pt-2.5 text-sm text-(--wb-muted)">
-                  {checksSteps
+                  {checksCircuits
+                    ? "Open a circuit sheet and write your KVL, KCL and answers under each one. I'll speak up if an equation doesn't hold. Hold space, or the mic, to ask me something."
+                    : checksSteps
                     ? "I'll speak up if a step doesn't follow. Hold space, or the mic, to ask me something."
                     : subject.checker
                       ? "Draw your structures, then press Check my work. Hold space, or the mic, to ask me something."
@@ -1310,7 +1349,7 @@ function Notebook({
               {heard && <p className="mt-2 text-xs text-(--wb-muted)">Heard: “{heard}”</p>}
             </div>
           </div>
-          <h2 className="wb-serif shrink-0 px-5 pb-2 pt-4 text-xl">{checksSteps ? "Your steps" : "Your structures"}</h2>
+          <h2 className="wb-serif shrink-0 px-5 pb-2 pt-4 text-xl">{checksCircuits ? "Your equations" : checksSteps ? "Your steps" : "Your structures"}</h2>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {structures.length > 0 && (
               <ol className="space-y-2.5">
@@ -1355,6 +1394,8 @@ function Notebook({
                     ? `Step checking for ${subject.name.toLowerCase()} is coming soon. For now this is your notebook: upload a worksheet and draw on it.`
                     : !checksSteps
                     ? "Open a worksheet, draw each structure under its question, then press Check my work."
+                    : checksCircuits
+                    ? "Open the circuits sheet, then write each KVL or KCL equation under its circuit. Each one is checked against the circuit as you write it."
                     : mode === "live"
                     ? "Write a line, then start the next one underneath. Nothing to press."
                     : "Work the whole thing through, then press Check my work."}
@@ -1404,6 +1445,11 @@ function Notebook({
                           {r.verdict.kind === "undetermined" && ` — ${r.verdict.why}`}
                           {r.verdict.kind === "not-equivalent" &&
                             ` — at ${r.verdict.witness.variable}=${r.verdict.witness.at.toFixed(2)}: previous ${r.verdict.witness.previousValue.toFixed(2)}, yours ${r.verdict.witness.currentValue.toFixed(2)}`}
+                          {r.verdict.kind === "sign" && ` — flip the sign of ${r.verdict.term} and it holds`}
+                          {r.verdict.kind === "wrong-value" &&
+                            ` — ${r.verdict.variable} is ${r.verdict.expected.toFixed(3)}, not ${r.verdict.got}`}
+                          {r.verdict.kind === "not-holding" &&
+                            ` — in the circuit, left side ${r.verdict.lhs.toFixed(3)}, right side ${r.verdict.rhs.toFixed(3)}`}
                           {r.checkMs !== null && ` (${r.checkMs.toFixed(2)}ms)`}
                         </div>
                       )}

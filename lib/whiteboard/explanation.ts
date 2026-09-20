@@ -16,7 +16,7 @@
  * costs one extra rung, a false positive would congratulate someone who is still
  * wrong. So it only claims "found it" on a fairly specific phrase.
  */
-import type { Equivalence } from "./checker/numeric.ts";
+import type { Verdict } from "./checker/circuit.ts";
 
 export type Outcome =
   /** They named the actual error. Confirm and stop. */
@@ -30,8 +30,15 @@ export type Outcome =
 const GIVING_UP = /\b(i don'?t know|no idea|not sure|i'?m stuck|give up|can'?t see it|seems right|looks right|thought i got it right|what'?s wrong)\b/i;
 
 /** What naming THIS misconception sounds like out loud. */
-function signals(verdict: Equivalence): RegExp | null {
+function signals(verdict: Verdict): RegExp | null {
   switch (verdict.kind) {
+    case "sign":
+      // "the drop should be negative", "I had the current going the wrong way"
+      return /\b(sign|polarity|negative|minus|plus|wrong way|other way|direction|flip|flipped|drop|rise)\b/i;
+    case "wrong-value":
+      return /\b(arithmetic|miscalculat\w*|divided|multiplied|added|subtracted|should be \d|is \d|equals \d|wrong number|calculat\w*)\b/i;
+    case "not-holding":
+      return /\b(forgot|missed|dropped|left out|extra|shouldn'?t be there|wrong (resistor|element|loop|node|branch)|should(?:'ve| have))\b/i;
     case "direction":
       // "I forgot to flip the sign", "should have reversed the inequality"
       return /\b(flip|flipped|flipping|reverse|reversed|switch|switched|swap|swapped)\b/i;
@@ -44,7 +51,7 @@ function signals(verdict: Equivalence): RegExp | null {
   }
 }
 
-export function assessExplanation(transcript: string, verdict: Equivalence): Outcome {
+export function assessExplanation(transcript: string, verdict: Verdict): Outcome {
   const said = transcript.trim();
   if (said.length === 0) return { kind: "not-yet" };
 
