@@ -97,6 +97,32 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Warm notebook palette used by the whiteboard. */
+  --wb-bg: #f5eee8;
+  --wb-card: #fffdfa;
+  --wb-ink: #2b1d14;
+  --wb-muted: #7d6e63;
+  --wb-line: #e8ded4;
+  --wb-hover: #f3ebe3;
+  --wb-primary: #3b2a1f;
+  --wb-butter: #f8efc8;
+  --wb-butter-ink: #6d5b1c;
+  --wb-good: #e4f1e3;
+  --wb-good-ink: #2f6b3c;
+  --wb-bad: #fbe5e1;
+  --wb-bad-ink: #a23a2f;
+  --wb-blush: #f9dcdc;
+}
+
+.wb {
+  font-family: var(--font-wb-sans), ui-sans-serif, system-ui, sans-serif;
+  background: var(--wb-bg);
+  color: var(--wb-ink);
+}
+
+.wb-serif {
+  font-family: var(--font-wb-serif), ui-serif, Georgia, serif;
 }
 
 html {

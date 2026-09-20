@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Mascot } from "@/components/Mascot";
 import RoadmapPreview from "@/components/landing/RoadmapPreview";
 import { ctaTarget, type LandingState } from "@/components/landing/cta-target";
 import { getUserState } from "@/lib/plans";
@@ -58,7 +59,14 @@ export default async function Home() {
             </div>
           </div>
 
-          <Card className="bg-panel">
+          <Card className="relative bg-panel">
+            <div className="absolute -left-4 -top-12 hidden items-end gap-1 sm:flex">
+              <Mascot size={72} />
+              <span className="relative mb-6 rounded-2xl bg-primary px-4 py-2.5 text-[15px] text-primary-foreground shadow-lg">
+                What should we dig into today?
+                <span className="absolute -left-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-primary" />
+              </span>
+            </div>
             <CardContent className="pt-2">
               <RoadmapPreview className="mx-auto h-auto w-full max-w-105" />
               <p className="mt-2 text-center text-xs text-muted-foreground">
