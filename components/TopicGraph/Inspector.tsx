@@ -64,9 +64,9 @@ export function Inspector({ graph, node, isPlan, onOps, onClose }: Props) {
       data-testid="tg-inspector"
       onKeyDown={onKeyDown}
     >
-      <header className="flex items-start justify-between gap-3 border-b border-[#eeeeea] px-4 pb-3 pt-4">
+      <header className="flex items-start justify-between gap-3 border-b border-[#e8ded4] px-4 pb-3 pt-4">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6f6f6b]">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#7d6e63]">
             {isContainer(graph, node.id)
               ? `Group, ${formatMinutes(containerMinutes(graph, node.id))}`
               : `Topic, ${formatMinutes(node.estMinutes)}`}
@@ -129,7 +129,7 @@ function TextFields({ node, onOps }: { node: DraftNode; onOps: (ops: GraphOp[]) 
           onChange={(event) => setTitle(event.target.value)}
           onBlur={commit}
         />
-        {titleEmpty && <p className="text-[12px] text-[#a12622]">A title is required.</p>}
+        {titleEmpty && <p className="text-[12px] text-[#a23a2f]">A title is required.</p>}
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor={summaryFieldId} className="text-[13px] font-semibold">Summary</label>
@@ -142,7 +142,7 @@ function TextFields({ node, onOps }: { node: DraftNode; onOps: (ops: GraphOp[]) 
           onChange={(event) => setSummary(event.target.value)}
           onBlur={commit}
         />
-        <p className="self-end text-[12px] text-[#6f6f6b]">{summary.length}/{MAX_SUMMARY}</p>
+        <p className="self-end text-[12px] text-[#7d6e63]">{summary.length}/{MAX_SUMMARY}</p>
       </div>
       <button type="submit" className="tg-btn self-start" data-variant="primary" disabled={!dirty || titleEmpty}>
         Save changes
@@ -181,7 +181,7 @@ function ScopeControl({
           </button>
         ))}
       </div>
-      <p className="text-[12px] text-[#6f6f6b]">
+      <p className="text-[12px] text-[#7d6e63]">
         {kids > 0
           ? `Applies to this group and its ${kids} subtopics.`
           : "Known topics are skipped in the schedule. Excluded topics stay on the map, greyed out."}
@@ -207,7 +207,7 @@ function AddChild({
 
   return (
     <form
-      className="flex flex-col gap-1.5 border-t border-[#eeeeea] pt-4"
+      className="flex flex-col gap-1.5 border-t border-[#e8ded4] pt-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (ops.length === 0 || full) return;
@@ -229,7 +229,7 @@ function AddChild({
           Add
         </button>
       </div>
-      <p className="text-[12px] text-[#6f6f6b]">
+      <p className="text-[12px] text-[#7d6e63]">
         {full
           ? "The map is full (30 topics)."
           : isLeaf && node.estMinutes > 0
@@ -257,7 +257,7 @@ function DeleteControl({
   const needsConfirm = kids > 0;
 
   return (
-    <div className="flex flex-col gap-1.5 border-t border-[#eeeeea] pt-4">
+    <div className="flex flex-col gap-1.5 border-t border-[#e8ded4] pt-4">
       {confirming ? (
         <div className="flex flex-wrap items-center gap-2" role="alert">
           <span className="text-[13px]">
@@ -283,7 +283,7 @@ function DeleteControl({
         </button>
       )}
       {isPlan && (
-        <p className="text-[12px] text-[#6f6f6b]">
+        <p className="text-[12px] text-[#7d6e63]">
           Saved plans keep the topic so progress is not lost; it is marked excluded instead.
         </p>
       )}

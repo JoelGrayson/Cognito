@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { generateGraph, generateGraphWithProvider, pickProvider } from "@/lib/ai";
-import { buildFallbackGraph } from "@/lib/graph/fallback";
+import { buildFallbackGraph, isFallbackGraph } from "@/lib/graph/fallback";
 import { applyKnownScope } from "@/lib/graph/known";
 import { jsonError, parseBody, serverError } from "@/lib/http";
 import { toLearnerProfile } from "@/lib/onboarding/profile";
@@ -9,7 +9,7 @@ import { requireUserId } from "@/lib/session";
 import type { DraftGraph, OnboardingProfile, OnboardingState } from "@/types/learning";
 
 // Real graph generation can take a while.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const Body = z.object({ regenerate: z.boolean().optional() });
 
@@ -45,7 +45,7 @@ async function respondWithStored(userId: string, state: OnboardingState) {
         .catch((error) => console.error("roadmap record sync failed", error));
     }
   }
-  return Response.json({ graph, roadmapId: state.activeRoadmapId, usedFallback: false });
+  return Response.json({ graph, roadmapId: state.activeRoadmapId, usedFallback: isFallbackGraph(graph) });
 }
 
 /**
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       let usedFallback = false;
       try {
         // A provider picked on screen 1 goes through the provider layer; the default stays on lib/ai.
-        const providerId = pickProvider(state.profile.provider);
+        const providerId = await pickProvider(state.profile.provider, { userId });
         graph = providerId
           ? await generateGraphWithProvider(providerId, learner, { userId })
           : await generateGraph(learner);
