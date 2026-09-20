@@ -1,4 +1,4 @@
-<img width="3840" height="2160" alt="cognito-mockup-ipad" src="https://github.com/user-attachments/assets/cdf9d0bf-d133-442a-b0cb-de09ea455d09" />
+<img width="3840" height="2160" alt="Cognito on an iPad: a handwritten algebra worksheet with each step ticked or circled, beside the star mascot asking what to dig into today" src="public/brand/cognito-mockup-ipad.png" />
 
 # Cognito
 
