@@ -52,3 +52,18 @@ export function providerFrom(id: unknown): Provider {
   if (!isProviderId(id)) throw new BadRequest("Unknown provider.");
   return PROVIDERS[id];
 }
+
+/** A picture of a page, as a data URL. 8 MB of base64 is roughly a 6 MB image. */
+export const PAGE_IMAGE_MAX_CHARS = 8_000_000;
+
+/** The provider for a route that sends a page picture; only some of them can see. */
+export function pageReaderFrom(id: unknown, image: string): Provider {
+  if (!/^data:image\/(png|jpeg|webp);base64,/.test(image)) {
+    throw new BadRequest("The page must be a PNG, JPEG or WebP picture.");
+  }
+  const provider = providerFrom(id);
+  if (provider.id === "local" || provider.id === "xai") {
+    throw new BadRequest(`${provider.label} cannot read pictures here. Switch the model to OpenAI or Claude.`);
+  }
+  return provider;
+}
