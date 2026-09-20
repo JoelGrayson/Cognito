@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Mascot } from "@/components/Mascot";
 import { ModeSwitch } from "@/components/ModeSwitch";
+import { SiteFooter } from "@/components/SiteFooter";
 import RoadmapPreview from "@/components/landing/RoadmapPreview";
 import { ctaTarget, type LandingState } from "@/components/landing/cta-target";
 import { getUserState } from "@/lib/plans";
@@ -160,9 +161,7 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-(--wb-line) px-5 py-6 text-center text-sm text-(--wb-muted) sm:px-8">
-        Built at HackMIT 2026
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
