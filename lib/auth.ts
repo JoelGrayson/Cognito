@@ -18,7 +18,7 @@ function createAuth() {
   if (!baseURL) throw new Error("Set BETTER_AUTH_URL to the application's origin.");
 
   return betterAuth({
-    appName: "Cognition",
+    appName: "Cognito",
     secret,
     baseURL,
     database: drizzleAdapter(getDb(), {
