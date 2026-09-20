@@ -27,11 +27,22 @@ const AT: Record<string, [x: number, y: number]> = {
   regress: [105, 176],
 };
 
+/** An edge that has to move sideways drops, turns a rounded corner, runs across and
+ *  turns again, so every edge ends in a straight vertical run. The arrowhead takes its
+ *  angle from the end of the path: on a curve it arrives tilted. */
+function route([x1, y1]: [number, number], [x2, y2]: [number, number]): string {
+  if (x1 === x2) return `M${x1} ${y1} V${y2}`;
+  const r = 6;
+  const bend = y1 + 10;
+  const dir = Math.sign(x2 - x1);
+  return `M${x1} ${y1} V${bend - r} Q${x1} ${bend} ${x1 + dir * r} ${bend} H${x2 - dir * r} Q${x2} ${bend} ${x2} ${bend + r} V${y2}`;
+}
+
 const EDGES: { d: string; dashed?: boolean }[] = [
-  { d: "M95 62 V94" },
-  { d: "M265 62 C265 84 140 74 140 94" },
-  { d: "M95 142 C95 162 140 156 140 174" },
-  { d: "M265 142 C265 162 220 156 220 174", dashed: true },
+  { d: route([95, 62], [95, 94]) },
+  { d: route([265, 62], [140, 94]) },
+  { d: route([95, 142], [140, 174]) },
+  { d: route([265, 142], [220, 174]), dashed: true },
 ];
 
 export default function RoadmapPreview({ className }: { className?: string }) {
@@ -43,8 +54,8 @@ export default function RoadmapPreview({ className }: { className?: string }) {
       className={className}
     >
       <defs>
-        <marker id="lp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M1 1 L9 5 L1 9" fill="none" stroke="#a3948a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <marker id="lp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M1 1.5 L9 5 L1 8.5 Z" fill="#a3948a" stroke="#a3948a" strokeWidth="1" strokeLinejoin="round" />
         </marker>
       </defs>
       {EDGES.map((edge) => (
@@ -54,6 +65,7 @@ export default function RoadmapPreview({ className }: { className?: string }) {
           fill="none"
           stroke="#a3948a"
           strokeWidth="1.6"
+          strokeLinecap="round"
           strokeDasharray={edge.dashed ? "4 4" : undefined}
           markerEnd="url(#lp-arrow)"
         />
