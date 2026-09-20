@@ -34,10 +34,11 @@ check("matches nothing, question known", judgeStructure("c1ccccc1", KEY, 5), { k
 // REGRESSION, seen with a real stylus: a correct answer misread at 0.58 was circled.
 const WRONG = { kind: "no-match", asked: 6 } as const;
 const RIGHT = { kind: "correct", problem: 6, name: "2-bromo-2-methylbutane" } as const;
-check("a shaky reading never accuses", trustedVerdict(WRONG, 0.58), null);
-check("a sure reading does", trustedVerdict(WRONG, 0.97), WRONG);
-check("a shaky reading that matches the key still ticks", trustedVerdict(RIGHT, 0.64), RIGHT);
-check("no confidence reported: judge as read", trustedVerdict(WRONG, null), WRONG);
+const MISTAKE = { kind: "known-mistake", problem: 5, name: "butanoic acid (over-oxidised)" } as const;
+check("an untrusted reading never says a bare 'wrong'", trustedVerdict(WRONG, false), null);
+check("a trusted reading does", trustedVerdict(WRONG, true), WRONG);
+check("an untrusted reading that matches the key still ticks", trustedVerdict(RIGHT, false), RIGHT);
+check("an untrusted reading that lands on a listed mistake still names it", trustedVerdict(MISTAKE, false), MISTAKE);
 
 console.log(`\n${pass}/${total} correct`);
 if (pass !== total) process.exit(1);
