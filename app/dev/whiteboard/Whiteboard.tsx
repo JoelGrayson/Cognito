@@ -34,13 +34,15 @@ import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
 import { pagesOf } from "@/lib/whiteboard/pdf";
 import { masteryOf } from "@/lib/whiteboard/mastery";
-import type { Subject } from "@/lib/subjects";
+import type { Subject, SubjectPanel } from "@/lib/subjects";
 import { deleteSheet, fileOf, listSheets, saveSheet, sheetId, type SavedSheet } from "@/lib/whiteboard/library";
 import { anchorsFrom, premiseFor, problemFor, type PrintedLine, type ProblemAnchor } from "@/lib/whiteboard/worksheet";
 import { assessExplanation } from "@/lib/whiteboard/explanation";
 import { spokenFor, ASK_WHY } from "@/lib/whiteboard/voice";
 import { workContext, type StepView } from "@/lib/whiteboard/context";
-import { READ_WORK, TUTOR_VOICES, TUTOR_VOICE_MODEL, whiteboardAgentSettings } from "@/lib/ai/whiteboard-agent";
+import { parsePlotArgs, planPlot, type Plot } from "@/lib/whiteboard/graph";
+import { GraphsPanel, type DesmosState } from "./Graphs";
+import { PLOT_GRAPH, READ_WORK, TUTOR_VOICES, TUTOR_VOICE_MODEL, whiteboardAgentSettings } from "@/lib/ai/whiteboard-agent";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { DEFAULT_CONFIG, type HintLevel } from "@/lib/whiteboard/policy";
 import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
@@ -174,14 +176,14 @@ export function Whiteboard({ subject }: { subject: Subject }) {
           return ((await res.json()) as { access_token: string }).access_token;
         },
       },
-      agent: whiteboardAgentSettings(subject.name),
+      agent: whiteboardAgentSettings(subject.name, subject.panels.includes("graphs")),
       audio: {
         input: { encoding: "linear16", sampleRate: 16000 },
         output: { encoding: "linear16", sampleRate: 24000 },
       },
       reconnect: { enabled: true, maxAttempts: 3 },
     }),
-    [subject.name],
+    [subject.name, subject.panels],
   );
 
   return (
@@ -311,7 +313,14 @@ function Notebook({
     null,
   );
   /** One side panel at a time; null is closed. */
-  const [panel, setPanel] = useState<"worksheets" | "mastery" | null>(null);
+  const [panel, setPanel] = useState<SubjectPanel | null>(null);
+  /** What the tutor has drawn on the graph. The panel is a view of this, so
+   *  closing it and opening it again shows the same curves. */
+  const [plots, setPlots] = useState<Plot[]>([]);
+  /** Whatever the learner typed into the calculator, held across closings of the
+   *  panel - the calculator itself only exists while the panel is open. */
+  const graphStateRef = useRef<DesmosState | null>(null);
+  const canGraph = subject.panels.includes("graphs");
   /** The anchors again, as state: the mastery panel renders from them. */
   const [problems, setProblems] = useState<ProblemAnchor[]>([]);
   const [sheets, setSheets] = useState<SavedSheet[]>([]);
@@ -694,6 +703,28 @@ function Notebook({
     }, [subject.name]),
   );
 
+  /** The tutor draws on the shared calculator. Whether it MAY is decided here,
+   *  off the same rung that gates its words - see lib/whiteboard/graph.ts. */
+  useAgentClientTool(
+    PLOT_GRAPH,
+    useCallback(
+      (fn: { arguments: string }) => {
+        // The tool is not offered on a subject without a graph panel, but a model
+        // that calls it anyway is told no rather than opening one.
+        if (!canGraph) return `There is no graph on the ${subject.name} page. Say it instead.`;
+        const plan = planPlot(parsePlotArgs(fn.arguments), openRef.current?.rung ?? null);
+        if (!plan.ok) return plan.message;
+        setPlots(plan.plots);
+        // No point drawing into a panel they cannot see. On a narrow screen this
+        // covers the canvas, which is the right trade when a graph was asked for -
+        // but wiping the graph is no reason to open it.
+        if (plan.plots.length > 0) setPanel("graphs");
+        return plan.message;
+      },
+      [canGraph, subject.name],
+    ),
+  );
+
   // Every learner turn is also a move in the hint ladder. The agent decides the
   // WORDS; whether they actually found the error stays with the deterministic
   // check, which knows - a model guessing "yes" closes a real error because the
@@ -765,6 +796,7 @@ function Notebook({
     followedRef.current.clear();
     justFoundRef.current = false;
     boundsRef.current.clear();
+    setPlots([]);
     session.clearConversationHistory();
     const editor = editorRef.current;
     if (!editor) return;
@@ -1052,7 +1084,20 @@ function Notebook({
       {/* Column on phones/tablets, row on desktop. min-h-0/min-w-0 are load-bearing:
           without them a flex child refuses to shrink and the canvas collapses to 0px. */}
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 sm:px-4 sm:pb-4 lg:flex-row">
-        <Rail panels={subject.panels} open={panel} onToggle={(id) => setPanel((open) => (open === id ? null : id))} />
+        <Rail
+          panels={subject.panels}
+          open={panel}
+          graphed={plots.length > 0 && panel !== "graphs"}
+          onToggle={(id) => setPanel((open) => (open === id ? null : id))}
+        />
+        {panel === "graphs" && (
+          <GraphsPanel
+            plots={plots}
+            stateRef={graphStateRef}
+            onClose={() => setPanel(null)}
+            onClear={() => setPlots([])}
+          />
+        )}
         {panel === "mastery" && (
           <MasteryPanel mastery={masteryOf(readings, problems)} onClose={() => setPanel(null)} />
         )}

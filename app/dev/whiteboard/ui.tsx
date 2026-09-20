@@ -400,35 +400,33 @@ export function Library({
 function RailButton({
   label,
   active = false,
-  soon = false,
+  dot = false,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
-  soon?: boolean;
+  /** Something is in this panel that the learner has not looked at. */
+  dot?: boolean;
   onClick?: () => void;
   children: ReactNode;
 }) {
   return (
     <button
       type="button"
-      aria-label={soon ? `${label}, coming soon` : label}
-      title={soon ? `${label} · coming soon` : label}
-      aria-pressed={soon ? undefined : active}
-      disabled={soon}
+      aria-label={label}
+      title={label}
+      aria-pressed={active}
       onClick={onClick}
       className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl border transition-colors ${
         active
           ? "border-(--wb-primary) bg-(--wb-primary) text-(--wb-card)"
-          : "border-(--wb-line) bg-(--wb-card) text-(--wb-ink) hover:bg-(--wb-hover) disabled:text-(--wb-muted) disabled:hover:bg-(--wb-card)"
+          : "border-(--wb-line) bg-(--wb-card) text-(--wb-ink) hover:bg-(--wb-hover)"
       }`}
     >
       {children}
-      {soon && (
-        <span className="absolute -right-1.5 -top-1.5 rounded-md bg-(--wb-butter) px-1 text-[9px] font-medium uppercase tracking-wider text-(--wb-butter-ink)">
-          soon
-        </span>
+      {dot && (
+        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#c74440] ring-2 ring-(--wb-card)" />
       )}
     </button>
   );
@@ -515,11 +513,14 @@ export function MasteryPanel({ mastery, onClose }: { mastery: Mastery; onClose: 
 export function Rail({
   panels,
   open,
+  graphed = false,
   onToggle,
 }: {
   panels: readonly SubjectPanel[];
-  open: "worksheets" | "mastery" | null;
-  onToggle: (panel: "worksheets" | "mastery") => void;
+  open: SubjectPanel | null;
+  /** The tutor has drawn something in the graph panel. */
+  graphed?: boolean;
+  onToggle: (panel: SubjectPanel) => void;
 }) {
   return (
     <nav aria-label="Whiteboard panels" className="flex shrink-0 gap-2 lg:flex-col lg:justify-end">
@@ -534,7 +535,7 @@ export function Rail({
         </RailButton>
       )}
       {panels.includes("graphs") && (
-        <RailButton label="Graphs" soon>
+        <RailButton label="Graph" active={open === "graphs"} dot={graphed} onClick={() => onToggle("graphs")}>
           <Icon name="graph" size={22} />
         </RailButton>
       )}
