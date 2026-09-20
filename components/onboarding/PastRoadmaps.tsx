@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { RoadmapSummary } from "@/lib/repo";
 
-const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]";
+const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--wb-primary)]";
 
 function formatDate(iso: string): string {
   const date = new Date(iso);
@@ -36,22 +36,22 @@ export function PastRoadmaps({ heading = "Pick up where you left off", emptyText
 
   return (
     <div className="mt-8">
-      <p className="mb-2 text-sm font-medium text-[#444]">{heading}</p>
+      <p className="mb-2 text-sm font-medium text-(--wb-muted)">{heading}</p>
       {!roadmaps?.length ? (
-        <p className="text-sm text-neutral-500">{emptyText}</p>
+        <p className="text-sm text-(--wb-muted)">{emptyText}</p>
       ) : (
       <ul className="space-y-2">
         {roadmaps.map((roadmap) => (
           <li key={roadmap.id}>
             <Link
               href={`/onboarding/workshop?from=${roadmap.id}`}
-              className={`flex items-center justify-between gap-3 rounded-2xl bg-[var(--panel)] px-4 py-3 text-left hover:bg-[#efefeb] ${focus}`}
+              className={`flex items-center justify-between gap-3 rounded-2xl bg-(--wb-hover) px-4 py-3 text-left hover:bg-(--wb-line) ${focus}`}
             >
               <span className="min-w-0">
-                <span className="block truncate text-[15px] font-semibold text-[#222]">{roadmap.title}</span>
-                <span className="block truncate text-[13px] text-[#6b6b67]">{roadmap.goal}</span>
+                <span className="block truncate text-[15px] font-medium text-(--wb-ink)">{roadmap.title}</span>
+                <span className="block truncate text-[13px] text-(--wb-muted)">{roadmap.goal}</span>
               </span>
-              <span className="shrink-0 text-xs text-[#8a8a8a]">{formatDate(roadmap.updatedAt)}</span>
+              <span className="shrink-0 text-xs text-(--wb-muted)">{formatDate(roadmap.updatedAt)}</span>
             </Link>
           </li>
         ))}

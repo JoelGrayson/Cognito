@@ -71,7 +71,7 @@ export function Step1Goal() {
           value={provider as ProviderId}
           onChange={(id) => setProfile({ provider: id })}
         />
-        <p id="goal-count" className="text-xs text-[#8a8a8a]">
+        <p id="goal-count" className="text-xs text-(--wb-muted)">
           {goal.trim().length}/{GOAL_MAX}
         </p>
       </div>
@@ -93,7 +93,7 @@ export function Step1Goal() {
             />
           </div>
 
-          <p className="mt-6 mb-2 text-sm font-medium text-[#444]">Why this goal? (optional)</p>
+          <p className="mt-6 mb-2 text-sm font-medium text-(--wb-muted)">Why this goal? (optional)</p>
           <ChoiceGroup label="Why are you learning this?" className="flex flex-wrap gap-2">
             {REASONS.map((reason) => (
               <Choice
@@ -125,7 +125,7 @@ export function Step1Goal() {
                 <button
                   type="button"
                   onClick={() => setProfile({ deadline: undefined })}
-                  className="min-h-10 rounded-full px-3 text-sm text-[#555] hover:bg-[#f0f0ee] focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
+                  className="min-h-10 rounded-full px-3 text-sm text-(--wb-muted) hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-[color:var(--wb-primary)]"
                 >
                   Clear
                 </button>
@@ -139,14 +139,14 @@ export function Step1Goal() {
 
       {!typing && (
         <>
-          <p className="mt-4 mb-2 text-sm font-medium text-[#444]">Need ideas?</p>
+          <p className="mt-4 mb-2 text-sm font-medium text-(--wb-muted)">Need ideas?</p>
           <div className="flex flex-wrap gap-2">
             {EXAMPLES.map((example) => (
               <button
                 key={example}
                 type="button"
                 onClick={() => setProfile({ goal: example })}
-                className="min-h-10 rounded-full border border-[#d5d5d1] bg-white px-4 text-sm text-[#333] hover:border-[#b9b9b4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
+                className="min-h-10 rounded-xl border border-(--wb-line) bg-(--wb-card) px-4 text-sm text-(--wb-ink) hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--wb-primary)]"
               >
                 {example}
               </button>
