@@ -2,8 +2,16 @@ import { z } from "zod";
 import { apiHandler, BadRequest, providerFrom, readJson } from "@/lib/api";
 import { keepReachable } from "@/lib/links";
 import { parsePartialJson } from "@/lib/partial-json";
-import { TUTOR_SYSTEM_PROMPT, tutorPrompt } from "@/lib/prompt";
-import { ChatMessageSchema, LessonSchema, TutorReplySchema, type Lesson } from "@/lib/schema";
+import { TUTOR_ANSWER_SYSTEM_PROMPT, TUTOR_SYSTEM_PROMPT, tutorPrompt } from "@/lib/prompt";
+import { answerOnly, routeTutorTurn } from "@/lib/ai/decide/chat";
+import {
+  ChatMessageSchema,
+  LessonSchema,
+  TutorAnswerSchema,
+  TutorReplySchema,
+  type Lesson,
+  type LessonContent,
+} from "@/lib/schema";
 import { ndjson, throttle } from "@/lib/stream";
 import { findHelpfulVideo } from "@/lib/video";
 import { getAuth } from "@/lib/auth";
@@ -38,13 +46,18 @@ export const POST = apiHandler(async (request) => {
   const { video, ...content } = body.lesson;
   const started = Date.now();
 
+  // Most turns are questions, and a question does not need a response format that
+  // can hold a whole rewritten lesson. Jev says which kind of turn this is; only a
+  // confident "answer" narrows the schema, and no Jev at all keeps the wide one.
+  const asked = answerOnly(await routeTutorTurn(content, body.messages));
+
   return ndjson(async (emit) => {
     const partial = throttle(emit);
     const result = await provider.structured(
       {
-        name: "tutor_reply",
-        schema: TutorReplySchema,
-        system: TUTOR_SYSTEM_PROMPT,
+        name: asked ? "tutor_answer" : "tutor_reply",
+        schema: asked ? TutorAnswerSchema : TutorReplySchema,
+        system: asked ? TUTOR_ANSWER_SYSTEM_PROMPT : TUTOR_SYSTEM_PROMPT,
         user: tutorPrompt(body.topic, content, body.messages),
         effort: "minimal",
         onText: (text) => {
@@ -57,7 +70,9 @@ export const POST = apiHandler(async (request) => {
     );
 
     let lesson: Lesson | null = null;
-    const updated = result.output.updatedLesson;
+    // Absent by construction on the answer-only schema, null when nothing changed.
+    const output: { reply: string; updatedLesson?: LessonContent | null } = result.output;
+    const updated = output.updatedLesson ?? null;
     if (updated) {
       const sameVideo = updated.videoQuery.trim() === content.videoQuery.trim();
       const [resources, newVideo] = await Promise.all([
@@ -77,7 +92,7 @@ export const POST = apiHandler(async (request) => {
 
     emit({
       type: "done",
-      reply: result.output.reply,
+      reply: output.reply,
       lesson,
       provider: provider.id,
       model: result.model,
