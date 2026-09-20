@@ -25,6 +25,14 @@ export interface StructureReading {
   svg: string | null;
   /** null when nothing valid was read, which is never evidence of a mistake. */
   verdict: StructureVerdict | null;
+  /**
+   * A reading we do not trust says this is not the answer. Not an accusation - the
+   * reading may be ours to blame - but silence was the wrong answer too: seen with a
+   * real stylus, a stray extra bond made a 2-butanol into 3-methyl-2-butanol, one
+   * reader saw exactly that, the other saw nonsense, and the board said nothing. So it
+   * is raised as a question, beside a drawing of what was read, and the learner judges.
+   */
+  suspected: boolean;
 }
 
 type Meta = { whiteboardMark?: boolean; worksheetPage?: boolean };
@@ -73,14 +81,17 @@ export async function readStructures(
         data.reader === "mathpix"
           ? (data.confidence ?? 1) >= TRUSTED_CONFIDENCE
           : drawn.canonical !== null && drawn.canonical === second;
+      const judged = drawn.canonical ? judgeStructure(drawn.canonical, key, asked) : null;
+      const verdict = trustedVerdict(judged, readingTrusted);
       return {
+        suspected: judged?.kind === "no-match" && verdict === null,
         bounds: cluster.bounds,
         asked,
         smiles: data.smiles ?? null,
         confidence: data.confidence ?? null,
         reader: data.reader ?? null,
         svg: drawn.svg,
-        verdict: trustedVerdict(drawn.canonical ? judgeStructure(drawn.canonical, key, asked) : null, readingTrusted),
+        verdict,
       };
     }),
   );
