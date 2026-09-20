@@ -271,6 +271,10 @@ function Notebook({
     voiceOnRef.current = voiceOn;
   }, [voiceOn]);
   const [said, setSaid] = useState<string | null>(null);
+  const saidRef = useRef(said);
+  useEffect(() => {
+    saidRef.current = said;
+  }, [said]);
   /** Utterance for a line that was read provisionally and hasn't been spoken yet. */
   const pendingSpeechRef = useRef<{ lineId: number; text: string } | null>(null);
   /** Lines already settled by a line break. Kept separately because the two halves
@@ -357,17 +361,37 @@ function Notebook({
     agentStateRef.current = agentState;
   }, [agentState]);
 
+  /** An announcement made before the session was up, or during a reconnect. Only
+   *  the newest is kept: by the time the socket is back, an older one is describing
+   *  a line the learner has moved on from. */
+  const heldRef = useRef<string | null>(null);
+
   /** Put words in the tutor's mouth. What the checker found is spoken verbatim -
    *  the verdict is deterministic and nothing may rephrase it into an accusation
    *  the checker never made. Queued rather than interrupting, so the tutor never
    *  talks over the learner; the words are on screen either way. */
   const speak = useCallback(
     (text: string) => {
-      if (!voiceOnRef.current || agentStateRef.current !== "connected") return;
+      if (!voiceOnRef.current) return;
+      if (agentStateRef.current !== "connected") {
+        // Connecting takes a second or two, and the first line can be written and
+        // checked inside it. Hold the words rather than dropping them silently.
+        heldRef.current = text;
+        return;
+      }
       session.injectAgentMessage(text, "queue");
     },
     [session],
   );
+
+  useEffect(() => {
+    if (agentState !== "connected") return;
+    const held = heldRef.current;
+    heldRef.current = null;
+    // Not if the step it was about has since been re-read, fixed or reset - the
+    // bubble is cleared in each of those, and this must not outlive it.
+    if (held && voiceOnRef.current && saidRef.current === held) session.injectAgentMessage(held, "queue");
+  }, [agentState, session]);
 
   // The voice toggle silences the tutor without dropping the session: the learner
   // can still talk to it and read the answer in the bubble.
@@ -732,6 +756,7 @@ function Notebook({
     setError(null);
     recorderRef.current?.clear();
     setSaid(null);
+    heldRef.current = null;
     pendingSpeechRef.current = null;
     finalizedRef.current.clear();
     openRef.current = null;
