@@ -8,7 +8,11 @@ import type { SubjectIconName } from "@/components/SubjectIcon";
 export type SubjectId = "math" | "chemistry";
 export type SubjectPanel = "worksheets" | "mastery" | "graphs";
 /** How written work is judged. `null` means nothing can check this subject yet. */
-export type SubjectChecker = "algebra-steps";
+export type SubjectChecker =
+  /** Each line is judged against the one before it, as it is written. */
+  | "algebra-steps"
+  /** Each drawn structure is judged against the sheet's answer key, when asked. */
+  | "structure-key";
 
 export interface Subject {
   id: SubjectId;
@@ -20,6 +24,8 @@ export interface Subject {
   sample: [from: string, to: string];
   checker: SubjectChecker | null;
   panels: readonly SubjectPanel[];
+  /** The practice sheet offered in the library, under public/. */
+  sampleSheet: { path: string; file: string; title: string; caption: string };
 }
 
 export const SUBJECTS: readonly Subject[] = [
@@ -31,15 +37,17 @@ export const SUBJECTS: readonly Subject[] = [
     sample: ["2x + 3 = 11", "x = 4"],
     checker: "algebra-steps",
     panels: ["worksheets", "mastery", "graphs"],
+    sampleSheet: { path: "/worksheets/algebra-practice.pdf", file: "algebra-practice.pdf", title: "Algebra practice", caption: "Sample · 6 problems" },
   },
   {
     id: "chemistry",
     name: "Chemistry",
     icon: "chemistry",
-    blurb: "Upload a worksheet and draw structures and mechanisms on it.",
+    blurb: "Draw structures on a worksheet and get each one checked against the answer.",
     sample: ["CH₃CH₂OH", "CH₂=CH₂ + H₂O"],
-    checker: null,
+    checker: "structure-key",
     panels: ["worksheets"],
+    sampleSheet: { path: "/worksheets/ochem-practice.pdf", file: "ochem-practice.pdf", title: "Organic chemistry practice", caption: "Sample · 6 structures" },
   },
 ];
 
