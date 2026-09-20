@@ -127,9 +127,12 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
     <div className="mt-10 grid gap-6">
       <section className={cn(card, "grid gap-6 p-6 lg:grid-cols-2")}>
         <div>
-          <h2 className="wb-serif text-2xl">1. Add the worksheets</h2>
+          <h2 className="wb-serif flex items-center gap-3 text-2xl">
+            <Step n={1} tint="#dfeaf6" ink="#3f6b9c" />
+            Add the worksheets
+          </h2>
           <label
-            className="mt-4 flex min-h-40 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-(--wb-line) p-6 text-center hover:bg-(--wb-hover)"
+            className="mt-4 flex min-h-40 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-[#b9cde3] bg-[#dfeaf6]/40 p-6 text-center text-[#3f6b9c] hover:bg-[#dfeaf6]/80"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
@@ -167,13 +170,16 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
           </label>
         </div>
         <div className="flex flex-col">
-          <h2 className="wb-serif text-2xl">2. Answer key (optional)</h2>
+          <h2 className="wb-serif flex items-center gap-3 text-2xl">
+            <Step n={2} tint="#f8efc8" ink="#6d5b1c" />
+            Answer key (optional)
+          </h2>
           <textarea
             value={answerKey}
             onChange={(e) => setAnswerKey(e.target.value)}
             maxLength={4000}
             placeholder={"1. x = 4\n2. x > -3\n3. (x + 2)(x - 5)\nAccept unsimplified fractions."}
-            className="mt-4 min-h-40 flex-1 rounded-2xl border border-(--wb-line) bg-(--wb-card) p-4 font-mono text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="mt-4 min-h-40 flex-1 rounded-2xl border border-[#e6d89a] bg-(--wb-butter)/35 p-4 font-mono text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           />
           <p className="mt-2 text-sm text-(--wb-muted)">Without a key, each problem is worked out and checked from scratch.</p>
         </div>
@@ -202,10 +208,10 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
 
       {summary.graded > 0 && (
         <section className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-          <div className={cn(card, "p-6")}>
-            <p className="text-sm text-(--wb-muted)">Class average</p>
+          <div className={cn(card, "bg-(--wb-good)! p-6 text-(--wb-good-ink)")}>
+            <p className="text-sm opacity-80">Class average</p>
             <p className="wb-serif mt-1 text-5xl">{summary.average}%</p>
-            <p className="mt-2 text-sm text-(--wb-muted)">
+            <p className="mt-2 text-sm opacity-80">
               {summary.graded} of {submissions.length} graded
             </p>
           </div>
@@ -289,5 +295,13 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
 
       {open && <GradedPaper submission={open} />}
     </div>
+  );
+}
+
+function Step({ n, tint, ink }: { n: number; tint: string; ink: string }) {
+  return (
+    <span aria-hidden="true" className="flex size-9 flex-none items-center justify-center rounded-full text-lg" style={{ background: tint, color: ink }}>
+      {n}
+    </span>
   );
 }
