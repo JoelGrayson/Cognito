@@ -20,6 +20,7 @@ import {
 import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isFallbackGraph } from "@/lib/graph/fallback";
 import { findNode, modulePath, topicPath } from "@/lib/modules";
 import type { DraftGraph } from "@/types/learning";
 
@@ -38,7 +39,9 @@ interface Props {
 export function Workshop({ draftGraph, roadmapId }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>(
-    draftGraph ? { kind: "ready", graph: draftGraph, roadmapId, usedFallback: false } : { kind: "loading" },
+    draftGraph
+      ? { kind: "ready", graph: draftGraph, roadmapId, usedFallback: isFallbackGraph(draftGraph) }
+      : { kind: "loading" },
   );
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const cancelled = useRef(false);
