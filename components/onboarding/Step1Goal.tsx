@@ -1,10 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CONSTRAINTS_MAX, GOAL_MAX } from "@/lib/onboarding/schemas";
 import { localToday, stepError } from "@/lib/onboarding/profile";
 import { useOnboarding } from "@/lib/stores/onboarding";
+import { trpc } from "@/lib/trpc";
+import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import type { LearnerProfile } from "@/types/learning";
+import { ProviderSelect } from "@/components/ProviderSelect";
 import { Choice, ChoiceGroup, FieldLabel, inputClass, StepShell } from "./ui";
+import { PastRoadmaps } from "./PastRoadmaps";
 
 const EXAMPLES = ["Linear algebra for machine learning", "Conversational Spanish", "Personal finance basics", "Rust for backend work"];
 
@@ -28,6 +33,16 @@ export function Step1Goal() {
   const goal = profile.goal ?? "";
   const typing = goal.trim().length > 0;
 
+  // Which AI provider builds the roadmap — same picker as the prototype branch.
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  useEffect(() => {
+    trpc.providers
+      .query()
+      .then(setProviders)
+      .catch(() => {});
+  }, []);
+  const provider = profile.provider ?? providers.find((p) => p.configured)?.id ?? "anthropic";
+
   return (
     <StepShell
       title="What do you want to learn?"
@@ -50,9 +65,16 @@ export function Step1Goal() {
         aria-describedby="goal-count"
         className={inputClass}
       />
-      <p id="goal-count" className="mt-2 text-right text-xs text-[#8a8a8a]">
-        {goal.trim().length}/{GOAL_MAX}
-      </p>
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <ProviderSelect
+          providers={providers}
+          value={provider as ProviderId}
+          onChange={(id) => setProfile({ provider: id })}
+        />
+        <p id="goal-count" className="text-xs text-[#8a8a8a]">
+          {goal.trim().length}/{GOAL_MAX}
+        </p>
+      </div>
 
       {typing && (
         <>
@@ -112,6 +134,8 @@ export function Step1Goal() {
           </div>
         </>
       )}
+
+      <PastRoadmaps />
 
       {!typing && (
         <>
