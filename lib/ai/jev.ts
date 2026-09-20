@@ -185,9 +185,16 @@ export async function ask<Q extends Record<string, JevQuestion>>(
       return null;
     });
     if (res?.ok) {
-      const parsed = ResponseSchema.safeParse(await res.json());
+      const json = await res.json().catch(() => {
+        throw new JevError("Jev returned a body that is not JSON.");
+      });
+      const parsed = ResponseSchema.safeParse(json);
       if (!parsed.success) throw new JevError("Jev returned an unexpected body.");
-      return { answers: parsed.data.answers as JevAnswers<Q>, model: parsed.data.model, ms: Date.now() - started };
+      return {
+        answers: matchAnswers(questions, parsed.data.answers),
+        model: parsed.data.model,
+        ms: Date.now() - started,
+      };
     }
     if (res) {
       last = new JevError(`Jev request failed with ${res.status}.`, res.status);
@@ -212,12 +219,36 @@ export async function tryAsk<Q extends Record<string, JevQuestion>>(
   }
 }
 
+/**
+ * The types only hold if every question came back with an answer of its own
+ * kind, and a choice the question actually offered. Checked rather than cast:
+ * callers branch on these numbers, and a missing id would read as `undefined`.
+ */
+function matchAnswers<Q extends Record<string, JevQuestion>>(
+  questions: Q,
+  answers: Record<string, z.infer<typeof AnswerSchema>>,
+): JevAnswers<Q> {
+  for (const [id, question] of Object.entries(questions)) {
+    const answer = answers[id];
+    if (!answer) throw new JevError(`Jev did not answer "${id}".`);
+    if (answer.type !== question.type) {
+      throw new JevError(`Jev answered "${id}" with a ${answer.type}, not a ${question.type}.`);
+    }
+    if (answer.type === "choice" && !(answer.choice in (question as ChoiceQuestion).criteria)) {
+      throw new JevError(`Jev chose "${answer.choice}" for "${id}", which was not an option.`);
+    }
+  }
+  return answers as JevAnswers<Q>;
+}
+
 async function post(key: string, body: string, options: AskOptions): Promise<Response> {
+  const timeout = AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS);
   return fetch(ENDPOINT, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body,
-    signal: options.signal ?? AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS),
+    // A caller's signal cancels the call; it never removes the timeout.
+    signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
     cache: "no-store",
   });
 }

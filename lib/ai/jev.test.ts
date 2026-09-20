@@ -81,6 +81,37 @@ describe("ask", () => {
     await expect(ask("s", { fits: QUESTIONS.fits })).rejects.toBeInstanceOf(JevError);
   });
 
+  it("rejects answers that do not match the questions asked", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const cases: [string, unknown][] = [
+      ["a missing id", { fits: ANSWERS.answers.fits }],
+      ["the wrong answer type", { ...ANSWERS.answers, fits: ANSWERS.answers.intent }],
+      [
+        "an option that was never offered",
+        { ...ANSWERS.answers, intent: { ...ANSWERS.answers.intent, choice: "invented" } },
+      ],
+    ];
+    for (const [, answers] of cases) {
+      fetchMock.mockResolvedValue(reply({ model: "jev-1.13.0", answers }));
+      await expect(ask("s", QUESTIONS)).rejects.toBeInstanceOf(JevError);
+    }
+  });
+
+  it("wraps a non-JSON success body, so callers only ever catch JevError", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<html>gateway</html>", { status: 200 }));
+    await expect(ask("s", QUESTIONS)).rejects.toBeInstanceOf(JevError);
+  });
+
+  it("keeps the timeout when the caller passes its own signal", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(reply(ANSWERS));
+    const caller = new AbortController();
+    await ask("s", QUESTIONS, { signal: caller.signal, timeoutMs: 50 });
+    const { signal } = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(signal?.aborted).toBe(false);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(signal?.aborted).toBe(true);
+  });
+
   it("tryAsk returns null instead of throwing, so callers keep their own path", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
