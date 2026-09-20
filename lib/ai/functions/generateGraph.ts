@@ -9,10 +9,10 @@ Call set_graph exactly once with the whole roadmap.
 
 Structure:
 - 5 to 8 nodes with kind "core" and no parentId: the spine, in learning order. These are containers.
-- Every spine node has 2 to 4 child nodes (kind "core", parentId = the spine node's id). The children are the leaf topics the learner actually studies. Children never have children of their own.
+- Spine nodes have child nodes (kind "core", parentId = the spine node's id): the leaf topics the learner actually studies. Children never have children of their own. Aim for 2 to 4 children per spine node, 16 to 22 leaf children overall.
 - Add 2 to 4 kind "optional" leaf nodes with no parentId for enrichment topics (they are studied last).
 - Never create a node that is both a parent and a child. The graph is exactly two levels deep.
-- Hard limit: at most 30 nodes in total, counting containers, children and optional nodes. Pick the spine size and children per spine so the total stays under 30 (for example 6 spine nodes with 3 children each plus 3 optional nodes is 27). Count before you answer.
+- Hard limit: 30 nodes in total, counting containers, children and optional nodes. When the spine is long, use fewer children per node — never exceed 30.
 
 Edges:
 - Connect consecutive spine nodes with kind "prerequisite" edges (a chain, or a small DAG when two spine nodes are truly independent). Prerequisite edges only ever go between spine nodes and must never form a cycle.

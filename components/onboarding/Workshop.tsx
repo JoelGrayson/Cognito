@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Mascot } from "@/components/Mascot";
-import { TopicGraph } from "@/components/TopicGraph";
+import { TopicGraph, type NodeAction } from "@/components/TopicGraph";
 import { Info, Pencil, RefreshCw } from "lucide-react";
 import {
   AlertDialog,
@@ -20,9 +20,10 @@ import {
 import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { applyOps, conceptMatchesNode, validateGraph } from "@/lib/graph";
 import { isFallbackGraph } from "@/lib/graph/fallback";
 import { findNode, modulePath, topicPath } from "@/lib/modules";
-import type { DraftGraph } from "@/types/learning";
+import type { DraftGraph, DraftNode, GraphOp } from "@/types/learning";
 
 
 type Status =
@@ -44,6 +45,8 @@ export function Workshop({ draftGraph, roadmapId }: Props) {
       : { kind: "loading" },
   );
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  /** Nodes to pulse briefly — set after a topic is added so its placement is visible. */
+  const [pulseIds, setPulseIds] = useState<string[]>([]);
   const cancelled = useRef(false);
 
   const generate = useCallback((regenerate = false) => {
@@ -78,6 +81,103 @@ export function Workshop({ draftGraph, roadmapId }: Props) {
       cancelled.current = true;
     };
   }, [draftGraph, generate]);
+
+  /**
+   * Applies ops optimistically, saves through the ops route, rolls back on failure.
+   * `build` sees the current graph and returns null to abort.
+   */
+  const submitOps = (build: (graph: DraftGraph) => GraphOp[] | null, onApplied?: (next: DraftGraph) => void) => {
+    if (status.kind !== "ready") return;
+    const graph = status.graph;
+    const ops = build(graph);
+    if (!ops?.length) return;
+    let next: DraftGraph;
+    try {
+      next = applyOps(graph, ops);
+    } catch {
+      return;
+    }
+    if (!validateGraph(next).ok) return;
+    setStatus({ ...status, graph: next });
+    onApplied?.(next);
+    void fetch("/api/workshop/ops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ops }),
+    })
+      .then(async (res) => {
+        if (res.ok) return;
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.errors?.[0] ?? "Could not save the change.");
+      })
+      .catch(() => {
+        setStatus((cur) => (cur.kind === "ready" ? { ...cur, graph } : cur));
+      });
+  };
+
+  /** Hover actions on a node. Scope changes cover the node's children too; delete cascades server-side. */
+  const handleNodeAction = (node: DraftNode, action: NodeAction) => {
+    if (action === "delete") {
+      submitOps(() => [{ op: "remove_node", id: node.id }]);
+      return;
+    }
+    const scope =
+      action === "known"
+        ? node.scope === "known" ? "included" : "known"
+        : node.scope === "excluded" ? "included" : "excluded";
+    submitOps((graph) =>
+      [node.id, ...graph.nodes.filter((n) => n.parentId === node.id).map((n) => n.id)].map((id) => ({
+        op: "update_node" as const,
+        id,
+        patch: { scope },
+      })),
+    );
+  };
+
+  /** Words shared between the typed topic and a node's title + summary. */
+  const overlap = (query: string, node: DraftNode): number => {
+    const words = new Set(`${node.title} ${node.summary}`.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2));
+    return query.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => words.has(w)).length;
+  };
+
+  /** Right-click composer: slug the title, attach under the best-matching section, else add a standalone topic. */
+  const handleAddTopic = (title: string) => {
+    const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60);
+    if (!id) return;
+    let before = new Set<string>();
+    submitOps(
+      (graph) => {
+        before = new Set(graph.nodes.map((n) => n.id));
+        // Best-matching container wins; a leaf match borrows its container.
+        const parents = new Set(graph.nodes.map((n) => n.parentId).filter(Boolean));
+        let best: string | undefined;
+        let bestScore = 0;
+        for (const node of graph.nodes) {
+          const score = overlap(title, node) + (conceptMatchesNode(title, node.title) ? 2 : 0);
+          if (score <= bestScore) continue;
+          const target = parents.has(node.id) ? node.id : node.parentId;
+          if (target) {
+            best = target;
+            bestScore = score;
+          }
+        }
+        const node: DraftNode = {
+          id,
+          title,
+          summary: "",
+          kind: best ? "core" : "optional",
+          ...(best ? { parentId: best } : {}),
+          estMinutes: 45,
+          scope: "included",
+        };
+        return [{ op: "add_node", node }];
+      },
+      (next) => {
+        const added = next.nodes.find((n) => !before.has(n.id));
+        if (added) setPulseIds([added.id]);
+      },
+    );
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-4 py-6 sm:px-8">
@@ -177,6 +277,9 @@ export function Workshop({ draftGraph, roadmapId }: Props) {
               const id = status.roadmapId;
               if (id && findNode(status.graph, node.id)) router.push(modulePath(id, node.id));
             }}
+            onNodeAction={handleNodeAction}
+            onAddTopic={handleAddTopic}
+            highlightIds={pulseIds}
           />
         )}
       </div>
