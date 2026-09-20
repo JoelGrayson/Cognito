@@ -1,8 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { z } from "zod";
 import { MARK_GRID, type CheckResponse } from "../shared/types.ts";
 
-const model = () => process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
+const model = () => process.env.OPENAI_MODEL ?? "gpt-4o";
 
 const coord = z.number().min(0).max(MARK_GRID);
 const markSchema = z.discriminatedUnion("kind", [
@@ -35,34 +35,37 @@ Grade the work like a careful human marker with a red pen:
   - "underline" under a specific wrong value,
   - "arrow" from a mark to a short "text" note (<= 6 words, e.g. "sign flips here", "forgot to divide by 2"),
   - never more than ~8 marks; do not obscure the student's writing with huge shapes.
-If the page has no student work, or it is illegible, use verdict "unclear" and say so.`;
+If the page has no student work, or it is illegible, use verdict "unclear" and say so.
+Respond by calling the "grade" function.`;
 
-let client: Anthropic | null = null;
+let client: OpenAI | null = null;
 function getClient() {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
-  client ??= new Anthropic();
+  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set");
+  client ??= new OpenAI();
   return client;
 }
 
 export async function check(imageDataUrl: string, question?: string): Promise<CheckResponse> {
-  const data = imageDataUrl.slice(imageDataUrl.indexOf(",") + 1);
-  const res = await getClient().messages.create({
+  const res = await getClient().chat.completions.create({
     model: model(),
-    max_tokens: 1500,
-    system: SYSTEM,
+    max_completion_tokens: 1500,
     tools: [
       {
-        name: "grade",
-        description: "Return the grade, written feedback and red-pen marks for the page.",
-        input_schema: z.toJSONSchema(resultSchema) as Anthropic.Tool.InputSchema,
+        type: "function",
+        function: {
+          name: "grade",
+          description: "Return the grade, written feedback and red-pen marks for the page.",
+          parameters: z.toJSONSchema(resultSchema),
+        },
       },
     ],
-    tool_choice: { type: "tool", name: "grade" },
+    tool_choice: { type: "function", function: { name: "grade" } },
     messages: [
+      { role: "system", content: SYSTEM },
       {
         role: "user",
         content: [
-          { type: "image", source: { type: "base64", media_type: "image/png", data } },
+          { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } },
           {
             type: "text",
             text: question
@@ -74,7 +77,7 @@ export async function check(imageDataUrl: string, question?: string): Promise<Ch
     ],
   });
 
-  const tool = res.content.find((b) => b.type === "tool_use");
-  if (!tool || tool.type !== "tool_use") throw new Error("model returned no grade");
-  return resultSchema.parse(tool.input);
+  const call = res.choices[0]?.message.tool_calls?.[0];
+  if (!call || call.type !== "function") throw new Error("model returned no grade");
+  return resultSchema.parse(JSON.parse(call.function.arguments));
 }

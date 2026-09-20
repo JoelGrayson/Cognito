@@ -9,7 +9,7 @@ config({ path: [".env.local", ".env"], quiet: true });
 
 const app = new Hono();
 
-app.get("/api/health", (c) => c.json({ ok: true, configured: Boolean(process.env.ANTHROPIC_API_KEY) }));
+app.get("/api/health", (c) => c.json({ ok: true, configured: Boolean(process.env.OPENAI_API_KEY) }));
 
 app.post("/api/check", bodyLimit({ maxSize: 8 * 1024 * 1024 }), async (c) => {
   const { image, question } = await c.req.json<{ image?: unknown; question?: unknown }>();
