@@ -1,13 +1,33 @@
+import { countModules } from "@/lib/modules";
+import type { Lesson } from "@/lib/schema";
 import type { OnboardingProfile, OnboardingState, StudyPlan } from "@/types/learning";
-import type { OnboardingPatch, OnboardingRepo, PlanRepo, RoadmapRecord, RoadmapRepo } from "./types";
+import type {
+  OnboardingPatch,
+  OnboardingRepo,
+  PlanRepo,
+  RoadmapRecord,
+  RoadmapRepo,
+} from "./types";
 
 // Held on globalThis so dev hot reloads don't wipe the data.
 const g = globalThis as typeof globalThis & {
-  __memoryRepo?: { onboarding: Map<string, OnboardingState>; plans: Map<string, StudyPlan>; roadmaps: Map<string, RoadmapRecord> };
+  __memoryRepo?: {
+    onboarding: Map<string, OnboardingState>;
+    plans: Map<string, StudyPlan>;
+    roadmaps: Map<string, RoadmapRecord>;
+    /** Lessons by `${roadmapId}:${nodeId}`. */
+    lessons: Map<string, Lesson>;
+  };
 };
-const store = (g.__memoryRepo ??= { onboarding: new Map(), plans: new Map(), roadmaps: new Map() });
+const store = (g.__memoryRepo ??= {
+  onboarding: new Map(),
+  plans: new Map(),
+  roadmaps: new Map(),
+  lessons: new Map(),
+});
 // A store created by an older module version may lack newer maps.
 store.roadmaps ??= new Map();
+store.lessons ??= new Map();
 
 const emptyState = (): OnboardingState => ({
   step: "questionnaire",
@@ -87,7 +107,15 @@ export const memoryRoadmapRepo: RoadmapRepo = {
     return [...store.roadmaps.values()]
       .filter((r) => r.userId === userId)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-      .map(({ id, title, goal, createdAt, updatedAt }) => ({ id, title, goal, createdAt, updatedAt }));
+      .map(({ id, title, goal, graph, createdAt, updatedAt }) => ({
+        id,
+        title,
+        goal,
+        createdAt,
+        updatedAt,
+        modules: countModules(graph),
+        lessonsWritten: lessonIds(id).length,
+      }));
   },
   async get(id, userId) {
     const record = store.roadmaps.get(id);
@@ -112,4 +140,32 @@ export const memoryRoadmapRepo: RoadmapRepo = {
     store.roadmaps.set(id, next);
     return structuredClone(next);
   },
+  async delete(id, userId) {
+    const record = store.roadmaps.get(id);
+    if (!record || record.userId !== userId) return;
+    store.roadmaps.delete(id);
+    for (const nodeId of lessonIds(id)) store.lessons.delete(lessonTag(id, nodeId));
+  },
+  async lessonNodeIds(id, userId) {
+    const record = store.roadmaps.get(id);
+    return record && record.userId === userId ? lessonIds(id) : [];
+  },
+  async getLesson(id, userId, nodeId) {
+    const record = store.roadmaps.get(id);
+    if (!record || record.userId !== userId) return null;
+    const lesson = store.lessons.get(lessonTag(id, nodeId));
+    return lesson ? structuredClone(lesson) : null;
+  },
+  async saveLesson(id, userId, nodeId, lesson) {
+    const record = store.roadmaps.get(id);
+    if (!record || record.userId !== userId) throw new Error("Roadmap not found.");
+    store.lessons.set(lessonTag(id, nodeId), structuredClone(lesson));
+  },
 };
+
+const lessonTag = (roadmapId: string, nodeId: string) => `${roadmapId}:${nodeId}`;
+
+function lessonIds(roadmapId: string): string[] {
+  const prefix = `${roadmapId}:`;
+  return [...store.lessons.keys()].filter((tag) => tag.startsWith(prefix)).map((tag) => tag.slice(prefix.length));
+}

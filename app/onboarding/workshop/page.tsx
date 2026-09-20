@@ -25,11 +25,11 @@ export default async function WorkshopPage({ searchParams }: PageProps<"/onboard
         activeRoadmapId: record.id,
         profile: { goal: record.goal, ...(goalChanged ? { priorKnowledge: [], concepts: undefined } : {}) },
       });
-      return <Workshop draftGraph={record.graph} />;
+      return <Workshop draftGraph={record.graph} roadmapId={record.id} />;
     }
   }
   // "0000-00-00" accepts any stored deadline, same as the PATCH gate.
   if (firstIncompleteStep(state.profile, "0000-00-00")) redirect("/onboarding");
 
-  return <Workshop draftGraph={state.draftGraph} />;
+  return <Workshop draftGraph={state.draftGraph} roadmapId={state.activeRoadmapId} />;
 }

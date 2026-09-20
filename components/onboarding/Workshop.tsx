@@ -1,20 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TopicGraph } from "@/components/TopicGraph";
+import { findNode, modulePath, topicPath } from "@/lib/modules";
 import type { DraftGraph } from "@/types/learning";
 
 const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]";
 
 type Status =
   | { kind: "loading" }
-  | { kind: "ready"; graph: DraftGraph; usedFallback: boolean }
+  | { kind: "ready"; graph: DraftGraph; roadmapId: string | null; usedFallback: boolean }
   | { kind: "error"; message: string };
 
-export function Workshop({ draftGraph }: { draftGraph: DraftGraph | null }) {
+interface Props {
+  draftGraph: DraftGraph | null;
+  /** The saved record the draft belongs to; its nodes open as modules. */
+  roadmapId: string | null;
+}
+
+export function Workshop({ draftGraph, roadmapId }: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState<Status>(
-    draftGraph ? { kind: "ready", graph: draftGraph, usedFallback: false } : { kind: "loading" },
+    draftGraph ? { kind: "ready", graph: draftGraph, roadmapId, usedFallback: false } : { kind: "loading" },
   );
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const cancelled = useRef(false);
@@ -29,7 +38,14 @@ export function Workshop({ draftGraph }: { draftGraph: DraftGraph | null }) {
       .then(async (res) => {
         const body = await res.json().catch(() => null);
         if (!res.ok) throw new Error(body?.errors?.[0] ?? "Could not build your roadmap.");
-        if (!cancelled.current) setStatus({ kind: "ready", graph: body.graph, usedFallback: Boolean(body.usedFallback) });
+        if (!cancelled.current) {
+          setStatus({
+            kind: "ready",
+            graph: body.graph,
+            roadmapId: typeof body.roadmapId === "string" ? body.roadmapId : null,
+            usedFallback: Boolean(body.usedFallback),
+          });
+        }
       })
       .catch((err) => {
         if (!cancelled.current)
@@ -51,10 +67,18 @@ export function Workshop({ draftGraph }: { draftGraph: DraftGraph | null }) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Your roadmap</h1>
           <p className="mt-1 text-[15px] text-[#6b6b6b]">
-            Topics you marked &ldquo;can explain&rdquo; are grayed out — we&rsquo;ll skip them.
+            Click a topic to open its lesson. Topics you marked &ldquo;can explain&rdquo; are grayed out — we&rsquo;ll skip them.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {status.kind === "ready" && status.roadmapId && (
+            <Link
+              href={topicPath(status.roadmapId)}
+              className={`inline-flex min-h-10 items-center rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-white ${focus}`}
+            >
+              Start learning
+            </Link>
+          )}
           {status.kind === "ready" && (
             <button
               type="button"
@@ -114,7 +138,16 @@ export function Workshop({ draftGraph }: { draftGraph: DraftGraph | null }) {
             </button>
           </div>
         )}
-        {status.kind === "ready" && <TopicGraph graph={status.graph} mode="view" />}
+        {status.kind === "ready" && (
+          <TopicGraph
+            graph={status.graph}
+            mode="view"
+            onNodeClick={(node) => {
+              const id = status.roadmapId;
+              if (id && findNode(status.graph, node.id)) router.push(modulePath(id, node.id));
+            }}
+          />
+        )}
       </div>
     </main>
   );

@@ -123,6 +123,8 @@ function AutoFit({
   return null;
 }
 
+function enablePointerEvents() {}
+
 export function TopicGraph({
   graph,
   mode,
@@ -282,6 +284,9 @@ export function TopicGraph({
           fitViewOptions={{ padding: 0.06, minZoom: 0.3, maxZoom: 1 }}
           defaultViewport={narrow ? narrowViewport(layout, size.w) : undefined}
           onPaneClick={() => editing && selectedId && closeInspector()}
+          // React Flow sets pointer-events: none on nodes that are neither selectable, draggable
+          // nor clickable; the cards handle clicks themselves, so this only turns them back on.
+          onNodeClick={enablePointerEvents}
           aria-label={`Topic graph: ${graph.title}`}
         >
           <Controls showInteractive={false} position="bottom-left" />

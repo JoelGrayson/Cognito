@@ -7,6 +7,7 @@ import { ProfileMenu } from "./ProfileMenu";
 const LINKS = [
   { href: "/", label: "Home", match: (path: string) => path === "/" },
   { href: "/onboarding?new=1", label: "New learning plan", match: (path: string) => path.startsWith("/onboarding") },
+  { href: "/topics", label: "Topics", match: (path: string) => path.startsWith("/topics") },
 ];
 
 const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong";

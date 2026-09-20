@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
 import { draftFromLesson, type LessonDraft } from "@/lib/drafts";
 import type { ProviderId } from "@/lib/providers/types";
-import { nodeAt, type NodeRef } from "@/lib/roadmap";
-import type { Lesson, MapNode, MindMap } from "@/lib/schema";
+import type { Lesson, MapNode, Phase } from "@/lib/schema";
 import { LessonChat } from "./LessonChat";
 import { QuizPanel } from "./Quiz";
 import { RichText } from "./RichText";
-import { Roadmap } from "./Roadmap";
 import { Explainer } from "./Explainer";
 import { VideoCall } from "./VideoCall";
 import { CodeExercise, lessonWantsCode } from "./CodeExercise";
@@ -21,41 +20,34 @@ export type LessonState =
 
 interface Props {
   topic: string;
-  map: MindMap;
-  selected: NodeRef;
+  node: MapNode;
+  phase: Phase;
   state: LessonState;
   providerId: ProviderId;
-  onSelectNode: (ref: NodeRef) => void;
-  onBack: () => void;
+  /** Where the expand button in the corner goes: the whole roadmap. */
+  backHref: string;
+  /** A compact view of the roadmap, shown beside the expand button. */
+  minimap?: ReactNode;
   onRetry: () => void;
-  /** The roadmap is still streaming in; its newest block is not clickable yet. */
-  mapStreaming?: boolean;
-  /** Address of a block's lesson, so mini-map blocks open in a new tab too. */
-  lessonHref?: (ref: NodeRef) => string | undefined;
-  /** Whether a block's lesson is fully written, for the mini map's borders. */
-  isReady?: (node: MapNode) => boolean;
   onLessonChange: (lesson: Lesson) => void;
+  /** Address of the tutor's own page. Given one, the aside links there instead of holding the chat. */
+  chatHref?: string;
 }
 
 export function LessonView({
   topic,
-  map,
-  selected,
+  node,
+  phase,
   state,
   providerId,
-  onSelectNode,
-  onBack,
+  backHref,
+  minimap,
   onRetry,
-  mapStreaming,
-  lessonHref,
-  isReady,
   onLessonChange,
+  chatHref,
 }: Props) {
   const [calling, setCalling] = useState(false);
   const [watching, setWatching] = useState(false);
-  const at = nodeAt(map, selected);
-  if (!at) return null;
-  const { node, phase } = at;
 
   const lesson = state.status === "ready" ? state.lesson : null;
   const draft: LessonDraft | null =
@@ -72,12 +64,12 @@ export function LessonView({
       <div className="min-w-0">
         <div className="lesson-top">
           <div className="minimap">
-            <Roadmap map={map} compact selected={selected} onSelect={onSelectNode} streaming={mapStreaming} hrefFor={lessonHref} isReady={isReady} />
-            <button type="button" className="minimap-expand" onClick={onBack} title="Back to the roadmap" aria-label="Back to the roadmap">
+            {minimap}
+            <Link href={backHref} className="minimap-expand" title="Back to the roadmap" aria-label="Back to the roadmap">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
               </svg>
-            </button>
+            </Link>
           </div>
           <div className="lesson-heading">
             <p className="text-sm text-neutral-500">
@@ -230,7 +222,17 @@ export function LessonView({
       </div>
 
       <aside className="lesson-aside">
-        {lesson ? (
+        {chatHref ? (
+          <div className="chat-panel items-center justify-center">
+            {lesson ? (
+              <Link href={chatHref} className="lesson-link px-6 text-center text-sm">
+                Ask the tutor about this lesson →
+              </Link>
+            ) : (
+              <p className="px-6 text-center text-sm text-neutral-500">The tutor joins once the lesson is ready.</p>
+            )}
+          </div>
+        ) : lesson ? (
           <LessonChat topic={topic} lesson={lesson} providerId={providerId} onLessonChange={onLessonChange} />
         ) : (
           <div className="chat-panel items-center justify-center">

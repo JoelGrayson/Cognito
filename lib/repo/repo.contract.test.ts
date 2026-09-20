@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { inArray } from "drizzle-orm";
+import type { Lesson } from "@/lib/schema";
+import type { DraftNode } from "@/types/learning";
 import type { NewPlan, NewRoadmap, OnboardingRepo, PlanRepo, RoadmapRepo } from "./types";
 import { memoryOnboardingRepo, memoryPlanRepo, memoryRoadmapRepo } from "./memory";
 
@@ -28,6 +30,26 @@ const roadmap: NewRoadmap = {
   title: "Rust roadmap",
   goal: "learn rust",
   graph: { title: "Rust roadmap", nodes: [], edges: [] },
+};
+
+const node = (id: string): DraftNode => ({
+  id,
+  title: id,
+  summary: "",
+  kind: "core",
+  estMinutes: 30,
+  scope: "included",
+});
+
+const lesson: Lesson = {
+  title: "Ownership",
+  summary: "Who owns a value.",
+  tldr: "One owner at a time.",
+  sections: [],
+  keyTakeaways: [],
+  resources: [],
+  videoQuery: "rust ownership",
+  video: { id: null, title: null, searchUrl: "https://www.youtube.com/results?search_query=rust+ownership" },
 };
 
 // Written against the interfaces so the Drizzle implementations can run the same suite.
@@ -104,6 +126,28 @@ function contract(name: string, onboarding: OnboardingRepo, plans: PlanRepo, roa
       expect(await roadmaps.update(record.id, "u-other", { graph: next })).toBeNull();
       expect(await roadmaps.get(record.id, "u-own")).toMatchObject({ graph: { title: "Edited" } });
     });
+
+    it("stores one lesson per node, visible only to the owner, and deletes with the roadmap", async () => {
+      const graph = { ...roadmap.graph, nodes: [node("ownership"), node("borrowing")] };
+      const record = await roadmaps.create("u-lessons", { ...roadmap, graph });
+      expect(await roadmaps.getLesson(record.id, "u-lessons", "ownership")).toBeNull();
+
+      await roadmaps.saveLesson(record.id, "u-lessons", "ownership", lesson);
+      await roadmaps.saveLesson(record.id, "u-lessons", "ownership", { ...lesson, title: "Ownership, again" });
+      expect((await roadmaps.getLesson(record.id, "u-lessons", "ownership"))?.title).toBe("Ownership, again");
+      expect(await roadmaps.lessonNodeIds(record.id, "u-lessons")).toEqual(["ownership"]);
+      expect(await roadmaps.list("u-lessons")).toMatchObject([{ modules: 2, lessonsWritten: 1 }]);
+
+      expect(await roadmaps.getLesson(record.id, "u-other", "ownership")).toBeNull();
+      expect(await roadmaps.lessonNodeIds(record.id, "u-other")).toEqual([]);
+      await expect(roadmaps.saveLesson(record.id, "u-other", "ownership", lesson)).rejects.toThrow();
+
+      await roadmaps.delete(record.id, "u-other");
+      expect(await roadmaps.get(record.id, "u-lessons")).not.toBeNull();
+      await roadmaps.delete(record.id, "u-lessons");
+      expect(await roadmaps.get(record.id, "u-lessons")).toBeNull();
+      expect(await roadmaps.lessonNodeIds(record.id, "u-lessons")).toEqual([]);
+    });
   });
 }
 
@@ -147,6 +191,10 @@ if (localDb) {
     get: (id, u) => seedUser(u).then(() => drizzleRoadmapRepo.get(id, u)),
     create: (u, r) => seedUser(u).then(() => drizzleRoadmapRepo.create(u, r)),
     update: (id, u, p) => seedUser(u).then(() => drizzleRoadmapRepo.update(id, u, p)),
+    delete: (id, u) => seedUser(u).then(() => drizzleRoadmapRepo.delete(id, u)),
+    lessonNodeIds: (id, u) => seedUser(u).then(() => drizzleRoadmapRepo.lessonNodeIds(id, u)),
+    getLesson: (id, u, n) => seedUser(u).then(() => drizzleRoadmapRepo.getLesson(id, u, n)),
+    saveLesson: (id, u, n, l) => seedUser(u).then(() => drizzleRoadmapRepo.saveLesson(id, u, n, l)),
   };
 
   // Rows cascade to onboarding_sessions, study_plans and roadmaps when users are removed.

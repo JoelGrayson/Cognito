@@ -1,3 +1,4 @@
+import type { Lesson } from "@/lib/schema";
 import type { DraftGraph, OnboardingState, StudyPlan } from "@/types/learning";
 
 export type OnboardingPatch = Partial<Omit<OnboardingState, "profile">> & {
@@ -35,7 +36,11 @@ export interface RoadmapRecord {
 }
 
 /** What the history list needs — the graph stays out of list payloads. */
-export type RoadmapSummary = Pick<RoadmapRecord, "id" | "title" | "goal" | "createdAt" | "updatedAt">;
+export type RoadmapSummary = Pick<RoadmapRecord, "id" | "title" | "goal" | "createdAt" | "updatedAt"> & {
+  /** Nodes the learner can open as modules (scope "included"). */
+  modules: number;
+  lessonsWritten: number;
+};
 
 export type NewRoadmap = Pick<RoadmapRecord, "title" | "goal" | "graph">;
 
@@ -47,4 +52,11 @@ export interface RoadmapRepo {
   create(userId: string, roadmap: NewRoadmap): Promise<RoadmapRecord>;
   /** Null when the record does not exist or belongs to someone else. */
   update(id: string, userId: string, patch: Partial<NewRoadmap>): Promise<RoadmapRecord | null>;
+  /** Removes the roadmap and its lessons. No-op when it is missing or someone else's. */
+  delete(id: string, userId: string): Promise<void>;
+  /** Ids of the nodes whose lesson has been written. */
+  lessonNodeIds(id: string, userId: string): Promise<string[]>;
+  getLesson(id: string, userId: string, nodeId: string): Promise<Lesson | null>;
+  /** Upserts; throws when the roadmap is missing or someone else's. */
+  saveLesson(id: string, userId: string, nodeId: string, lesson: Lesson): Promise<void>;
 }
