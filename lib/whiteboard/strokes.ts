@@ -62,6 +62,14 @@ export interface EndpointConfig {
   /** Minimum line height in px, so a single dot or dash doesn't produce a degenerate
    *  line box that makes every later stroke look like a new line. */
   minLineHeight: number;
+  /** A stroke that lands this many line-heights clear of the line, above or below,
+   *  starts a new line wherever it is. A worksheet is not written top to bottom:
+   *  the learner hops to a problem in the other column or back up the page, which is
+   *  never a carriage return, and the two problems would otherwise be read as one. */
+  jumpRatio: number;
+  /** The same, sideways. Much larger, because a wide gap inside one line is ordinary
+   *  ("x = 4      check: ...") while a wide vertical gap is not. */
+  jumpAcrossRatio: number;
   /** A line must have at least this many strokes before a break can fire against it.
    *  WHY (observed live, twice): the first stroke of a new line is usually one
    *  diagonal of an "x" or the stem of a "4". The SECOND stroke of that same
@@ -103,6 +111,8 @@ export interface EndpointConfig {
 export const DEFAULT_ENDPOINT_CONFIG: EndpointConfig = {
   belowRatio: 0.75,
   carriageReturnRatio: 0.35,
+  jumpRatio: 2,
+  jumpAcrossRatio: 6,
   minLineHeight: 12,
   minStrokesForBreak: 2,
   minLineWidthForBreak: 40,
@@ -129,10 +139,11 @@ export function mergeBounds(a: Bounds, b: Bounds): Bounds {
 /**
  * Does `stroke` begin a new line, given the bounds of the line being written?
  *
- * Pure geometry, no clock. Requires BOTH conditions, because either alone
- * misfires on ordinary math notation:
+ * Pure geometry, no clock. The ordinary break requires BOTH conditions, because
+ * either alone misfires on ordinary math notation:
  *   - vertical alone  -> a fraction denominator looks like a new line
  *   - horizontal alone -> writing "=" after a long term looks like a new line
+ * A stroke far enough from the line is a break on its own -- see jumpRatio.
  */
 export function startsNewLine(
   line: Bounds,
@@ -146,6 +157,10 @@ export function startsNewLine(
 
   // Too little written to judge against -- see minLineWidthForBreak.
   if (lineWidth < cfg.minLineWidthForBreak) return false;
+
+  const gapY = Math.max(0, stroke.bounds.minY - line.maxY, line.minY - stroke.bounds.maxY);
+  const gapX = Math.max(0, stroke.bounds.minX - line.maxX, line.minX - stroke.bounds.maxX);
+  if (gapY > lineHeight * cfg.jumpRatio || gapX > lineHeight * cfg.jumpAcrossRatio) return true;
 
   const isBelow = stroke.bounds.minY > line.minY + lineHeight * cfg.belowRatio;
   const isCarriageReturn = start.x < line.minX + lineWidth * cfg.carriageReturnRatio;
@@ -195,6 +210,9 @@ export interface StrokeRecorder {
   currentBounds(): Bounds | null;
   /** Drop the current line (call after committing it). */
   clear(): void;
+  /** Settle the line being written right now, without waiting for a line break or
+   *  the idle timer. For "I'm done, check it": the last line has nothing after it. */
+  flush(): void;
   stop(): void;
 }
 
@@ -289,6 +307,19 @@ export function recordStrokes(
         armIdle();
       }
 
+      // The eraser. Without this an erased stroke is still sent to the recognizer, so
+      // rubbing out a wrong sign and rewriting it reads as both signs at once.
+      for (const record of Object.values(entry.changes.removed)) {
+        if (record.typeName !== "shape" || record.type !== "draw") continue;
+        if (!line.some((s) => s.id === record.id)) continue;
+        line = line.filter((s) => s.id !== record.id);
+        bounds = line.length > 0 ? line.map((s) => s.bounds).reduce(mergeBounds) : null;
+        // The line changed, so whatever was read from it on idle is stale.
+        idleFiredFor = -1;
+        if (line.length > 0) armIdle();
+        else cancelIdle();
+      }
+
       // Pen-up and in-progress growth both arrive as updates.
       for (const [, next] of Object.values(entry.changes.updated)) {
         if (next.typeName !== "shape" || next.type !== "draw") continue;
@@ -313,6 +344,18 @@ export function recordStrokes(
       line = [];
       bounds = null;
       lineId += 1;
+    },
+    flush: () => {
+      cancelIdle();
+      if (line.length === 0) return;
+      if (idleFiredFor !== lineId) {
+        onCommit({ strokes: [...line], lineId, reason: "line-break" });
+      } else {
+        onCommit({ strokes: [], lineId, reason: "finalized" });
+      }
+      lineId += 1;
+      line = [];
+      bounds = null;
     },
     stop: () => {
       cancelIdle();
