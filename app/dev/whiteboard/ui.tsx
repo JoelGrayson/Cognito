@@ -522,7 +522,7 @@ export function Rail({
   onToggle: (panel: "worksheets" | "mastery") => void;
 }) {
   return (
-    <nav aria-label="Whiteboard panels" className="flex shrink-0 gap-2 lg:flex-col">
+    <nav aria-label="Whiteboard panels" className="flex shrink-0 gap-2 lg:flex-col lg:justify-end">
       {panels.includes("worksheets") && (
         <RailButton label="My worksheets" active={open === "worksheets"} onClick={() => onToggle("worksheets")}>
           <Icon name="folder" size={22} />
