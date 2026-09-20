@@ -9,7 +9,7 @@ import type { Editor, TLShapeId } from "tldraw";
 import { clusterByGap } from "./cluster";
 import { depict, type RDKit } from "./rdkit";
 import type { Bounds } from "./strokes";
-import { judgeStructure, trustedVerdict, type KeyEntry, type StructureVerdict } from "./structure-key";
+import { judgeStructure, trustedVerdict, TRUSTED_CONFIDENCE, type KeyEntry, type StructureVerdict } from "./structure-key";
 import { problemFor, type ProblemAnchor } from "./worksheet";
 
 export interface StructureReading {
@@ -19,6 +19,8 @@ export interface StructureReading {
   asked: number | null;
   smiles: string | null;
   confidence: number | null;
+  /** Which reader the SMILES came from. */
+  reader: "mathpix" | "gemini" | null;
   /** RDKit's drawing of what was read; null when it read nothing valid. */
   svg: string | null;
   /** null when nothing valid was read, which is never evidence of a mistake. */
@@ -64,14 +66,21 @@ export async function readStructures(
       // the tutor ask for larger lettering when the network was down.
       if (!res?.ok || !data) throw new Error(data?.error ?? "Couldn't reach the structure reader. Check the connection and try again.");
 
-      const drawn = depict(rdkit, data?.smiles ?? null, 200, 130);
+      const drawn = depict(rdkit, data.smiles ?? null, 200, 130);
+      // Trusted: Mathpix was sure, or the second reader came to the same molecule.
+      const second = depict(rdkit, data.mathpixSmiles ?? null).canonical;
+      const readingTrusted =
+        data.reader === "mathpix"
+          ? (data.confidence ?? 1) >= TRUSTED_CONFIDENCE
+          : drawn.canonical !== null && drawn.canonical === second;
       return {
         bounds: cluster.bounds,
         asked,
-        smiles: data?.smiles ?? null,
-        confidence: data?.confidence ?? null,
+        smiles: data.smiles ?? null,
+        confidence: data.confidence ?? null,
+        reader: data.reader ?? null,
         svg: drawn.svg,
-        verdict: trustedVerdict(drawn.canonical ? judgeStructure(drawn.canonical, key, asked) : null, data.confidence ?? null),
+        verdict: trustedVerdict(drawn.canonical ? judgeStructure(drawn.canonical, key, asked) : null, readingTrusted),
       };
     }),
   );

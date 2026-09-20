@@ -53,21 +53,24 @@ export function judgeStructure(canonical: string, key: KeyEntry[], asked: number
   return { kind: "no-match", asked };
 }
 
+/** Mathpix confidence at or above this is a reading we act on as-is. */
+export const TRUSTED_CONFIDENCE = 0.9;
+
 /**
- * Below this, a reading may CONFIRM an answer but never CONDEMN one.
+ * The verdict we are willing to act on, given whether the READING is trusted.
+ *
+ * A reading is trusted when Mathpix was sure, or when two independent readers agree.
+ * Anything else may still act when it lands EXACTLY on the answer key - the right
+ * answer, a listed mistake, another question's answer - because a misread landing
+ * exactly on one of a handful of molecules is very unlikely. What an untrusted reading
+ * can never do is produce a bare "that is wrong".
  *
  * Seen with a real stylus: a correct 2-bromo-2-methylbutane read as a dibromide at
- * 0.58, and the board circled right work as wrong. Every wrong or repaired reading so
- * far scored 0.82 or lower; correct ones were usually 0.95+, but one was 0.64. So the
- * rule is one-sided. A shaky reading that happens to equal the answer key is almost
- * certainly the answer (a misread landing exactly on the key is very unlikely), while
- * a shaky reading that differs is more likely our mistake than theirs - and accusing
- * someone of an error they did not make costs more than missing one.
+ * 0.58, and the board circled right work. A shaky reading that differs from the key is
+ * more likely our mistake than theirs, and accusing someone of an error they did not
+ * make costs more than missing one.
  */
-export const ACCUSE_CONFIDENCE_FLOOR = 0.9;
-
-/** The verdict we are willing to act on, given how sure the reading was. */
-export function trustedVerdict(verdict: StructureVerdict | null, confidence: number | null): StructureVerdict | null {
-  if (!verdict || verdict.kind === "correct") return verdict;
-  return confidence !== null && confidence < ACCUSE_CONFIDENCE_FLOOR ? null : verdict;
+export function trustedVerdict(verdict: StructureVerdict | null, readingTrusted: boolean): StructureVerdict | null {
+  if (!verdict || readingTrusted) return verdict;
+  return verdict.kind === "no-match" ? null : verdict;
 }

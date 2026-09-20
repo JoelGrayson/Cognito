@@ -16,6 +16,46 @@ import { NextResponse } from "next/server";
 export const maxDuration = 30;
 
 const MATHPIX_URL = "https://api.mathpix.com/v3/text";
+/** Below this Mathpix is not sure, and a second reader is asked. Same number the page
+ *  uses to decide whether to trust a reading (structure-key.ts). */
+const SECOND_OPINION_BELOW = 0.9;
+const GEMINI_MODEL = process.env.GEMINI_STRUCTURE_MODEL || "gemini-3.8-flash";
+
+/**
+ * The second reader. Mathpix is fast (~0.4s) but was trained on tidy diagrams: on a
+ * real stylus it read a 2-butanol as the letter "Y" and a toluene as "(Ei)". Gemini
+ * Flash read all five real drawings in the fixtures correctly, at 2-7s each, so it is
+ * asked only when Mathpix finds nothing or is unsure. (gpt-4.1 got 3 of 3 wrong and
+ * gpt-5 returned nothing in 30s; that is why it is this model.)
+ *
+ * It READS, it does not judge: it is never told the question or the answer.
+ */
+async function secondReading(image: string): Promise<string | null> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: "You read hand-drawn skeletal (line-angle) chemical structures. Reply with ONLY the SMILES of the molecule drawn, exactly as drawn, even if it looks chemically wrong. If it is not a chemical structure, reply NONE." }],
+        },
+        contents: [{ parts: [{ inlineData: { mimeType: "image/png", data: image.split(",")[1] } }, { text: "SMILES?" }] }],
+        // "low", measured: default thinking read the same drawings no better and once
+        // took 60s. Low keeps all of them right at 3-7s. ("minimal" is refused.)
+        generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } },
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    const text: string = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("").trim() ?? "";
+    // One token of SMILES, or nothing. Prose means it did not follow the instruction.
+    return /^[A-Za-z0-9@+\-\[\]()=#$\\/%.:]{1,200}$/.test(text) && text !== "NONE" ? text : null;
+  } catch {
+    return null;
+  }
+}
 const MAX_IMAGE_CHARS = 4_000_000;
 const FIXTURE_DIR = join(process.cwd(), "fixtures", "structures");
 
@@ -66,6 +106,7 @@ export async function POST(request: Request) {
     res = await fetch(MATHPIX_URL, {
       method: "POST",
       headers: { app_id: appId, app_key: appKey, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(10_000),
       body: JSON.stringify({ src: image, formats: ["text"], include_smiles: true, include_line_data: true }),
     });
   } catch (error) {
@@ -83,16 +124,24 @@ export async function POST(request: Request) {
   const text: string = data?.text ?? "";
   const found = [...text.matchAll(/<smiles[^>]*>(.*?)<\/smiles>/g)].map((m) => m[1]);
   const diagram = (data?.line_data ?? []).find((l: { subtype?: string }) => l.subtype === "chemistry");
+  const mathpixSmiles = found[0] ?? null;
+  const mathpixConfidence = (diagram?.confidence ?? data?.confidence ?? null) as number | null;
+  const unsure = !mathpixSmiles || (mathpixConfidence !== null && mathpixConfidence < SECOND_OPINION_BELOW);
+  const second = unsure ? await secondReading(image) : null;
+
   const reading = {
-    smiles: found[0] ?? null,
+    smiles: second ?? mathpixSmiles,
+    reader: (second ? "gemini" : mathpixSmiles ? "mathpix" : null) as "gemini" | "mathpix" | null,
+    /** Kept beside a second reading so the page can see whether the two agree. */
+    mathpixSmiles,
     /** More than one means the cut was wrong and two drawings shared a picture. */
     structuresSeen: found.length,
-    confidence: (diagram?.confidence ?? data?.confidence ?? null) as number | null,
+    confidence: mathpixConfidence,
     text,
-    ms,
+    ms: Date.now() - started,
   };
 
   void capture(image, { ...reading, intended: typeof intended === "string" ? intended.slice(0, 200) : "" });
-  console.log(`[wb] structure ${ms}ms conf=${reading.confidence?.toFixed(2) ?? "?"} smiles=${reading.smiles ?? "(none)"} text="${text.slice(0, 80)}"`);
+  console.log(`[wb] structure ${reading.ms}ms reader=${reading.reader ?? "none"} mathpix=${mathpixSmiles ?? "(none)"} conf=${reading.confidence?.toFixed(2) ?? "?"} smiles=${reading.smiles ?? "(none)"} text="${text.slice(0, 80)}"`);
   return NextResponse.json(reading);
 }
