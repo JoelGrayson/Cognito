@@ -1,35 +1,29 @@
 /**
- * THE SPIKE. Answers one question: can Mathpix read your handwriting well enough,
- * and fast enough, to build the interrupt loop on top of it?
- *
- * Write a line, hit Read. Write the next line, hit Read again. The second reading is
- * checked against the first with the real checker, so this proves the whole chain --
- * pen -> text -> "does this step follow?" -- not just the OCR.
- *
- * Judge it on three things, in this order:
- *   1. Does it read YOUR messy handwriting correctly? (accuracy is everything)
- *   2. Is the round trip under ~400ms? (the number is printed on screen)
- *   3. Does latexToMathjs() produce something the checker can parse?
- * If 1 fails, switch to typed input and keep the rest of the design.
+ * The handwriting whiteboard: write a line, start the next one underneath, and each
+ * step is read (Mathpix) and checked against the one before it with the real checker.
+ * On a blank board or on an uploaded worksheet.
  */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   AssetRecordType,
-  DefaultColorStyle,
-  DefaultSizeStyle,
   Tldraw,
   createShapeId,
   type Editor,
   type TLComponents,
 } from "tldraw";
 import "tldraw/tldraw.css";
+import "./whiteboard.css";
+import { Mascot } from "@/components/Mascot";
+import { Dock, Icon, Library, Rail, Tag, TutorBubble, type PenColor, type PenSize } from "./ui";
 import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
 import { pagesOf } from "@/lib/whiteboard/pdf";
+import { deleteSheet, fileOf, listSheets, saveSheet, sheetId, type SavedSheet } from "@/lib/whiteboard/library";
 import { anchorsFrom, premiseFor, problemFor, type PrintedLine, type ProblemAnchor } from "@/lib/whiteboard/worksheet";
 import { assessExplanation, replyTo } from "@/lib/whiteboard/explanation";
 import { createSpeaker, createPushToTalk, spokenFor, ASK_WHY, type Speaker, type PushToTalk } from "@/lib/whiteboard/voice";
@@ -75,10 +69,12 @@ const SHEET_GAP = 32;
  *  inequalities, one expression. One per row, so no two read as a single line. */
 const SAMPLE_SHEET = "/worksheets/algebra-practice.pdf";
 
-/** A notebook, not a diagramming tool: keep the toolbar (pen, eraser, highlighter) and
- *  undo, drop everything that floats over the page or leads off it. The style panel in
- *  particular opens on top of the worksheet's right-hand margin. */
+/** A notebook, not a diagramming tool: drop everything that floats over the page or
+ *  leads off it. The style panel in particular opens on top of the worksheet's
+ *  right-hand margin. The toolbar is replaced by the Dock. */
 const NOTEBOOK_UI: TLComponents = {
+  Toolbar: null,
+  MenuPanel: null,
   StylePanel: null,
   PageMenu: null,
   MainMenu: null,
@@ -87,21 +83,20 @@ const NOTEBOOK_UI: TLComponents = {
   HelpMenu: null,
   DebugPanel: null,
 };
-/** Red is left out on purpose: it is the tutor's pen. */
-const PEN_COLORS = [
-  ["black", "bg-neutral-900"],
-  ["blue", "bg-blue-600"],
-  ["green", "bg-emerald-600"],
+
+const RUNG_OPTIONS = [
+  [0, "Stay silent"],
+  [1, "A “?” in the margin"],
+  [2, "“Look here”"],
+  [3, "Circle or strike it"],
+  [4, "Circle the sign and say why"],
+  [5, "Plus an arrow to the prior step"],
 ] as const;
-type PenColor = (typeof PEN_COLORS)[number][0];
-/** tldraw size token -> dot diameter (px) for the picker. */
-const PEN_SIZES = [
-  ["s", 4],
-  ["m", 7],
-  ["l", 11],
-  ["xl", 15],
+
+const MODE_OPTIONS = [
+  ["live", "Check as I go"],
+  ["when-done", "Check when I'm done"],
 ] as const;
-type PenSize = (typeof PEN_SIZES)[number][0];
 
 /** A step the checker has judged wrong. Everything the tutor later needs to mark it,
  *  talk about it, and escalate on it. */
@@ -166,8 +161,11 @@ function speakOrReport(
     .catch((e) => report(e instanceof Error ? e.message : "Voice failed."));
 }
 
-export default function SpikePage() {
+export default function WhiteboardPage() {
   const editorRef = useRef<Editor | null>(null);
+  /** The same editor, as state: the Dock renders from it, the callbacks read the ref. */
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [readings, setReadings] = useState<Reading[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -238,7 +236,15 @@ export default function SpikePage() {
    *  is judged after the verdict has already been announced. */
   const inflightRef = useRef<Set<Promise<void>>>(new Set());
   const anchorsRef = useRef<ProblemAnchor[]>([]);
-  const [worksheet, setWorksheet] = useState<{ name: string; pages: number; problems: number } | null>(null);
+  const [worksheet, setWorksheet] = useState<{ id: string; name: string; pages: number; problems: number } | null>(
+    null,
+  );
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [sheets, setSheets] = useState<SavedSheet[]>([]);
+  // The library is a convenience: where IndexedDB is unavailable (private windows) the
+  // shelf is simply empty and uploading still works.
+  const refreshSheets = useCallback(() => listSheets().then(setSheets, () => setSheets([])), []);
+  useEffect(() => void refreshSheets(), [refreshSheets]);
   const [uploading, setUploading] = useState(false);
   const [penColor, setPenColor] = useState<PenColor>("black");
   const [penSize, setPenSize] = useState<PenSize>("m");
@@ -704,6 +710,7 @@ export default function SpikePage() {
       setError(null);
       try {
         const pages = await pagesOf(file);
+        void saveSheet(file, pages).then(refreshSheets, () => {});
         // A new sheet is a new session: old working would be anchored to problems
         // that are no longer there.
         reset();
@@ -796,6 +803,7 @@ export default function SpikePage() {
         );
         anchorsRef.current = anchorsFrom(printed);
         setWorksheet({
+          id: sheetId(file),
           name: file.name,
           pages: pages.length,
           problems: anchorsRef.current.filter((a) => a.parsed).length,
@@ -811,315 +819,337 @@ export default function SpikePage() {
         setUploading(false);
       }
     },
-    [reset, removeWorksheet],
+    [reset, removeWorksheet, refreshSheets],
   );
+
+  /** Below xl the library covers the canvas, so choosing something has to dismiss it;
+   *  docked beside the canvas it stays put, like a sidebar. */
+  const closeLibraryIfCovering = () => {
+    if (!window.matchMedia("(min-width: 1280px)").matches) setLibraryOpen(false);
+  };
+
+  const outline =
+    "inline-flex items-center gap-2 rounded-xl border border-(--wb-line) bg-(--wb-card) px-3.5 py-2 text-sm hover:bg-(--wb-hover) disabled:opacity-50";
+  const field = "w-full rounded-lg border border-(--wb-line) bg-(--wb-card) px-2 py-1.5 text-sm";
 
   return (
     /* h-dvh, not h-screen: on iOS Safari h-screen is the WRONG height because of the
        address bar, and the canvas ends up pushed off the bottom of the viewport.
        overscroll-none stops the page rubber-banding while you draw. */
     /* fixed, over the site nav: the nav sits above this page in the root layout, so an
-       h-dvh box starts 65px down and its bottom 65px - tldraw's pen and eraser toolbar -
-       falls off the screen. A notebook wants the whole screen anyway. */
-    <div className="fixed inset-0 z-50 flex h-dvh flex-col overscroll-none bg-neutral-950 text-neutral-100">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-800 px-3 py-2">
-        <h1 className="text-sm font-semibold">Handwriting spike</h1>
-        <span className="hidden text-xs text-neutral-500 sm:inline">
-          write on a blank board or an uploaded worksheet
-        </span>
-        <label className="flex items-center gap-1 text-[11px] text-neutral-500">
-          rung
-          <select
-            value={rung}
-            onChange={(e) => setRung(Number(e.target.value) as HintLevel)}
-            className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-[11px] text-neutral-200"
-          >
-            <option value={0}>0 — silent</option>
-            <option value={1}>1 — “?” in margin</option>
-            <option value={2}>2 — “look here”</option>
-            <option value={3}>3 — circle / strike</option>
-            <option value={4}>4 — circle the sign + why</option>
-            <option value={5}>5 — + arrow to prior step</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-1 text-[11px] text-neutral-500">
-          <input type="checkbox" checked={voiceOn} onChange={(e) => setVoiceOn(e.target.checked)} />
-          voice
-        </label>
-        <select
-          value={voiceId}
-          onChange={(e) => {
-            setVoiceId(e.target.value);
-            // Speak on change so the voice can be auditioned without writing anything.
-            speakOrReport(
-              speakerRef.current,
-              setError,
-              "Something in there doesn't hold up. Want to take another look?",
-              e.target.value,
-            );
-          }}
-          className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-[11px] text-neutral-200"
-        >
-          {VOICE_OPTIONS.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <span className="font-mono text-[10px] text-neutral-600">
-          idle {idleMs}ms
-        </span>
-        <div className="flex overflow-hidden rounded border border-neutral-700 text-[11px]">
-          {(
-            [
-              ["live", "check as I go"],
-              ["when-done", "check when I'm done"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => {
-                setMode(value);
-                modeRef.current = value;
-                // Going live with verdicts still held back would strand them.
-                if (value === "live" && mode === "when-done") void checkNow();
-              }}
-              className={`px-2 py-1 ${mode === value ? "bg-neutral-200 text-neutral-900" : "text-neutral-400"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1" role="radiogroup" aria-label="Pen colour">
-          {PEN_COLORS.map(([color, swatch]) => (
-            <button
-              key={color}
-              role="radio"
-              aria-checked={penColor === color}
-              aria-label={color}
-              onClick={() => {
-                setPenColor(color);
-                editorRef.current?.setStyleForNextShapes(DefaultColorStyle, color);
-                editorRef.current?.setCurrentTool("draw");
-              }}
-              className={`h-5 w-5 rounded-full border border-neutral-500 ${swatch} ${
-                penColor === color ? "ring-2 ring-neutral-200 ring-offset-1 ring-offset-neutral-950" : ""
-              }`}
-            />
-          ))}
-        </div>
-        <div className="flex items-center gap-1" role="radiogroup" aria-label="Pen thickness">
-          {PEN_SIZES.map(([size, px]) => (
-            <button
-              key={size}
-              role="radio"
-              aria-checked={penSize === size}
-              aria-label={`thickness ${size}`}
-              title={`Thickness ${size}`}
-              onClick={() => {
-                setPenSize(size);
-                editorRef.current?.setStyleForNextShapes(DefaultSizeStyle, size);
-                editorRef.current?.setCurrentTool("draw");
-              }}
-              className={`flex h-5 w-5 items-center justify-center rounded ${
-                penSize === size ? "bg-neutral-700" : "hover:bg-neutral-800"
-              }`}
-            >
-              <span
-                className="block rounded-full bg-neutral-200"
-                style={{ width: px, height: px }}
-              />
-            </button>
-          ))}
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/pdf,image/*"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            // Cleared so picking the same file again still fires a change.
-            e.target.value = "";
-            if (file) void loadWorksheet(file);
-          }}
-        />
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="rounded border border-neutral-700 px-2 py-1 text-[11px] text-neutral-200 disabled:opacity-50"
-        >
-          {uploading ? "opening…" : worksheet ? "replace worksheet" : "upload worksheet"}
-        </button>
-        {!worksheet && (
-          <button
-            onClick={async () => {
-              const res = await fetch(SAMPLE_SHEET);
-              if (!res.ok) return setError("Couldn't load the sample worksheet.");
-              void loadWorksheet(new File([await res.blob()], "algebra-practice.pdf", { type: "application/pdf" }));
-            }}
-            disabled={uploading}
-            className="rounded border border-neutral-700 px-2 py-1 text-[11px] text-neutral-400 disabled:opacity-50"
-          >
-            try the sample
-          </button>
-        )}
+       h-dvh box starts 65px down and its bottom 65px - the Dock - falls off the screen.
+       A notebook wants the whole screen anyway. */
+    <div className="wb fixed inset-0 z-50 flex h-dvh flex-col overscroll-none">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-6">
+        <Link href="/" className="wb-serif text-2xl font-medium tracking-tight">
+          Cognito
+        </Link>
+        <span className="h-6 w-px bg-(--wb-line)" />
+        <span className="text-lg text-(--wb-muted)">Whiteboard</span>
         {worksheet && (
-          <span className="flex items-center gap-1 text-[11px] text-neutral-500">
-            <span className="max-w-40 truncate">{worksheet.name}</span>· {worksheet.pages}p · {worksheet.problems}{" "}
-            problems read
-            <button onClick={removeWorksheet} aria-label="Remove worksheet" className="px-1 text-neutral-400">
-              ✕
+          <span className="flex items-center gap-2 rounded-md bg-(--wb-butter) py-1 pl-2.5 pr-1.5 text-[11px] font-medium uppercase tracking-wider text-(--wb-butter-ink)">
+            <span className="max-w-40 truncate">{worksheet.name}</span>
+            <span className="normal-case tracking-normal opacity-70">
+              {worksheet.pages}p · {worksheet.problems} problems read
+            </span>
+            <button onClick={removeWorksheet} aria-label="Remove worksheet" className="rounded p-0.5 hover:bg-black/5">
+              <Icon name="x" size={12} />
             </button>
           </span>
         )}
-        <div className="ml-auto flex gap-2">
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {(busy || checking) && (
-            <span className="self-center text-xs text-neutral-400">{checking ? "checking…" : "reading…"}</span>
+            <span className="text-sm text-(--wb-muted)">{checking ? "checking…" : "reading…"}</span>
           )}
-          {mode === "when-done" && (
+          {uploading && <span className="text-sm text-(--wb-muted)">opening…</span>}
+          <div className="flex rounded-xl border border-(--wb-line) bg-(--wb-card) p-1 text-sm">
+            {MODE_OPTIONS.map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => {
+                  setMode(value);
+                  modeRef.current = value;
+                  // Going live with verdicts still held back would strand them.
+                  if (value === "live" && mode === "when-done") void checkNow();
+                }}
+                className={`rounded-lg px-3 py-1 ${
+                  mode === value ? "bg-(--wb-primary) text-(--wb-card)" : "text-(--wb-muted) hover:text-(--wb-ink)"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/pdf,image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Cleared so picking the same file again still fires a change.
+              e.target.value = "";
+              if (file) {
+                closeLibraryIfCovering();
+                void loadWorksheet(file);
+              }
+            }}
+          />
+          <div className="relative">
             <button
-              onClick={() => void checkNow()}
-              disabled={checking}
-              className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-neutral-950 disabled:opacity-50"
+              onClick={() => setSettingsOpen((open) => !open)}
+              aria-label="Tutor settings"
+              aria-expanded={settingsOpen}
+              className={`${outline} px-2.5`}
             >
-              Check my work
+              <Icon name="sliders" size={18} />
             </button>
-          )}
-          <button
-            onMouseDown={beginTalking}
-            onMouseUp={endTalking}
-            onMouseLeave={endTalking}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              void beginTalking();
-            }}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              void endTalking();
-            }}
-            className={`select-none rounded px-4 py-2 text-sm font-medium ${
-              listening ? "bg-red-500 text-white" : "border border-neutral-700 text-neutral-200"
-            }`}
-          >
-            {listening ? "listening…" : "hold to talk"}
-          </button>
-          <button onClick={reset} className="rounded border border-neutral-700 px-3 py-2 text-sm">
-            Reset
-          </button>
+            {settingsOpen && (
+              <div className="wb-pop absolute right-0 top-full z-[400] mt-2 w-72 space-y-3 rounded-2xl border border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_12px_40px_rgb(59_42_31/0.16)]">
+                <p className="text-[11px] font-medium uppercase tracking-widest text-(--wb-muted)">Tutor settings</p>
+                <label className="block space-y-1 text-sm">
+                  <span>How much the first hint shows</span>
+                  <select value={rung} onChange={(e) => setRung(Number(e.target.value) as HintLevel)} className={field}>
+                    {RUNG_OPTIONS.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {value} · {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block space-y-1 text-sm">
+                  <span>Voice</span>
+                  <select
+                    value={voiceId}
+                    onChange={(e) => {
+                      setVoiceId(e.target.value);
+                      // Speak on change so the voice can be auditioned without writing anything.
+                      speakOrReport(
+                        speakerRef.current,
+                        setError,
+                        "Something in there doesn't hold up. Want to take another look?",
+                        e.target.value,
+                      );
+                    }}
+                    className={field}
+                  >
+                    {VOICE_OPTIONS.map(([id, name]) => (
+                      <option key={id} value={id}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="font-mono text-[10px] text-(--wb-muted)">
+                  idle {idleMs}ms · {box}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Column on phones/tablets, row on desktop. min-h-0/min-w-0 are load-bearing:
           without them a flex child refuses to shrink and the canvas collapses to 0px. */}
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 sm:px-4 sm:pb-4 lg:flex-row">
+        <Rail libraryOpen={libraryOpen} onLibrary={() => setLibraryOpen((open) => !open)} />
+        {libraryOpen && (
+          <Library
+            sheets={sheets}
+            currentId={worksheet?.id ?? null}
+            busy={uploading}
+            onClose={() => setLibraryOpen(false)}
+            onUpload={() => fileRef.current?.click()}
+            onBlank={() => {
+              reset();
+              removeWorksheet();
+              closeLibraryIfCovering();
+            }}
+            onSample={async () => {
+              const res = await fetch(SAMPLE_SHEET);
+              closeLibraryIfCovering();
+              if (!res.ok) return setError("Couldn't load the sample worksheet.");
+              await loadWorksheet(new File([await res.blob()], "algebra-practice.pdf", { type: "application/pdf" }));
+            }}
+            onOpen={async (id) => {
+              const file = await fileOf(id).catch(() => null);
+              closeLibraryIfCovering();
+              if (!file) return setError("Couldn't find that worksheet in this browser any more.");
+              await loadWorksheet(file);
+            }}
+            onDelete={(id) => {
+              if (worksheet?.id === id) removeWorksheet();
+              void deleteSheet(id).then(refreshSheets, () => {});
+            }}
+          />
+        )}
         <div
           ref={boxRef}
-          className="relative min-h-[55dvh] w-full flex-1 touch-none lg:min-h-0"
+          className="relative min-h-[55dvh] w-full flex-1 touch-none overflow-hidden rounded-3xl border border-(--wb-line) bg-(--wb-card) shadow-[0_1px_3px_rgb(59_42_31/0.06)] lg:min-h-0"
         >
-          <span className="pointer-events-none absolute right-1 top-1 z-[300] rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
-            {box}
-          </span>
           <div className="absolute inset-0">
             <Tldraw
-            components={NOTEBOOK_UI}
-            onMount={(editor) => {
-              editorRef.current = editor;
-              // Open on the pencil, not the select tool -- otherwise the first
-              // scribble silently does nothing and it looks broken.
-              editor.setCurrentTool("draw");
-              // Auto-commit: starting a new line commits the previous one. No timer,
-              // so you can pause mid-line to think without anything firing.
-              // Start from a clean canvas. Ink that survives a reload gets replayed
-              // into the recorder as one batch of "added" strokes, which merges every
-              // previous line into a single commit -- observed as an 11-stroke read
-              // coming back as a \begin{aligned} block that then fails to parse.
-              const existing = editor.getCurrentPageShapes().map((sh) => sh.id);
-              if (existing.length > 0) editor.deleteShapes(existing);
+              components={NOTEBOOK_UI}
+              onMount={(editor) => {
+                editorRef.current = editor;
+                setEditor(editor);
+                // Open on the pencil, not the select tool -- otherwise the first
+                // scribble silently does nothing and it looks broken.
+                editor.setCurrentTool("draw");
+                // Auto-commit: starting a new line commits the previous one. No timer,
+                // so you can pause mid-line to think without anything firing.
+                // Start from a clean canvas. Ink that survives a reload gets replayed
+                // into the recorder as one batch of "added" strokes, which merges every
+                // previous line into a single commit -- observed as an 11-stroke read
+                // coming back as a \begin{aligned} block that then fails to parse.
+                const existing = editor.getCurrentPageShapes().map((sh) => sh.id);
+                if (existing.length > 0) editor.deleteShapes(existing);
 
-              // Swallow pasted text. tldraw turns any text paste into a black text
-              // shape, and a system dictation tool listening alongside push-to-talk
-              // pastes what it heard - so the learner's own words landed on the page,
-              // looking like something the tutor wrote.
-              editor.registerExternalContentHandler("text", () => {});
+                // Swallow pasted text. tldraw turns any text paste into a black text
+                // shape, and a system dictation tool listening alongside push-to-talk
+                // pastes what it heard - so the learner's own words landed on the page,
+                // looking like something the tutor wrote.
+                editor.registerExternalContentHandler("text", () => {});
 
-              annotatorRef.current = createAnnotator(editor);
-              speakerRef.current ??= createSpeaker();
-              // React dev-mode mounts twice. Without this, two store listeners end up
-              // registered and every line is submitted twice.
-              recorderRef.current?.stop();
-              recorderRef.current = recordStrokes(
-                editor,
-                (commit) => {
-                  const read = submitLine(commit);
-                  inflightRef.current.add(read);
-                  void read.finally(() => inflightRef.current.delete(read));
-                },
-                { ...DEFAULT_ENDPOINT_CONFIG, finalLineIdleMs: idleMs },
-              );
-            }}
+                annotatorRef.current = createAnnotator(editor);
+                speakerRef.current ??= createSpeaker();
+                // React dev-mode mounts twice. Without this, two store listeners end up
+                // registered and every line is submitted twice.
+                recorderRef.current?.stop();
+                recorderRef.current = recordStrokes(
+                  editor,
+                  (commit) => {
+                    const read = submitLine(commit);
+                    inflightRef.current.add(read);
+                    void read.finally(() => inflightRef.current.delete(read));
+                  },
+                  { ...DEFAULT_ENDPOINT_CONFIG, finalLineIdleMs: idleMs },
+                );
+              }}
             />
+          </div>
+
+          {error && (
+            <div className="wb-pop absolute inset-x-3 top-3 z-[300] mx-auto flex max-w-md items-start gap-2 rounded-2xl border border-(--wb-bad-ink)/15 bg-(--wb-bad) px-4 py-2.5 text-sm text-(--wb-bad-ink)">
+              <span className="flex-1">{error}</span>
+              <button onClick={() => setError(null)} aria-label="Dismiss" className="mt-0.5">
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          )}
+
+          <div className="pointer-events-none absolute bottom-16 left-3 z-[300] flex flex-col items-start gap-2 sm:bottom-[4.5rem] sm:left-4">
+            {(listening || said) && (
+              <div className="pointer-events-auto">
+                {listening ? (
+                  <TutorBubble text="I'm listening…" />
+                ) : (
+                  said && <TutorBubble text={said} onDismiss={() => setSaid(null)} />
+                )}
+              </div>
+            )}
+            <div className="hidden sm:block">
+              <Mascot listening={listening} />
+            </div>
+          </div>
+
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[300] flex items-center justify-center gap-2 sm:bottom-4">
+            <div className="pointer-events-auto max-w-full">
+              <Dock
+                editor={editor}
+                penColor={penColor}
+                onPenColor={setPenColor}
+                penSize={penSize}
+                onPenSize={setPenSize}
+                voiceOn={voiceOn}
+                onVoiceOn={setVoiceOn}
+                listening={listening}
+                onTalkStart={() => void beginTalking()}
+                onTalkEnd={() => void endTalking()}
+                onReset={reset}
+              />
+            </div>
+            {mode === "when-done" && (
+              <button
+                onClick={() => void checkNow()}
+                disabled={checking}
+                className="pointer-events-auto inline-flex shrink-0 items-center gap-2 rounded-full bg-(--wb-primary) px-5 py-3 text-sm font-medium text-(--wb-card) shadow-[0_6px_24px_rgb(59_42_31/0.2)] disabled:opacity-50"
+              >
+                <Icon name="check" size={16} />
+                Check my work
+              </button>
+            )}
           </div>
         </div>
 
-        <aside className="max-h-[38dvh] shrink-0 overflow-y-auto border-t border-neutral-800 p-3 lg:max-h-none lg:w-96 lg:border-l lg:border-t-0 lg:p-4">
-          {error && (
-            <p className="mb-3 rounded border border-red-900 bg-red-950/50 p-2 text-xs text-red-300">{error}</p>
-          )}
-          {said && (
-            <p className="mb-3 rounded border border-red-900 bg-red-950/40 p-2 text-sm italic text-red-300">
-              “{said}”
-            </p>
-          )}
-          {readings.length === 0 && !error && (
-            <p className="text-xs text-neutral-500">
-              {mode === "live"
-                ? "Write a line, then start the next one underneath. Nothing to press."
-                : "Work the whole thing through, then press Check my work."}
-            </p>
-          )}
+        <aside className="flex max-h-[38dvh] shrink-0 flex-col overflow-hidden rounded-3xl border border-(--wb-line) bg-(--wb-card) lg:max-h-none lg:w-80 2xl:w-96">
+          <h2 className="wb-serif shrink-0 px-5 pb-2 pt-4 text-xl">Your steps</h2>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+            {readings.length === 0 && (
+              <div className="grid place-items-center gap-3 px-6 py-10 text-center">
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-(--wb-butter) text-(--wb-butter-ink)">
+                  <Icon name="pen" />
+                </span>
+                <p className="text-sm text-(--wb-muted)">
+                  {mode === "live"
+                    ? "Write a line, then start the next one underneath. Nothing to press."
+                    : "Work the whole thing through, then press Check my work."}
+                </p>
+              </div>
+            )}
 
-          <ol className="space-y-2">
-            {readings.map((r, i) => (
-              <li key={i} className="rounded border border-neutral-800 p-2.5 text-xs">
-                <div className="mb-1 flex items-center justify-between text-neutral-500">
-                  <span>
-                    step {i + 1}
-                    {r.provisional && <span className="ml-1 text-neutral-600">· still writing?</span>}
-                  </span>
-                  <span className={r.ms < 400 ? "text-green-400" : "text-amber-400"}>{r.ms}ms</span>
-                </div>
-                <div className="break-all font-mono text-sm text-neutral-100">{r.raw || "(nothing read)"}</div>
-                <div className="mt-1 break-all font-mono text-[11px] text-neutral-400">→ {r.parsed}</div>
-                <div className="mt-1 text-[11px] text-neutral-500">
-                  {r.strokeCount} strokes
-                  {r.confidence !== null && ` · confidence ${r.confidence.toFixed(2)}`}
-                </div>
-                {r.hidden && <div className="mt-2 text-[11px] text-neutral-600">held until you check</div>}
-                {r.verdict && !r.hidden && (
-                  <div
-                    className={`mt-2 rounded px-2 py-1 text-[11px] ${
-                      r.verdict.kind === "equivalent"
-                        ? "bg-green-950/60 text-green-300"
-                        : r.verdict.kind === "undetermined"
-                          ? "bg-neutral-800 text-neutral-400"
-                          : "bg-red-950/60 text-red-300"
-                    }`}
-                  >
-                    <strong>{r.verdict.kind}</strong>
-                    {r.verdict.kind === "direction" &&
-                      ` — expected "${r.verdict.expected}", got "${r.verdict.got}"`}
-                    {r.verdict.kind === "undetermined" && ` — ${r.verdict.why}`}
-                    {r.verdict.kind === "not-equivalent" &&
-                      ` — at ${r.verdict.witness.variable}=${r.verdict.witness.at.toFixed(2)}: previous ${r.verdict.witness.previousValue.toFixed(2)}, yours ${r.verdict.witness.currentValue.toFixed(2)}`}
-                    {r.checkMs !== null && (
-                      <span className="ml-1 text-neutral-500">({r.checkMs.toFixed(2)}ms)</span>
+            <ol className="space-y-2.5">
+              {readings.map((r, i) => (
+                <li key={i} className="rounded-2xl border border-(--wb-line) p-3.5">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium uppercase tracking-widest text-(--wb-muted)">
+                      Step {i + 1}
+                    </span>
+                    {r.hidden ? (
+                      <Tag tone="butter">Held until you check</Tag>
+                    ) : r.verdict ? (
+                      r.verdict.kind === "equivalent" ? (
+                        <Tag tone="good">Follows</Tag>
+                      ) : r.verdict.kind === "undetermined" ? (
+                        <Tag tone="quiet">Couldn&apos;t tell</Tag>
+                      ) : (
+                        <Tag tone="bad">Take another look</Tag>
+                      )
+                    ) : (
+                      r.provisional && <Tag tone="quiet">Still writing?</Tag>
                     )}
                   </div>
-                )}
-              </li>
-            ))}
-          </ol>
+                  <div className="break-all font-mono text-[15px]">{r.raw || "(nothing read)"}</div>
+                  <details className="mt-2 text-[11px] text-(--wb-muted)">
+                    <summary className="cursor-pointer select-none">Details</summary>
+                    <div className="mt-1.5 space-y-1">
+                      <div className="break-all font-mono">→ {r.parsed}</div>
+                      <div>
+                        {r.strokeCount} strokes
+                        {r.confidence !== null && ` · confidence ${r.confidence.toFixed(2)}`} ·{" "}
+                        <span className={r.ms < 400 ? "text-(--wb-good-ink)" : "text-(--wb-butter-ink)"}>
+                          read in {r.ms}ms
+                        </span>
+                        {r.provisional && " · still writing?"}
+                      </div>
+                      {r.verdict && !r.hidden && (
+                        <div>
+                          <strong>{r.verdict.kind}</strong>
+                          {r.verdict.kind === "direction" &&
+                            ` — expected "${r.verdict.expected}", got "${r.verdict.got}"`}
+                          {r.verdict.kind === "undetermined" && ` — ${r.verdict.why}`}
+                          {r.verdict.kind === "not-equivalent" &&
+                            ` — at ${r.verdict.witness.variable}=${r.verdict.witness.at.toFixed(2)}: previous ${r.verdict.witness.previousValue.toFixed(2)}, yours ${r.verdict.witness.currentValue.toFixed(2)}`}
+                          {r.checkMs !== null && ` (${r.checkMs.toFixed(2)}ms)`}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          </div>
         </aside>
       </div>
     </div>

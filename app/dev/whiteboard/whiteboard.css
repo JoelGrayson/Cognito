@@ -1,0 +1,30 @@
+/* The page under the ink is the card, not tldraw's cool grey. */
+.wb .tl-theme__light {
+  --tl-color-background: var(--wb-card);
+}
+
+.wb-pop {
+  animation: wb-pop 180ms ease-out;
+}
+@keyframes wb-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+.wb-listening {
+  animation: wb-pulse 1.2s ease-in-out infinite;
+}
+@keyframes wb-pulse {
+  50% {
+    box-shadow: 0 0 0 8px rgb(217 83 79 / 0.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-pop,
+  .wb-listening {
+    animation: none;
+  }
+}

@@ -10,13 +10,13 @@ const LINKS = [
   { href: "/topics", label: "Topics", match: (path: string) => path.startsWith("/topics") },
 ];
 
-const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong";
+const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--wb-primary)";
 
 function Nav({ pathname }: { pathname: string | null }) {
   return (
-    <header className="sticky top-0 z-50 border-b border-[#ecebe7] bg-white/90 backdrop-blur">
+    <header className="wb sticky top-0 z-50 border-b border-(--wb-line) bg-(--wb-bg)/90 backdrop-blur">
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-3 sm:px-8">
-        <Link href="/" className={`text-base font-semibold tracking-tight ${focus}`}>
+        <Link href="/" className={`wb-serif text-2xl font-medium tracking-tight ${focus}`}>
           Cognito
         </Link>
         <ul className="flex items-center gap-1 sm:gap-2">
@@ -27,8 +27,8 @@ function Nav({ pathname }: { pathname: string | null }) {
                 <Link
                   href={link.href}
                   aria-current={active ? "page" : undefined}
-                  className={`inline-flex min-h-10 items-center rounded-full px-3 text-sm font-medium sm:px-4 ${focus} ${
-                    active ? "bg-[#ecebfb] text-[#3b3499]" : "text-neutral-600 hover:bg-[#f0f0ee] hover:text-neutral-900"
+                  className={`inline-flex min-h-10 items-center rounded-xl px-3 text-sm sm:px-4 ${focus} ${
+                    active ? "bg-(--wb-primary) text-(--wb-card)" : "text-(--wb-muted) hover:bg-(--wb-hover) hover:text-(--wb-ink)"
                   }`}
                 >
                   {link.label}
