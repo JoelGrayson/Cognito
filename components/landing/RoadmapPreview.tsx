@@ -20,62 +20,37 @@ const NODES: { id: string; title: string; sub: string; tone: Tone }[] = [
   { id: "nn", title: "Neural networks", sub: "8 h", tone: "advanced" },
 ];
 
-interface Layout {
-  viewBox: string;
-  at: Record<string, [x: number, y: number]>;
-  edges: { d: string; dashed?: boolean }[];
-}
-
-/** Top to bottom on a phone, where a wide drawing would shrink the labels to nothing;
- *  left to right everywhere else, so the card reads as a banner. */
-const LAYOUTS: Record<"portrait" | "landscape", Layout> = {
-  portrait: {
-    viewBox: "0 0 360 318",
-    at: { python: [20, 16], linalg: [190, 16], prob: [20, 96], calc: [190, 96], regress: [105, 176], nn: [105, 256] },
-    edges: [
-      { d: "M95 62 V94" },
-      { d: "M265 62 C265 84 140 74 140 94" },
-      { d: "M95 142 C95 162 140 156 140 174" },
-      { d: "M265 142 C265 162 220 156 220 174", dashed: true },
-      { d: "M180 222 V254" },
-    ],
-  },
-  landscape: {
-    viewBox: "0 0 730 168",
-    at: { python: [20, 16], linalg: [20, 106], prob: [200, 16], calc: [200, 106], regress: [380, 61], nn: [560, 61] },
-    edges: [
-      { d: "M170 33 H198" },
-      { d: "M170 129 C188 129 182 47 198 47" },
-      { d: "M350 39 C368 39 362 77 378 77" },
-      { d: "M350 129 C368 129 362 92 378 92", dashed: true },
-      { d: "M530 84 H558" },
-    ],
-  },
+const AT: Record<string, [x: number, y: number]> = {
+  python: [20, 16],
+  linalg: [190, 16],
+  prob: [20, 96],
+  calc: [190, 96],
+  regress: [105, 176],
+  nn: [105, 256],
 };
 
-export default function RoadmapPreview({
-  className,
-  orientation = "portrait",
-}: {
-  className?: string;
-  orientation?: keyof typeof LAYOUTS;
-}) {
-  const layout = LAYOUTS[orientation];
-  // Two previews can share a page; marker ids must not collide.
-  const arrow = `lp-arrow-${orientation}`;
+const EDGES: { d: string; dashed?: boolean }[] = [
+  { d: "M95 62 V94" },
+  { d: "M265 62 C265 84 140 74 140 94" },
+  { d: "M95 142 C95 162 140 156 140 174" },
+  { d: "M265 142 C265 162 220 156 220 174", dashed: true },
+  { d: "M180 222 V254" },
+];
+
+export default function RoadmapPreview({ className }: { className?: string }) {
   return (
     <svg
-      viewBox={layout.viewBox}
+      viewBox="0 0 360 318"
       role="img"
       aria-label="Example roadmap: Python basics marked as known, linear algebra and probability first, calculus skipped, then regression and neural networks."
       className={className}
     >
       <defs>
-        <marker id={arrow} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <marker id="lp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
           <path d="M1 1 L9 5 L1 9" fill="none" stroke="#a3948a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </marker>
       </defs>
-      {layout.edges.map((edge) => (
+      {EDGES.map((edge) => (
         <path
           key={edge.d}
           d={edge.d}
@@ -83,12 +58,12 @@ export default function RoadmapPreview({
           stroke="#a3948a"
           strokeWidth="1.6"
           strokeDasharray={edge.dashed ? "4 4" : undefined}
-          markerEnd={`url(#${arrow})`}
+          markerEnd="url(#lp-arrow)"
         />
       ))}
       {NODES.map((node) => {
         const tone = TONES[node.tone];
-        const [x, y] = layout.at[node.id];
+        const [x, y] = AT[node.id];
         return (
           <g key={node.id}>
             <rect

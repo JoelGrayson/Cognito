@@ -38,17 +38,15 @@ export default async function Home() {
   return (
     <div className="wb flex min-h-screen flex-col">
       <main className="flex-1">
-        <section className="mx-auto w-full max-w-6xl px-5 pb-14 pt-8 sm:px-8 lg:pb-20 lg:pt-14">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h1 className="wb-serif text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
-                Learn anything, in the right order.
-              </h1>
-              <p className="mt-4 max-w-xl text-lg leading-relaxed text-(--wb-muted)">
-                Tell us your goal. Get a personal roadmap in under 3 minutes.
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+        <section className="mx-auto grid w-full max-w-6xl items-center gap-14 px-5 pb-14 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:pb-24 lg:pt-16">
+          <div>
+            <h1 className="wb-serif text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl">
+              Learn anything, in the right order.
+            </h1>
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-(--wb-muted)">
+              Tell us your goal. Get a personal roadmap in under 3 minutes.
+            </p>
+            <div className="mt-8 flex flex-col items-start gap-3">
               <Link
                 href={cta.href}
                 className="inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-(--wb-primary) px-7 text-lg text-(--wb-card) shadow-[0_6px_24px_rgb(59_42_31/0.18)] transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-(--wb-primary) sm:w-auto"
@@ -62,17 +60,16 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="relative mt-8 rounded-3xl border sm:mt-24 border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-8">
-            <div className="absolute -left-5 -top-9 hidden items-end gap-1 sm:flex">
+          <div className="relative rounded-3xl border border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-6">
+            <div className="absolute -left-5 -top-9 hidden items-start gap-1 sm:flex">
               <Mascot size={72} />
-              <span className="relative mb-11 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
+              <span className="relative mt-3 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
                 What should we dig into today?
                 <span className="absolute -left-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
               </span>
             </div>
-            <RoadmapPreview orientation="landscape" className="mx-auto hidden h-auto w-full sm:block" />
-            <RoadmapPreview className="mx-auto h-auto w-full max-w-105 sm:hidden" />
-            <p className="mt-3 text-center text-xs text-(--wb-muted)">
+            <RoadmapPreview className="mx-auto mt-4 h-auto w-full max-w-105" />
+            <p className="mt-2 text-center text-xs text-(--wb-muted)">
               Example roadmap for &ldquo;Learn machine learning&rdquo;
             </p>
           </div>
