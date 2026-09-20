@@ -1003,6 +1003,12 @@ export default function SpikePage() {
               const existing = editor.getCurrentPageShapes().map((sh) => sh.id);
               if (existing.length > 0) editor.deleteShapes(existing);
 
+              // Swallow pasted text. tldraw turns any text paste into a black text
+              // shape, and a system dictation tool listening alongside push-to-talk
+              // pastes what it heard - so the learner's own words landed on the page,
+              // looking like something the tutor wrote.
+              editor.registerExternalContentHandler("text", () => {});
+
               annotatorRef.current = createAnnotator(editor);
               speakerRef.current ??= createSpeaker();
               // React dev-mode mounts twice. Without this, two store listeners end up
