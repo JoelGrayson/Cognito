@@ -46,19 +46,17 @@ export const drizzleLegacyRoadmapRepo: LegacyRoadmapRepo = {
       })
       .from(legacyRoadmaps)
       .leftJoin(lessonsWritten, eq(lessonsWritten.roadmapId, legacyRoadmaps.id))
-      .where(and(eq(legacyRoadmaps.userId, userId), eq(legacyRoadmaps.complete, true)))
+      .where(eq(legacyRoadmaps.userId, userId))
       .orderBy(desc(legacyRoadmaps.createdAt));
-    return rows
-      .filter((row) => row.map.stages.length > 0)
-      .map((row) => ({
-        id: row.id,
-        topic: row.topic,
-        title: row.map.topic || row.topic,
-        instruction: row.instruction,
-        blocks: countBlocks(row.map),
-        lessonsWritten: row.lessonsWritten,
-        createdAt: row.createdAt.toISOString(),
-      }));
+    return rows.map((row) => ({
+      id: row.id,
+      topic: row.topic,
+      title: row.map.topic || row.topic,
+      instruction: row.instruction,
+      blocks: countBlocks(row.map),
+      lessonsWritten: row.lessonsWritten,
+      createdAt: row.createdAt.toISOString(),
+    }));
   },
   async get(id, userId) {
     const [row] = await getDb().select().from(legacyRoadmaps).where(owned(id, userId));

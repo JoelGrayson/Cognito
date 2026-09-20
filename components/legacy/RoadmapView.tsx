@@ -80,7 +80,6 @@ export function RoadmapView({ roadmap, lessonKeys }: Props) {
     if (roadmap.complete || roadmap.error || started.current) return;
     started.current = true;
     writeMap();
-    return () => mapAbort.current?.abort();
   }, [roadmap.complete, roadmap.error, writeMap]);
 
   const isReady = (node: MapNode) => written.has(lessonKey(node));

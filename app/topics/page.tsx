@@ -46,7 +46,7 @@ export default async function TopicsPage() {
                 </span>
               </Link>
               <span className="shrink-0 text-right text-xs text-neutral-400">
-                {topic.lessonsWritten} of {topic.blocks} lessons
+                {topic.blocks === 0 ? "not written yet" : `${topic.lessonsWritten} of ${topic.blocks} lessons`}
                 <br />
                 {timeAgo(topic.createdAt)}
               </span>

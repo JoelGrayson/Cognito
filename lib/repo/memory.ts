@@ -149,7 +149,7 @@ export const memoryLegacyRoadmapRepo: LegacyRoadmapRepo = {
       lessonsWritten.set(id, (lessonsWritten.get(id) ?? 0) + 1);
     }
     return [...store.legacyRoadmaps.values()]
-      .filter((r) => r.userId === userId && r.complete && r.map.stages.length > 0)
+      .filter((r) => r.userId === userId)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .map((r) => ({
         id: r.id,
