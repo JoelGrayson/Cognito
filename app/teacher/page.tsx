@@ -18,11 +18,12 @@ const PERKS = [
 export default async function TeacherPage() {
   return (
     <div className="wb flex min-h-screen flex-col">
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 pb-20 pt-8 sm:px-8 lg:pt-12">
-        <section className="grid items-center gap-14 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-16">
+      <main className="flex-1">
+        {/* The same hero frame as the student landing: the switch and the title stay put between modes. */}
+        <section className="mx-auto grid w-full max-w-6xl items-start gap-14 px-5 pb-10 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-16 lg:pb-14 lg:pt-16">
           <div>
-            <ModeSwitch mode="teacher" />
-            <h1 className="wb-serif mt-6 text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl">
+            <ModeSwitch mode="teacher" className="mb-6" />
+            <h1 className="wb-serif text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl">
               Grade the whole stack <span className="whitespace-nowrap rounded-xl bg-(--wb-butter) px-2 text-(--wb-butter-ink)">in minutes.</span>
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-(--wb-muted)">
@@ -39,8 +40,10 @@ export default async function TeacherPage() {
           </div>
           <HeroArt />
         </section>
-        <Grader providers={await listProviders()} mock={process.env.MOCK_AI === "true"} />
-        <Library />
+        <div className="mx-auto w-full max-w-6xl px-5 pb-20 sm:px-8">
+          <Grader providers={await listProviders()} mock={process.env.MOCK_AI === "true"} />
+          <Library />
+        </div>
       </main>
     </div>
   );
