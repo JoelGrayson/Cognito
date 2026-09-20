@@ -4,7 +4,7 @@
  *
  *   node --experimental-strip-types lib/whiteboard/worksheet.test.ts
  */
-import { anchorsFrom, mathFromPrintedLine, premiseFor, problemFor, type PriorStep } from "./worksheet.ts";
+import { questionsFrom, anchorsFrom, mathFromPrintedLine, premiseFor, problemFor, type PriorStep } from "./worksheet.ts";
 import type { Bounds } from "./strokes.ts";
 
 let pass = 0, total = 0;
@@ -57,6 +57,15 @@ check("never from another problem's working", premiseFor(steps, 3, anchors[1], 0
 check("ambiguous print offers no premise", premiseFor(steps, 3, anchors[3], 0.5), null);
 check("blank canvas: previous line", premiseFor([{ lineId: 0, problemId: null, parsed: "2*x=4", confidence: null }], 1, null, 0.5), { text: "2*x=4", lineId: 0 });
 check("blank canvas: first line", premiseFor([], 0, null, 0.5), null);
+
+const prose = questionsFrom([
+  { text: "Organic chemistry practice", bounds: box(50, 20, 400, 50) },
+  { text: "1. Draw the structure of 2-butanol.", bounds: box(50, 100, 500, 130) },
+  { text: "PCC stops at the first oxidation.", bounds: box(80, 440, 400, 460) },
+  { text: "\n5. 1-Butanol is oxidised with PCC. Draw the product.", bounds: box(50, 400, 600, 430) },
+]);
+check("numbered prose questions, by printed number", prose.map((q) => q.id), [1, 5]);
+check("a drawing under question 5 belongs to it", problemFor(box(100, 500, 300, 600), prose)?.id, 5);
 
 console.log(`\n${pass}/${total} correct`);
 if (pass !== total) process.exit(1);
