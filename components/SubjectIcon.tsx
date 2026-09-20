@@ -32,6 +32,12 @@ const ICONS = {
 
 export type SubjectIconName = keyof typeof ICONS;
 
+/** The icon's two colours, for surfaces that should read as the same subject. */
+export function subjectColors(name: SubjectIconName): { tint: string; ink: string } {
+  const { tint, ink } = ICONS[name];
+  return { tint, ink };
+}
+
 /** A line drawing on a pastel tile. The tint is part of the icon so a subject looks
  *  the same wherever it appears. */
 export function SubjectIcon({ name, size = 44 }: { name: SubjectIconName; size?: number }) {

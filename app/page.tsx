@@ -5,7 +5,7 @@ import { ctaTarget, type LandingState } from "@/components/landing/cta-target";
 import { getUserState } from "@/lib/plans";
 import { getUserId } from "@/lib/session";
 import { SUBJECTS } from "@/lib/subjects";
-import { SubjectIcon } from "@/components/SubjectIcon";
+import { SubjectIcon, subjectColors } from "@/components/SubjectIcon";
 
 // The CTA depends on per-user state, so this page must never be prerendered.
 export const dynamic = "force-dynamic";
@@ -78,29 +78,37 @@ export default async function Home() {
         <section className="mx-auto w-full max-w-6xl px-5 pb-14 sm:px-8 lg:pb-20">
           <h2 className="wb-serif text-2xl font-medium tracking-tight sm:text-3xl">Your subjects</h2>
           <ul className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {SUBJECTS.map((subject) => (
-              <li
-                key={subject.id}
-                className="flex flex-col rounded-3xl border border-(--wb-line) bg-(--wb-card) p-6 shadow-[0_2px_10px_rgb(59_42_31/0.06)]"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="rounded-md bg-(--wb-butter) px-2 py-0.5 text-[11px] font-medium uppercase tracking-widest text-(--wb-butter-ink)">
-                    {subject.name}
-                  </span>
-                  <SubjectIcon name={subject.icon} />
-                </div>
-                <p className="mt-4 flex-1 text-lg leading-snug">{subject.blurb}</p>
-                <p className="mt-2 text-sm text-(--wb-muted)">
-                  {subject.checker ? "Steps checked as you write" : "Step checking coming soon"}
-                </p>
-                <Link
-                  href={`/dev/whiteboard?subject=${subject.id}`}
-                  className="mt-5 inline-flex min-h-11 items-center self-start rounded-xl border border-(--wb-line) px-5 hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-(--wb-primary)"
+            {SUBJECTS.map((subject) => {
+              const { tint, ink } = subjectColors(subject.icon);
+              return (
+                <li
+                  key={subject.id}
+                  className="flex flex-col overflow-hidden rounded-3xl border border-(--wb-line) bg-(--wb-card) shadow-[0_2px_10px_rgb(59_42_31/0.06)]"
                 >
-                  Open whiteboard
-                </Link>
-              </li>
-            ))}
+                  <div className="flex items-center gap-4 px-6 py-5" style={{ background: tint, color: ink }}>
+                    <SubjectIcon name={subject.icon} size={56} />
+                    <div className="min-w-0">
+                      <h3 className="wb-serif text-2xl">{subject.name}</h3>
+                      <p className="truncate font-mono text-sm opacity-80">
+                        {subject.sample[0]} <span aria-hidden="true">→</span> {subject.sample[1]}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-1 flex-col p-6">
+                    <p className="flex-1 text-lg leading-snug">{subject.blurb}</p>
+                    <p className="mt-2 text-sm text-(--wb-muted)">
+                      {subject.checker ? "Steps checked as you write" : "Step checking coming soon"}
+                    </p>
+                    <Link
+                      href={`/dev/whiteboard?subject=${subject.id}`}
+                      className="mt-5 inline-flex min-h-11 items-center self-start rounded-xl border border-(--wb-line) px-5 hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-(--wb-primary)"
+                    >
+                      Open {subject.name.toLowerCase()} whiteboard
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
 
