@@ -16,9 +16,9 @@ import { AiValidationError } from "./withRetry";
  * The provider the call should go through, or null for the default Anthropic path.
  * A profile without a provider uses the first configured one.
  */
-export function pickProvider(id: unknown): ProviderId | null {
+export async function pickProvider(id: unknown, ctx?: ProviderContext): Promise<ProviderId | null> {
   if (isMockAi()) return null;
-  const chosen = isProviderId(id) ? id : defaultProviderId();
+  const chosen = isProviderId(id) ? id : await defaultProviderId(ctx);
   return chosen !== "anthropic" ? chosen : null;
 }
 

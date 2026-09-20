@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       let usedFallback = false;
       try {
         // A provider picked on screen 1 goes through the provider layer; the default stays on lib/ai.
-        const providerId = pickProvider(state.profile.provider);
+        const providerId = await pickProvider(state.profile.provider, { userId });
         graph = providerId
           ? await generateGraphWithProvider(providerId, learner, { userId })
           : await generateGraph(learner);

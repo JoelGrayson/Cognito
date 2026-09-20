@@ -10,7 +10,7 @@ import { protectedProcedure, router } from "./trpc";
 /** The provider chosen on onboarding screen 1 writes and tutors every lesson. */
 async function providerFor(userId: string): Promise<ProviderId> {
   const { profile } = await onboardingRepo.get(userId);
-  return isProviderId(profile.provider) ? profile.provider : defaultProviderId();
+  return isProviderId(profile.provider) ? profile.provider : defaultProviderId({ userId });
 }
 
 const roadmapInput = z.object({ id: z.string().uuid() });
