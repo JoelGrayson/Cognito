@@ -25,7 +25,7 @@ pnpm dev                     # Vite on :5173, Hono API on :8787
 
 Run `pnpm dev` on your computer; Vite prints a `Network: http://192.168.x.x:5173` URL.
 Open that URL in Safari on an iPad on the same Wi‑Fi, then Share → *Add to Home Screen*
-for a full-screen, Notability-style app. Pencil, finger and mouse all draw via pointer events.
+— it installs as a PWA (manifest + icon, standalone, no browser chrome). Pencil, finger and mouse all draw via pointer events.
 
 ## How it works
 
