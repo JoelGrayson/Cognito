@@ -2,3 +2,8 @@
 {"ts":"2026-09-20T07-23-11-114Z","smiles":"Clc1ccccc1","structuresSeen":1,"confidence":0.9931795466725362,"text":"<smiles>Clc1ccccc1</smiles>","ms":483,"intended":""}
 {"ts":"2026-09-20T07-23-37-746Z","smiles":null,"structuresSeen":0,"confidence":0.9302096366882324,"text":"x","ms":454,"intended":""}
 {"ts":"2026-09-20T07-24-22-675Z","smiles":"CCC(C)(C)O","structuresSeen":1,"confidence":0.5220319030493963,"text":"<smiles>CCC(C)(C)O</smiles>","ms":268,"intended":""}
+{"ts":"2026-09-20T07-33-00-980Z","smiles":"Cc1ccccc1","structuresSeen":1,"confidence":0.9537014321165859,"text":"<smiles>Cc1ccccc1</smiles>","ms":330,"intended":""}
+{"ts":"2026-09-20T07-33-00-985Z","smiles":"C1CCCCCC1","structuresSeen":1,"confidence":0.8178491592407227,"text":"<smiles>C1CCCCCC1</smiles>","ms":351,"intended":""}
+{"ts":"2026-09-20T07-33-00-993Z","smiles":"CC(=O)O","structuresSeen":1,"confidence":0.9849059268667588,"text":"<smiles>CC(=O)O</smiles>","ms":366,"intended":""}
+{"ts":"2026-09-20T07-33-57-491Z","smiles":"OC1CCCCC1","structuresSeen":1,"confidence":0.99951171875,"text":"<smiles>OC1CCCCC1</smiles>","ms":244,"intended":""}
+{"ts":"2026-09-20T07-33-57-553Z","smiles":"C1CCCCCC1","structuresSeen":1,"confidence":0.8178491592407227,"text":"<smiles>C1CCCCCC1</smiles>","ms":316,"intended":""}
