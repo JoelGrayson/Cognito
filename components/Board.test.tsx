@@ -114,6 +114,20 @@ describe("Board pointer handling", () => {
     expect(strokes.mock.calls[0][0]).toEqual([10, 10, 40, 12]);
   });
 
+  it("lets the stylus write when the palm landed first", () => {
+    const svg = mount();
+    // The heel of the hand touches down a moment before the nib does.
+    send(svg, "pointerdown", { x: 600, y: 400 }, { pointerId: 2, pointerType: "touch" });
+    send(svg, "pointermove", { x: 620, y: 410 }, { pointerId: 2, pointerType: "touch" });
+    write(svg, { pointerId: 1 });
+    send(svg, "pointerup", { x: 70, y: 14 }, { pointerId: 1 });
+    send(svg, "pointerup", { x: 620, y: 410 }, { pointerId: 2, pointerType: "touch" });
+
+    // Only the pen's line is kept; the palm's is dropped where the pen took over.
+    expect(strokes).toHaveBeenCalledTimes(1);
+    expect(strokes.mock.calls[0][0]).toEqual([10, 10, 40, 12, 70, 14]);
+  });
+
   it("keeps the stroke when the system cancels the pointer", () => {
     const svg = mount();
     write(svg, { pointerId: 1 });

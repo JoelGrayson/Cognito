@@ -155,12 +155,22 @@ function CallSession({ topic, lesson, onClose, micOn, setMicOn, error, setError 
     // The call board has no eraser button, but a stylus turned upside down still means
     // "take that off", so the eraser end rubs out what it passes over.
     if (erased) {
-      const kept = rubOut(elementsRef.current, points);
-      if (kept.length !== elementsRef.current.length) setBoard(kept);
+      const els = elementsRef.current;
+      const kept = rubOut(els, points);
+      if (kept.length === els.length) return;
+      setBoard(kept);
+      // Rubbing out work the tutor has not seen yet unsays it: otherwise the board
+      // can be empty and still offer to send strokes that are no longer there.
+      const rubbedOut = drawn(els) - drawn(kept);
+      setPendingStrokes(Math.max(0, pendingRef.current - rubbedOut));
       return;
     }
     setBoard([...elementsRef.current, learnerStroke(points, penColor, strokeCount.current)]);
     setPendingStrokes(pendingRef.current + 1);
+  }
+  /** How many of these elements are the learner's own strokes. */
+  function drawn(elements: BoardElement[]): number {
+    return elements.filter((el) => el.type === "stroke").length;
   }
   function undoStroke() {
     const els = elementsRef.current;

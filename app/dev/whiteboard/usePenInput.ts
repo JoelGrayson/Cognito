@@ -63,15 +63,17 @@ export function usePenInput(editor: Editor | null): void {
       if (e.pointerType !== "touch") return;
       touching.add(e.pointerId);
       // Only a finger on the page itself, and only in pen mode: with no pen in play
-      // tldraw handles the finger itself.
+      // tldraw handles the finger itself. Never while the pen is writing - that finger
+      // is the palm, and panning under it would drag the half-written line away.
       const onCanvas = e.target instanceof Element && e.target.closest(".tl-canvas") !== null;
-      const alone = onCanvas && touching.size === 1 && editor.getInstanceState().isPenMode;
+      const alone = onCanvas && touching.size === 1 && editor.getInstanceState().isPenMode && !editor.inputs.getIsPointing();
       panFrom = alone ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null;
     };
 
     const onPointerMove = (e: PointerEvent) => {
       if (!panFrom || e.pointerId !== panFrom.id) return;
-      if (touching.size > 1 || editor.inputs.getIsPinching()) {
+      // A pen that comes down after the palm takes the gesture back.
+      if (touching.size > 1 || editor.inputs.getIsPinching() || editor.inputs.getIsPointing()) {
         panFrom = null;
         return;
       }
