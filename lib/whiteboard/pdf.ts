@@ -36,7 +36,7 @@ function blankCanvas(w: number, h: number) {
   return { canvas, ctx };
 }
 
-async function pagesOfPdf(file: File): Promise<PageImage[]> {
+async function pagesOfPdf(file: File, maxPages: number): Promise<PageImage[]> {
   // The LEGACY build, on purpose. The default one calls Map.prototype.getOrInsertComputed,
   // which no iPad browser has (they are all WebKit), so opening any PDF on a tablet
   // died with "getOrInsertComputed is not a function". Legacy carries the polyfills.
@@ -51,7 +51,7 @@ async function pagesOfPdf(file: File): Promise<PageImage[]> {
   try {
     const doc = await task.promise;
     const out: PageImage[] = [];
-    for (let n = 1; n <= Math.min(doc.numPages, MAX_PAGES); n++) {
+    for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) {
       const page = await doc.getPage(n);
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: TARGET_LONG_EDGE / Math.max(base.width, base.height) });
@@ -75,8 +75,8 @@ async function pageOfImage(file: File): Promise<PageImage[]> {
 }
 
 /** A PDF, or a photo / screenshot of a problem. */
-export function pagesOf(file: File): Promise<PageImage[]> {
-  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return pagesOfPdf(file);
+export function pagesOf(file: File, maxPages = MAX_PAGES): Promise<PageImage[]> {
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return pagesOfPdf(file, maxPages);
   if (file.type.startsWith("image/")) return pageOfImage(file);
   return Promise.reject(new Error("Upload a PDF or an image."));
 }
