@@ -1056,21 +1056,6 @@ export function Whiteboard({ subject }: { subject: Subject }) {
             </div>
           )}
 
-          <div className="pointer-events-none absolute bottom-28 left-3 z-[300] flex flex-col items-start gap-2 sm:bottom-[4.5rem] sm:left-4">
-            {(listening || said) && (
-              <div className="pointer-events-auto">
-                {listening ? (
-                  <TutorBubble text="I'm listening…" />
-                ) : (
-                  said && <TutorBubble text={said} onDismiss={() => setSaid(null)} />
-                )}
-              </div>
-            )}
-            <div className="hidden sm:block">
-              <Mascot listening={listening} />
-            </div>
-          </div>
-
           <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[300] flex items-center justify-center gap-2 sm:bottom-4">
             <div className="pointer-events-auto max-w-full">
               <Dock
@@ -1101,6 +1086,22 @@ export function Whiteboard({ subject }: { subject: Subject }) {
         </div>
 
         <aside className="flex max-h-[38dvh] shrink-0 flex-col overflow-hidden rounded-3xl border border-(--wb-line) bg-(--wb-card) lg:max-h-none lg:w-80 2xl:w-96">
+          {/* The tutor lives here, not over the canvas: anywhere on the page it would
+              cover the problem the learner is working on. */}
+          <div className="flex shrink-0 items-start gap-2 border-b border-(--wb-line) px-4 py-3">
+            <Mascot size={52} listening={listening} />
+            <div className="min-w-0 flex-1 pt-1">
+              {listening ? (
+                <TutorBubble text="I'm listening…" />
+              ) : said ? (
+                <TutorBubble text={said} onDismiss={() => setSaid(null)} />
+              ) : (
+                <p className="pt-2.5 text-sm text-(--wb-muted)">
+                  {subject.checker ? "I'll speak up if a step doesn't follow." : "Draw away. I'm just keeping you company."}
+                </p>
+              )}
+            </div>
+          </div>
           <h2 className="wb-serif shrink-0 px-5 pb-2 pt-4 text-xl">Your steps</h2>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {readings.length === 0 && (

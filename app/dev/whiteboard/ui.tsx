@@ -235,10 +235,10 @@ export function Dock({
   );
 }
 
-/** What the tutor last said, with the tail pointing down at the mascot. */
+/** What the tutor last said, with the tail pointing left at the mascot. */
 export function TutorBubble({ text, onDismiss }: { text: string; onDismiss?: () => void }) {
   return (
-    <div className="wb-pop relative max-w-xs rounded-2xl bg-(--wb-primary) px-4 py-3 text-[15px] leading-snug text-(--wb-card) shadow-lg">
+    <div className="wb-pop relative w-fit max-w-full rounded-2xl bg-(--wb-primary) px-4 py-3 text-[15px] leading-snug text-(--wb-card)">
       {onDismiss && (
         <button
           type="button"
@@ -250,7 +250,7 @@ export function TutorBubble({ text, onDismiss }: { text: string; onDismiss?: () 
         </button>
       )}
       {text}
-      <span className="absolute -bottom-1.5 left-7 h-3.5 w-3.5 rotate-45 rounded-[3px] bg-(--wb-primary)" />
+      <span className="absolute -left-1.5 top-4 h-3.5 w-3.5 rotate-45 rounded-[3px] bg-(--wb-primary)" />
     </div>
   );
 }
