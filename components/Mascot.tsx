@@ -9,8 +9,8 @@ export function Mascot({ listening = false, size = 64 }: { listening?: boolean; 
         strokeWidth="2"
         strokeLinejoin="round"
       />
-      <circle cx="19" cy="40" r="3.5" fill="#f4a08a" opacity="0.7" />
-      <circle cx="45" cy="40" r="3.5" fill="#f4a08a" opacity="0.7" />
+      <circle cx="22" cy="40" r="3" fill="#f4a08a" opacity="0.7" />
+      <circle cx="42" cy="40" r="3" fill="#f4a08a" opacity="0.7" />
       <circle cx="25" cy="31" r="6" fill="#fff" />
       <circle cx="39" cy="31" r="6" fill="#fff" />
       <circle cx={26 + look} cy={32 - look} r="3.2" fill="#2b1d14" />
