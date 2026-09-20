@@ -23,9 +23,11 @@
  *     and a molecule that does not match the answer key.
  *   - Acetic acid, toluene and cyclohexanol read correctly (0.95-1.00). A BARE hexagon
  *     with nothing on it reads as cycloheptane, every time, at 0.82.
- *   - Across every run so far: correct readings scored 0.95 or higher, wrong or
- *     repaired ones 0.82 or lower. A confidence floor near 0.9 would have separated
- *     them all, the same idea as the math checker's recognition floor.
+ *   - Cyclohexanone and butanal read correctly at 1.00. 2-bromo-2-methylbutane read
+ *     correctly at only 0.64, with a clumsily lettered "Br".
+ *   - So confidence is a hint, not a gate. Wrong and repaired readings scored 0.52 and
+ *     0.82, but a CORRECT one scored 0.64. A floor near 0.9 would stay silent on some
+ *     correct work, which is the safe direction to be wrong in.
  */
 "use client";
 
