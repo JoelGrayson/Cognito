@@ -42,9 +42,13 @@ export function judgeStructure(canonical: string, key: KeyEntry[], asked: number
       ? { kind: "correct", problem: answered.problem, name: answered.name }
       : { kind: "other-question", problem: answered.problem, name: answered.name, asked };
   }
-  for (const entry of key) {
-    const mistake = entry.commonWrong.find((w) => w.smiles === canonical);
-    if (mistake) return { kind: "known-mistake", problem: entry.problem, name: mistake.name };
+  // Another question's usual mistake says nothing about THIS question. Naming it would
+  // circle the drawing under question 1 while the tutor talks about question 5.
+  if (asked === null) {
+    for (const entry of key) {
+      const mistake = entry.commonWrong.find((w) => w.smiles === canonical);
+      if (mistake) return { kind: "known-mistake", problem: entry.problem, name: mistake.name };
+    }
   }
   return { kind: "no-match", asked };
 }
