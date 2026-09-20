@@ -38,12 +38,14 @@ function withConceptsAsKnowledge(profile: OnboardingProfile): OnboardingProfile 
 async function respondWithStored(userId: string, state: OnboardingState) {
   const graph = applyKnownScope(state.draftGraph!, state.profile.priorKnowledge ?? []);
   if (graph !== state.draftGraph) {
-    await onboardingRepo.update(userId, { draftGraph: graph });
-    if (state.activeRoadmapId) {
-      await roadmapRepo
-        .update(state.activeRoadmapId, userId, { graph })
-        .catch((error) => console.error("roadmap record sync failed", error));
-    }
+    await Promise.all([
+      onboardingRepo.update(userId, { draftGraph: graph }),
+      state.activeRoadmapId
+        ? roadmapRepo
+            .update(state.activeRoadmapId, userId, { graph })
+            .catch((error) => console.error("roadmap record sync failed", error))
+        : null,
+    ]);
   }
   return Response.json({ graph, roadmapId: state.activeRoadmapId, usedFallback: isFallbackGraph(graph) });
 }
