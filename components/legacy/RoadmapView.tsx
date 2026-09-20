@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Roadmap, RoadmapLegend, RoadmapSkeleton } from "@/components/Roadmap";
 import { RoadmapChat } from "@/components/RoadmapChat";
 import { RichText } from "@/components/RichText";
@@ -36,44 +36,52 @@ export function RoadmapView({ roadmap, lessonKeys }: Props) {
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const bulkAbort = useRef<AbortController | null>(null);
   const started = useRef(false);
+  const mapAbort = useRef<AbortController | null>(null);
   /** Lets the streaming effect start the bulk write without depending on it. */
   const generateAllRef = useRef<(map: MindMap) => void>(() => {});
 
-  // A roadmap row starts empty: the map is written here, once, the first time it is opened.
-  useEffect(() => {
-    if (roadmap.complete || roadmap.error || started.current) return;
-    started.current = true;
-    let cancelled = false;
+  /** Writes the map of this roadmap, streaming it in. Used on first open and by "Try again". */
+  const writeMap = useCallback(() => {
+    const controller = new AbortController();
+    mapAbort.current?.abort();
+    mapAbort.current = controller;
+    setWriting(true);
+    setError(null);
     void (async () => {
       try {
         const res = await fetch("/api/mindmap", {
           method: "POST",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roadmapId: roadmap.id }),
         });
         await ensureOk(res);
         let finalMap: MindMap | null = null;
         await readNdjson(res, (event) => {
-          if (cancelled) return;
           if (event.type === "partial" || event.type === "done") setMap(event.mindMap as MindMap);
           if (event.type === "done") finalMap = event.mindMap as MindMap;
           if (event.type === "error") throw new Error(String(event.error));
         });
         if (!finalMap) throw new Error("The roadmap never finished.");
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setWriting(false);
         router.refresh();
         if (readSettings().autoGenerateLessons) generateAllRef.current(finalMap);
       } catch (err) {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setWriting(false);
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [roadmap.complete, roadmap.error, roadmap.id, router]);
+  }, [roadmap.id, router]);
+
+  // A roadmap row starts empty: the map is written here, once, the first time it is opened.
+  useEffect(() => {
+    if (roadmap.complete || roadmap.error || started.current) return;
+    started.current = true;
+    writeMap();
+    return () => mapAbort.current?.abort();
+  }, [roadmap.complete, roadmap.error, writeMap]);
 
   const isReady = (node: MapNode) => written.has(lessonKey(node));
   const unwritten = allRefs(map).filter((ref) => !isReady(nodeAt(map, ref)!.node)).length;
@@ -176,6 +184,13 @@ export function RoadmapView({ roadmap, lessonKeys }: Props) {
           {map.stages.length === 0 && !writing && error ? (
             <div className="panel px-6 py-16 text-center">
               <p className="text-red-600">{error}</p>
+              <button
+                type="button"
+                className="mt-4 text-sm text-neutral-600 underline underline-offset-4 hover:text-neutral-900"
+                onClick={writeMap}
+              >
+                Try again
+              </button>
             </div>
           ) : null}
         </div>
