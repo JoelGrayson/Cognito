@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   const contentType = AUDIO_TYPES.includes(declared) ? declared : "audio/webm";
   const form = new FormData();
   form.append("model_id", "scribe_v1");
-  form.append("file", new Blob([audio], { type: contentType }), "clip.webm");
+  form.append("file", new Blob([audio], { type: contentType }), `clip.${contentType.split("/")[1]}`);
 
   const started = Date.now();
   let res: Response;
