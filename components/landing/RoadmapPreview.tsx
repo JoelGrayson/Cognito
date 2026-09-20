@@ -17,7 +17,6 @@ const NODES: { id: string; title: string; sub: string; tone: Tone }[] = [
   { id: "prob", title: "Probability", sub: "4 h", tone: "core" },
   { id: "calc", title: "Calculus", sub: "Skipped", tone: "skipped" },
   { id: "regress", title: "Regression", sub: "5 h", tone: "advanced" },
-  { id: "nn", title: "Neural networks", sub: "8 h", tone: "advanced" },
 ];
 
 const AT: Record<string, [x: number, y: number]> = {
@@ -26,7 +25,6 @@ const AT: Record<string, [x: number, y: number]> = {
   prob: [20, 96],
   calc: [190, 96],
   regress: [105, 176],
-  nn: [105, 256],
 };
 
 const EDGES: { d: string; dashed?: boolean }[] = [
@@ -34,15 +32,14 @@ const EDGES: { d: string; dashed?: boolean }[] = [
   { d: "M265 62 C265 84 140 74 140 94" },
   { d: "M95 142 C95 162 140 156 140 174" },
   { d: "M265 142 C265 162 220 156 220 174", dashed: true },
-  { d: "M180 222 V254" },
 ];
 
 export default function RoadmapPreview({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 360 318"
+      viewBox="0 0 360 238"
       role="img"
-      aria-label="Example roadmap: Python basics marked as known, linear algebra and probability first, calculus skipped, then regression and neural networks."
+      aria-label="Example roadmap: Python basics marked as known, linear algebra and probability first, calculus skipped, then regression."
       className={className}
     >
       <defs>
