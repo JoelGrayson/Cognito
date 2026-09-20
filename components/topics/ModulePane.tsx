@@ -108,11 +108,9 @@ export function ModulePane({ roadmap, node, lesson, written, providerId }: Props
     })();
   }
 
-  // Written once, the first time the node is opened.
-  const started = useRef(false);
+  // Written the first time the node is opened; an unmounted pane stops its own stream.
   useEffect(() => {
-    if (lesson || started.current) return;
-    started.current = true;
+    if (lesson) return;
     write();
     return () => abort.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
