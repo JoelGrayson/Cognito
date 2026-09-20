@@ -103,7 +103,8 @@ async function structured<T>(
       const response = await client.responses.create({
         model: chosen,
         instructions,
-        input: req.user,
+        // The ChatGPT-backed endpoint requires a list, not the API's string shorthand.
+        input: [{ role: "user", content: req.user }],
         stream: true,
         ...(attempt.format ? { text: { format: attempt.format } } : {}),
         reasoning: mapEffort(req.effort) ? { effort: mapEffort(req.effort) } : undefined,
