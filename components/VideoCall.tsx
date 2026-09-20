@@ -6,6 +6,7 @@ import { ensureOk } from "@/lib/ndjson";
 import { speak } from "@/lib/speech";
 import type { ProviderId } from "@/lib/providers/types";
 import type { BoardColor, Lesson } from "@/lib/schema";
+import { readLearnerWork, describeLearnerWork, type FlatStroke } from "@/lib/whiteboard/board-bridge";
 import { Board, INK } from "./Board";
 
 type Status = "thinking" | "speaking" | "listening" | "your-turn" | "drawing" | "ended" | "error";
@@ -86,6 +87,21 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
+      // Recognise and check whatever the learner has written, so the tutor is told
+      // what it says and whether it follows - instead of being handed coordinates
+      // and asked to "interpret generously". Best effort: a failure here costs the
+      // tutor its reading, never the turn.
+      let work = "";
+      try {
+        const penStrokes: FlatStroke[] = elementsRef.current
+          .filter((e): e is Extract<BoardElement, { type: "stroke" }> => e.type === "stroke")
+          .map((e) => ({ id: e.id, points: e.points }));
+        if (penStrokes.length > 0) work = describeLearnerWork(await readLearnerWork(penStrokes));
+      } catch {
+        work = "";
+      }
+      if (ended.current || controller.signal.aborted) return;
+
       const res = await fetch("/api/lesson/call", {
         method: "POST",
         signal: controller.signal,
@@ -93,7 +109,7 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
         body: JSON.stringify({
           topic,
           lesson,
-          board: describeBoard(elementsRef.current),
+          board: describeBoard(elementsRef.current) + work,
           transcript: transcriptRef.current.slice(-30),
           provider: providerId,
         }),
