@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/", label: "Home", short: "Home", match: (path: string) => path === "/" },
   { href: "/onboarding?new=1", label: "New learning plan", short: "New plan", match: (path: string) => path.startsWith("/onboarding") },
   { href: "/topics", label: "Topics", short: "Topics", match: (path: string) => path.startsWith("/topics") },
+  { href: "/teacher", label: "For teachers", short: "Teach", match: (path: string) => path.startsWith("/teacher") },
 ];
 
 function Nav({ pathname }: { pathname: string | null }) {
