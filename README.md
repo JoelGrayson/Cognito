@@ -1,3 +1,6 @@
+<img width="3840" height="2160" alt="cognito-mockup-ipad" src="https://github.com/user-attachments/assets/cdf9d0bf-d133-442a-b0cb-de09ea455d09" />
+
+
 # Cognito
 
 Type what you want to learn and get a structured roadmap: the stages you need to work through, what to learn at each one, and what to learn alongside it. Then type modifications ("more on transformers", "assume I know calculus") to reshape the map.
