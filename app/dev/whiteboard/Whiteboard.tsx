@@ -718,8 +718,8 @@ function Notebook({
         if (!plan.ok) return plan.message;
         setPlots(plan.plots);
         // No point drawing into a panel they cannot see. On a narrow screen this
-        // covers the canvas, which is the right trade when a graph was asked for -
-        // but wiping the graph is no reason to open it.
+        // takes over the canvas, which is the right trade when a graph was asked
+        // for - but wiping the graph is no reason to open it.
         if (plan.plots.length > 0) setPanel("graphs");
         return plan.message;
       },
@@ -1096,15 +1096,6 @@ function Notebook({
           graphed={plots.length > 0 && panel !== "graphs"}
           onToggle={(id) => setPanel((open) => (open === id ? null : id))}
         />
-        {panel === "graphs" && (
-          <GraphsPanel
-            plots={plots}
-            stateRef={graphStateRef}
-            resetKey={graphReset}
-            onClose={() => setPanel(null)}
-            onClear={() => setPlots([])}
-          />
-        )}
         {panel === "mastery" && (
           <MasteryPanel mastery={masteryOf(readings, problems)} onClose={() => setPanel(null)} />
         )}
@@ -1142,6 +1133,18 @@ function Notebook({
           ref={boxRef}
           className="relative min-h-[55dvh] w-full flex-1 touch-none overflow-hidden rounded-3xl border border-(--wb-line) bg-(--wb-card) shadow-[0_1px_3px_rgb(59_42_31/0.06)] lg:min-h-0"
         >
+          {/* The graph is a tab over the sheet, not a sidebar: it takes the whole
+              canvas. The canvas stays mounted underneath so the ink and the editor
+              survive switching back. */}
+          {panel === "graphs" && (
+            <GraphsPanel
+              plots={plots}
+              stateRef={graphStateRef}
+              resetKey={graphReset}
+              onClose={() => setPanel(null)}
+              onClear={() => setPlots([])}
+            />
+          )}
           <div className="absolute inset-0">
             <Tldraw
               components={NOTEBOOK_UI}
