@@ -320,6 +320,8 @@ function Notebook({
   /** Whatever the learner typed into the calculator, held across closings of the
    *  panel - the calculator itself only exists while the panel is open. */
   const graphStateRef = useRef<DesmosState | null>(null);
+  /** Bumped by reset, so an open calculator empties itself too. */
+  const [graphReset, setGraphReset] = useState(0);
   const canGraph = subject.panels.includes("graphs");
   /** The anchors again, as state: the mastery panel renders from them. */
   const [problems, setProblems] = useState<ProblemAnchor[]>([]);
@@ -797,6 +799,10 @@ function Notebook({
     justFoundRef.current = false;
     boundsRef.current.clear();
     setPlots([]);
+    // Their graph is their working too: a new sheet should not open onto the
+    // last one's curves.
+    graphStateRef.current = null;
+    setGraphReset((n) => n + 1);
     session.clearConversationHistory();
     const editor = editorRef.current;
     if (!editor) return;
@@ -1094,6 +1100,7 @@ function Notebook({
           <GraphsPanel
             plots={plots}
             stateRef={graphStateRef}
+            resetKey={graphReset}
             onClose={() => setPanel(null)}
             onClear={() => setPlots([])}
           />

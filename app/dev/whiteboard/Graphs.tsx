@@ -25,6 +25,7 @@ interface DesmosCalculator {
   removeExpression(state: { id: string }): void;
   getState(): DesmosState;
   setState(state: DesmosState): void;
+  setBlank(): void;
   resize(): void;
   destroy(): void;
 }
@@ -55,6 +56,7 @@ const SHELL =
 export function GraphsPanel({
   plots,
   stateRef,
+  resetKey,
   onClose,
   onClear,
 }: {
@@ -62,6 +64,10 @@ export function GraphsPanel({
   /** The learner's own work in the calculator, kept by the page so that closing
    *  the panel is closing a panel and not throwing their graph away. */
   stateRef: RefObject<DesmosState | null>;
+  /** Bumped when the page is reset. The saved state is cleared by the page; a
+   *  calculator that is open at the time has to be emptied here as well, or its
+   *  cleanup would save the pre-reset graph straight back. */
+  resetKey: number;
   onClose: () => void;
   onClear: () => void;
 }) {
@@ -108,6 +114,14 @@ export function GraphsPanel({
       drawnRef.current = [];
     };
   }, [start, stateRef]);
+
+  const seenResetRef = useRef(resetKey);
+  useEffect(() => {
+    if (resetKey === seenResetRef.current) return;
+    seenResetRef.current = resetKey;
+    calcRef.current?.setBlank();
+    drawnRef.current = [];
+  }, [resetKey]);
 
   // The plots are held by the page, not in here, so closing the panel and
   // reopening it redraws whatever the tutor last graphed.
