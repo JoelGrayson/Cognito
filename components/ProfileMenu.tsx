@@ -49,9 +49,9 @@ export function ProfileMenu({ active = false }: { active?: boolean }) {
           variant="ghost"
           size="icon"
           aria-label="Account"
-          className={cn("rounded-full text-muted-foreground", (open || active) && "bg-brand-soft text-primary hover:bg-brand-soft hover:text-primary")}
+          className={cn("size-9 rounded-full text-muted-foreground sm:size-11", (open || active) && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground")}
         >
-          <UserRound className="size-5" aria-hidden="true" />
+          <UserRound className="size-5 sm:size-6" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
       <PopoverContent

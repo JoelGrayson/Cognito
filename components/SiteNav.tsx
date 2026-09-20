@@ -16,24 +16,26 @@ const LINKS = [
 function Nav({ pathname }: { pathname: string | null }) {
   return (
     <header className="sticky top-0 z-50 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-2.5 sm:px-8">
+      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-8 sm:py-5">
         <Link
           href="/"
-          className="wb-serif inline-flex items-center gap-2 rounded-md text-xl font-medium tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-2xl"
+          className="wb-serif inline-flex items-center gap-2 rounded-md text-xl font-medium tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:gap-2.5 sm:text-3xl"
         >
-          <Mascot size={30} />
+          <span className="hidden sm:block">
+            <Mascot size={38} />
+          </span>
           Cognito
         </Link>
-        <ul className="flex items-center gap-1">
+        <ul className="flex items-center gap-0.5 sm:gap-2">
           {LINKS.map((link) => {
             const active = pathname !== null && link.match(pathname);
             return (
-              <li key={link.href}>
+              <li key={link.href} className={link.href === "/" ? "hidden sm:list-item" : undefined}>
                 <Button
                   asChild
                   variant="ghost"
                   className={cn(
-                    "px-2.5 text-muted-foreground sm:px-4",
+                    "h-10 rounded-xl px-2 text-[13px] font-normal text-muted-foreground sm:h-11 sm:px-5 sm:text-base",
                     active && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
                   )}
                 >
@@ -45,7 +47,7 @@ function Nav({ pathname }: { pathname: string | null }) {
               </li>
             );
           })}
-          <li className="ml-1">
+          <li className="sm:ml-2">
             <ProfileMenu active={pathname?.startsWith("/settings") ?? false} />
           </li>
         </ul>
