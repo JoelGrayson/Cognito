@@ -4,6 +4,8 @@ import RoadmapPreview from "@/components/landing/RoadmapPreview";
 import { ctaTarget, type LandingState } from "@/components/landing/cta-target";
 import { getUserState } from "@/lib/plans";
 import { getUserId } from "@/lib/session";
+import { SUBJECTS } from "@/lib/subjects";
+import { SubjectIcon } from "@/components/SubjectIcon";
 
 // The CTA depends on per-user state, so this page must never be prerendered.
 export const dynamic = "force-dynamic";
@@ -36,16 +38,17 @@ export default async function Home() {
   return (
     <div className="wb flex min-h-screen flex-col">
       <main className="flex-1">
-        <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-5 pb-14 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:pb-24 lg:pt-14">
-          <div>
-            <h1 className="wb-serif text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
-              Know what to learn, in what order, and for how long.
-            </h1>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-(--wb-muted)">
-              Most self-learners stall because nobody hands them a plan. Tell us your goal and get a personalized,
-              editable roadmap in under 3 minutes.
-            </p>
-            <div className="mt-8 flex flex-col items-start gap-3">
+        <section className="mx-auto w-full max-w-6xl px-5 pb-14 pt-8 sm:px-8 lg:pb-20 lg:pt-14">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="wb-serif text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+                Learn anything, in the right order.
+              </h1>
+              <p className="mt-4 max-w-xl text-lg leading-relaxed text-(--wb-muted)">
+                Tell us your goal. Get a personal roadmap in under 3 minutes.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
               <Link
                 href={cta.href}
                 className="inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-(--wb-primary) px-7 text-lg text-(--wb-card) shadow-[0_6px_24px_rgb(59_42_31/0.18)] transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-(--wb-primary) sm:w-auto"
@@ -59,19 +62,49 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="relative rounded-3xl border border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-6">
-            <div className="absolute -left-4 -top-12 hidden items-end gap-1 sm:flex">
+          <div className="relative mt-8 rounded-3xl border sm:mt-24 border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-8">
+            <div className="absolute -left-5 -top-12 hidden items-end gap-1 sm:flex">
               <Mascot size={72} />
               <span className="relative mb-6 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
                 What should we dig into today?
                 <span className="absolute -left-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
               </span>
             </div>
-            <RoadmapPreview className="mx-auto h-auto w-full max-w-105" />
-            <p className="mt-2 text-center text-xs text-(--wb-muted)">
+            <RoadmapPreview orientation="landscape" className="mx-auto hidden h-auto w-full sm:block" />
+            <RoadmapPreview className="mx-auto h-auto w-full max-w-105 sm:hidden" />
+            <p className="mt-3 text-center text-xs text-(--wb-muted)">
               Example roadmap for &ldquo;Learn machine learning&rdquo;
             </p>
           </div>
+        </section>
+
+        <section className="mx-auto w-full max-w-6xl px-5 pb-14 sm:px-8 lg:pb-20">
+          <h2 className="wb-serif text-2xl font-medium tracking-tight sm:text-3xl">Your subjects</h2>
+          <ul className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {SUBJECTS.map((subject) => (
+              <li
+                key={subject.id}
+                className="flex flex-col rounded-3xl border border-(--wb-line) bg-(--wb-card) p-6 shadow-[0_2px_10px_rgb(59_42_31/0.06)]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="rounded-md bg-(--wb-butter) px-2 py-0.5 text-[11px] font-medium uppercase tracking-widest text-(--wb-butter-ink)">
+                    {subject.name}
+                  </span>
+                  <SubjectIcon name={subject.icon} />
+                </div>
+                <p className="mt-4 flex-1 text-lg leading-snug">{subject.blurb}</p>
+                <p className="mt-2 text-sm text-(--wb-muted)">
+                  {subject.checker ? "Steps checked as you write" : "Step checking coming soon"}
+                </p>
+                <Link
+                  href={`/dev/whiteboard?subject=${subject.id}`}
+                  className="mt-5 inline-flex min-h-11 items-center self-start rounded-xl border border-(--wb-line) px-5 hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-(--wb-primary)"
+                >
+                  Open whiteboard
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section aria-labelledby="problems" className="border-y border-(--wb-line) bg-(--wb-butter)/40">

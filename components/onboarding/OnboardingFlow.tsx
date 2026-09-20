@@ -35,7 +35,7 @@ export function OnboardingFlow({ edit = false, fresh = false }: { edit?: boolean
     <div className="wb flex flex-1 flex-col">
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 pt-14 pb-20 sm:pt-20 sm:pb-12">
         <div className="relative flex flex-1 flex-col rounded-3xl border border-(--wb-line) bg-(--wb-card) p-5 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:flex-none sm:p-10">
-          <div className="absolute -top-12 right-8">
+          <div className="absolute -top-10 right-0 sm:-right-5">
             <Mascot size={60} />
           </div>
           {status === "error" ? (
