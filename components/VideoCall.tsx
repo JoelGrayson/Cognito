@@ -1,246 +1,160 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { AgentProvider, useAgentClientTool, useAgentConversation, useAgentMicrophone, useAgentMode, useAgentSession, useAgentState, type AgentSessionConfig } from "@deepgram/react";
+import { ensureAnonymousSession } from "@/lib/auth-client";
+import { VOICE_LESSON_START, VoiceBoardSchema, voiceAgentSettings } from "@/lib/ai/voice-agent";
 import { applyActions, describeBoard, learnerStroke, type BoardElement, type ResolvedAction } from "@/lib/board";
 import { ensureOk } from "@/lib/ndjson";
-import { speak } from "@/lib/speech";
-import type { ProviderId } from "@/lib/providers/types";
 import type { BoardColor, Lesson } from "@/lib/schema";
+import { plainVoiceText } from "@/lib/voice-text";
 import { Board, INK } from "./Board";
 
-type Status = "thinking" | "speaking" | "listening" | "your-turn" | "drawing" | "ended" | "error";
-interface Line {
-  role: "tutor" | "learner";
-  text: string;
-}
-interface Turn {
-  say: string;
-  actions: ResolvedAction[];
-  next: "answer" | "draw" | "continue" | "end";
-}
-
-interface Props {
-  topic: string;
-  lesson: Lesson;
-  providerId: ProviderId;
-  onClose: () => void;
-}
-
+interface Props { topic: string; lesson: Lesson; onClose: () => void }
 const PENS: BoardColor[] = ["blue", "red", "green", "ink"];
-/** The tutor may keep talking without a reply at most this many turns in a row. */
-const MAX_CONTINUES = 2;
 
-/**
- * A lesson taught over a "video call": the tutor talks (browser speech), draws on a
- * shared whiteboard, asks questions and asks the learner to draw. The learner
- * replies by voice (browser speech recognition) or by typing.
- */
-export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
-  const [elements, setElements] = useState<BoardElement[]>([]);
-  const [transcript, setTranscript] = useState<Line[]>([]);
-  const [status, setStatus] = useState<Status>("thinking");
-  const [caption, setCaption] = useState("");
-  const [heard, setHeard] = useState("");
-  const [typed, setTyped] = useState("");
-  const [error, setError] = useState<string | null>(null);
+export function VideoCall(props: Props) {
   const [micOn, setMicOn] = useState(true);
-  const [voiceOn, setVoiceOn] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const config = useMemo<AgentSessionConfig>(() => ({
+    auth: { tokenFactory: async () => {
+      await ensureAnonymousSession();
+      const response = await fetch("/api/voice/token", { cache: "no-store" });
+      await ensureOk(response);
+      const token = await response.json() as { access_token: string };
+      return token.access_token;
+    } },
+    agent: voiceAgentSettings(props.topic, props.lesson),
+    audio: { input: { encoding: "linear16", sampleRate: 16000 }, output: { encoding: "linear16", sampleRate: 24000 } },
+    reconnect: { enabled: true, maxAttempts: 3 },
+  }), [props.topic, props.lesson]);
+
+  return <AgentProvider config={config} autoStart microphone={micOn}
+    // Preserve quiet first syllables for faster barge-in; echo cancellation still removes tutor playback.
+    microphoneOptions={{ echoCancellation: true, noiseSuppression: false, autoGainControl: true, sampleRate: 16000 }}
+    onError={(event) => setError(event.description || "The voice service could not connect. Try reconnecting.")}
+    onSdkError={(event) => {
+      if (event.name === "NotAllowedError" || event.name === "NotFoundError" || event.name === "NotReadableError") {
+        setMicOn(false);
+        setError("Microphone unavailable. Allow microphone access and unmute, or reconnect to use chat.");
+      } else setError(event.message || "Connection lost. Try reconnecting.");
+    }}
+    onInjectionRefused={() => setError("Your message could not be sent yet. Wait a moment and send it again.")}
+  ><CallSession {...props} micOn={micOn} setMicOn={setMicOn} error={error} setError={setError} /></AgentProvider>;
+}
+
+function CallSession({ topic, lesson, onClose, micOn, setMicOn, error, setError }: Props & {
+  micOn: boolean; setMicOn: (on: boolean) => void; error: string | null; setError: (error: string | null) => void;
+}) {
+  const session = useAgentSession();
+  const { state, start, stop } = useAgentState();
+  const { mode } = useAgentMode();
+  const { micActive } = useAgentMicrophone();
+  const { conversation, sendUserMessage } = useAgentConversation();
+  const [elements, setElements] = useState<BoardElement[]>([]);
+  const [typed, setTyped] = useState("");
+  const [userSpeaking, setUserSpeaking] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
+  const [captionsOn, setCaptionsOn] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const [penColor, setPenColor] = useState<BoardColor>("blue");
   const [pending, setPending] = useState(0);
-
-  // Latest values for the async turn loop.
+  const [elapsed, setElapsed] = useState(0);
   const elementsRef = useRef<BoardElement[]>([]);
-  const transcriptRef = useRef<Line[]>([]);
   const pendingRef = useRef(0);
   const strokeCount = useRef(0);
-  const continues = useRef(0);
-  const ended = useRef(false);
-  const interrupted = useRef(false);
-  const micOnRef = useRef(true);
-  const voiceOnRef = useRef(true);
-  const abortRef = useRef<AbortController | null>(null);
-  const recognitionRef = useRef<Recognition | null>(null);
+  const boardRequest = useRef<AbortController | null>(null);
+  const lessonStarted = useRef(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const transcriptEnd = useRef<HTMLDivElement>(null);
+  const connected = state === "connected" && mode !== "idle";
+  const status = error ? "error" : !connected ? "connecting" : userSpeaking && micOn ? "listening" : mode === "speaking" ? "speaking" : mode === "thinking" ? "thinking" : "your-turn";
+  const transcript = conversation
+    .filter((line) => line.role !== "user" || line.content !== VOICE_LESSON_START)
+    .map((line) => ({ role: line.role === "assistant" ? "tutor" : "learner", text: line.role === "assistant" ? plainVoiceText(line.content) : line.content }));
+  const latest = transcript.at(-1);
+  const caption = userSpeaking ? "" : latest?.text ?? "";
+  const captionSpeaker = latest?.role === "learner" ? "You" : "Tutor";
 
-  const canListen = typeof window !== "undefined" && recognitionCtor() !== null;
+  function setBoard(next: BoardElement[]) { elementsRef.current = next; setElements(next); }
+  function setPendingStrokes(n: number) { pendingRef.current = n; setPending(n); }
 
-  function setBoard(next: BoardElement[]) {
-    elementsRef.current = next;
-    setElements(next);
-  }
-  function addLine(line: Line) {
-    transcriptRef.current = [...transcriptRef.current, line];
-    setTranscript(transcriptRef.current);
-  }
-  function setPendingStrokes(n: number) {
-    pendingRef.current = n;
-    setPending(n);
-  }
-
-  /** Ask the tutor for its next turn, then say it, draw it, and wait for what it asked for. */
-  async function requestTurn() {
-    abortRef.current?.abort();
+  useAgentClientTool("read_whiteboard", () => JSON.stringify({ board: describeBoard(elementsRef.current) }));
+  useAgentClientTool("update_whiteboard", async (fn) => {
+    const parsed = VoiceBoardSchema.safeParse(JSON.parse(fn.arguments));
+    if (!parsed.success) return JSON.stringify({ error: "Invalid board actions. Check the tool schema and try again." });
+    boardRequest.current?.abort();
     const controller = new AbortController();
-    abortRef.current = controller;
-    try {
-      const res = await fetch("/api/lesson/call", {
-        method: "POST",
-        signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic,
-          lesson,
-          board: describeBoard(elementsRef.current),
-          transcript: transcriptRef.current.slice(-30),
-          provider: providerId,
-        }),
+    boardRequest.current = controller;
+    let actions: ResolvedAction[];
+    if (parsed.data.actions.some((action) => action.type === "image")) {
+      const response = await fetch("/api/voice/board", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.data), signal: controller.signal,
       });
-      await ensureOk(res);
-      const turn = (await res.json()) as Turn;
-      if (ended.current || controller.signal.aborted) return;
-      setBoard(applyActions(elementsRef.current, turn.actions));
-      addLine({ role: "tutor", text: turn.say });
-      setCaption(turn.say);
-      setStatus("speaking");
-      interrupted.current = false;
-      await speak(turn.say, voiceOnRef.current);
-      if (ended.current) return;
-      if (interrupted.current) {
-        interrupted.current = false;
-        listen();
-        return;
-      }
-      afterTurn(turn.next);
-    } catch (err) {
-      if (controller.signal.aborted || ended.current) return;
-      setError(err instanceof Error ? err.message : "The tutor could not respond.");
-      setStatus("error");
+      await ensureOk(response);
+      actions = (await response.json() as { actions: ResolvedAction[] }).actions;
+    } else {
+      actions = parsed.data.actions.filter((action) => action.type !== "image");
     }
-  }
+    if (controller.signal.aborted) return JSON.stringify({ error: "The learner interrupted this update." });
+    const readableActions = actions.map((action) => {
+      if (action.type === "text") return { ...action, text: plainVoiceText(action.text) };
+      if (action.type === "plot") return { ...action, xLabel: plainVoiceText(action.xLabel), yLabel: plainVoiceText(action.yLabel) };
+      return action;
+    });
+    setBoard(applyActions(elementsRef.current, readableActions));
+    return JSON.stringify({ board: describeBoard(elementsRef.current) });
+  });
 
-  function nextTurn() {
-    stopListening();
-    setError(null);
-    setStatus("thinking");
-    void requestTurn();
-  }
-
-  function afterTurn(next: Turn["next"]) {
-    if (next === "end") {
-      setStatus("ended");
-      return;
-    }
-    if (next === "continue" && continues.current < MAX_CONTINUES) {
-      continues.current += 1;
-      nextTurn();
-      return;
-    }
-    continues.current = 0;
-    if (next === "draw") {
-      setStatus("drawing");
-      return;
-    }
-    setStatus("your-turn");
-    if (micOnRef.current) listen();
-  }
-
-  /** The learner said or typed something. */
-  function reply(text: string) {
-    const strokes = pendingRef.current;
-    const note = strokes ? ` (I drew ${strokes} stroke${strokes === 1 ? "" : "s"} on the board.)` : "";
-    addLine({ role: "learner", text: `${text}${note}` });
-    setPendingStrokes(0);
-    continues.current = 0;
-    nextTurn();
-  }
-
-  function sendDrawing() {
-    const strokes = pendingRef.current;
-    if (!strokes) return;
-    addLine({ role: "learner", text: `(I drew ${strokes} stroke${strokes === 1 ? "" : "s"} on the board. Take a look.)` });
-    setPendingStrokes(0);
-    continues.current = 0;
-    nextTurn();
-  }
-
-  function listen() {
-    const Ctor = recognitionCtor();
-    if (!Ctor || ended.current) {
-      setStatus("your-turn");
-      return;
-    }
-    recognitionRef.current?.abort();
-    const rec = new Ctor();
-    rec.lang = navigator.language || "en-US";
-    rec.interimResults = true;
-    rec.continuous = false;
-    let finalText = "";
-    rec.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const result = e.results[i];
-        if (result.isFinal) finalText += result[0].transcript;
-        else interim += result[0].transcript;
-      }
-      setHeard(`${finalText}${interim}`);
+  useEffect(() => {
+    const onSpeech = () => { lessonStarted.current = true; boardRequest.current?.abort(); setUserSpeaking(true); };
+    const onText = (line: { role: string }) => {
+      if (line.role === "user") lessonStarted.current = true;
+      setUserSpeaking(false);
     };
-    rec.onerror = () => {};
-    rec.onend = () => {
-      if (recognitionRef.current === rec) recognitionRef.current = null;
-      setHeard("");
-      const text = finalText.trim();
-      if (text && !ended.current) reply(text);
-      else setStatus((s) => (s === "listening" ? "your-turn" : s));
+    const onGreetingDone = () => {
+      if (lessonStarted.current) return;
+      lessonStarted.current = true;
+      session.injectUserMessage(VOICE_LESSON_START);
     };
-    recognitionRef.current = rec;
-    setStatus("listening");
-    try {
-      rec.start();
-    } catch {
-      setStatus("your-turn");
-    }
-  }
+    const onConnected = () => setError(null);
+    session.on("user-started-speaking", onSpeech);
+    session.on("conversation-text", onText);
+    session.on("agent-audio-done", onGreetingDone);
+    session.on("settings-applied", onConnected);
+    return () => {
+      session.off("user-started-speaking", onSpeech);
+      session.off("conversation-text", onText);
+      session.off("agent-audio-done", onGreetingDone);
+      session.off("settings-applied", onConnected);
+      boardRequest.current?.abort();
+    };
+  }, [session, setError]);
 
-  function stopListening() {
-    const rec = recognitionRef.current;
-    recognitionRef.current = null;
-    rec?.abort();
-    setHeard("");
-  }
-
-  /** Mic button: interrupt the tutor, start listening, or stop listening. */
-  function onMic() {
-    if (status === "speaking") {
-      interrupted.current = true;
-      window.speechSynthesis?.cancel();
-      return;
-    }
-    if (status === "listening") {
-      recognitionRef.current?.stop();
-      return;
-    }
-    if (status === "your-turn" || status === "drawing" || status === "error") listen();
-  }
-
+  function toggleMic() { setError(null); setUserSpeaking(false); setMicOn(!micOn); }
   function onSubmitTyped(e: FormEvent) {
     e.preventDefault();
     const text = typed.trim();
-    if (!text || status === "thinking") return;
+    if (!text || !connected) return;
+    lessonStarted.current = true;
+    sendUserMessage(text);
     setTyped("");
-    if (status === "speaking") window.speechSynthesis?.cancel();
-    stopListening();
-    reply(text);
   }
-
+  function sendDrawing() {
+    if (!pendingRef.current || !connected) return;
+    lessonStarted.current = true;
+    sendUserMessage(`I'm done drawing. Please use read_whiteboard to review my ${pendingRef.current} new strokes.`);
+    setPendingStrokes(0);
+  }
   function onStroke(points: number[]) {
     strokeCount.current += 1;
     setBoard([...elementsRef.current, learnerStroke(points, penColor, strokeCount.current)]);
     setPendingStrokes(pendingRef.current + 1);
   }
-
   function undoStroke() {
     const els = elementsRef.current;
     for (let i = els.length - 1; i >= 0; i--) {
@@ -251,211 +165,135 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
       }
     }
   }
-
   function endCall() {
-    ended.current = true;
-    abortRef.current?.abort();
-    stopListening();
-    window.speechSynthesis?.cancel();
+    boardRequest.current?.abort();
+    stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
     onClose();
   }
+  function reconnect() {
+    setError(null);
+    stop();
+    void start().catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not reconnect. Try again."));
+  }
 
-  // Start the call on mount; stop everything on unmount.
-  const start = useEffectEvent(() => {
-    ended.current = false;
-    void requestTurn();
-  });
   useEffect(() => {
-    start();
-    return () => {
-      ended.current = true;
-      abortRef.current?.abort();
-      recognitionRef.current?.abort();
-      window.speechSynthesis?.cancel();
-    };
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    const timer = setInterval(() => setElapsed((seconds) => seconds + 1), 1000);
+    return () => { clearInterval(timer); dialog?.close(); };
   }, []);
-
-  // The learner's camera, when switched on.
   useEffect(() => {
     if (!cameraOn) return;
     let cancelled = false;
-    navigator.mediaDevices
-      ?.getUserMedia({ video: { width: 640, height: 400 }, audio: false })
+    const fail = () => {
+      if (cancelled) return;
+      setCameraOn(false);
+      setCameraError("Camera unavailable. Allow camera access, then turn it on again.");
+    };
+    if (!navigator.mediaDevices) { fail(); return; }
+    void navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 400 }, audio: false })
       .then((stream) => {
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
+        if (cancelled) { stream.getTracks().forEach((track) => track.stop()); return; }
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
-      })
-      .catch(() => setCameraOn(false));
+      }).catch(fail);
     return () => {
       cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
   }, [cameraOn]);
+  useEffect(() => { transcriptEnd.current?.scrollIntoView({ block: "end" }); }, [conversation, chatOpen]);
 
-  // Keep the newest line of the transcript in view.
-  useEffect(() => {
-    transcriptEnd.current?.scrollIntoView({ block: "end" });
-  }, [transcript]);
-
-  const tutorStatus: Record<Status, string> = {
-    thinking: "Thinking…",
-    speaking: "Speaking",
-    listening: "Listening to you…",
-    "your-turn": "Your turn",
-    drawing: "Waiting for your drawing",
-    ended: "Lesson finished",
-    error: "Connection problem",
+  const tutorStatus = {
+    connecting: state === "reconnecting" ? "Reconnecting…" : state === "disconnected" ? "Call disconnected" : "Connecting…",
+    thinking: "Thinking…", speaking: "Speaking", listening: "Listening to you", "your-turn": "Ready when you are", error: "Unable to connect",
   };
+  const micLabel = micOn ? "Mute microphone" : "Unmute microphone";
+  const micHint = !connected ? "Connecting your tutor…" : !micOn ? "You’re muted. Unmute to join in." : !micActive ? "Connecting microphone…" : userSpeaking ? "Listening. Take your time." : "Jump in anytime. Your tutor will listen.";
+  const duration = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   return (
-    <div className="call" role="dialog" aria-modal="true" aria-label={`Video lesson: ${lesson.title}`}>
+    <dialog ref={dialogRef} className="call" aria-label={`Video lesson: ${lesson.title}`} onCancel={(e) => { e.preventDefault(); endCall(); }}>
       <header className="call-header">
-        <div className="min-w-0">
-          <p className="truncate text-[15px] font-medium text-white">{lesson.title}</p>
-          <p className="text-xs text-neutral-400">Video lesson · {topic}</p>
-        </div>
-        <button type="button" className="call-btn call-end" onClick={endCall}>
-          End call
-        </button>
+        <div className="call-presenting"><span className="call-present-icon"><CallIcon name="present" /></span><span><strong>Your tutor</strong> is presenting</span></div>
+        <span className="call-session-label">Live lesson <span aria-hidden="true">·</span> {topic}</span>
       </header>
 
-      <div className="call-main">
-        <div className="call-stage">
-          <Board elements={elements} canDraw={status !== "ended"} penColor={penColor} onStroke={onStroke} />
-          {status === "drawing" && <div className="call-banner">Your turn at the whiteboard: draw, then press Done</div>}
-          {(heard || caption) && (
-            <div className="call-caption" aria-live="polite">
-              {heard ? <span className="text-green-300">You: {heard}</span> : caption}
+      <div className="call-main" data-chat={chatOpen || undefined}>
+        <section className="call-stage" aria-label="Shared whiteboard">
+          <div className="call-board-header"><span><CallIcon name="board" /> Shared whiteboard</span><span className="call-board-hint">Draw together, learn together</span></div>
+          <div className="call-board-canvas"><Board elements={elements} canDraw={true} penColor={penColor} onStroke={onStroke} /></div>
+          <div className="call-board-tools">
+            <div className="call-pens" role="group" aria-label="Pen color">
+              {PENS.map((c) => <button key={c} type="button" className="pen-dot" aria-label={`${c} pen`} aria-pressed={penColor === c} onClick={() => setPenColor(c)}><span style={{ background: INK[c] }} /></button>)}
             </div>
-          )}
-        </div>
+            <button type="button" className="call-board-button" onClick={undoStroke} disabled={!elements.some((e) => e.type === "stroke")} aria-label="Undo last stroke" title="Undo last stroke"><CallIcon name="undo" /></button>
+            {pending > 0 && <button type="button" className="call-board-send" onClick={sendDrawing} disabled={!connected}>Done drawing <CallIcon name="send" /></button>}
+          </div>
+          {captionsOn && caption && <div className="call-caption"><span className="call-caption-who">{captionSpeaker}</span>{caption}</div>}
+        </section>
 
-        <aside className="call-side">
-          <div className="call-tile" data-state={status}>
-            <div className="tutor-avatar" aria-hidden="true">
-              {status === "thinking" ? <span className="thinking-dots"><i /><i /><i /></span> : "T"}
-            </div>
-            <span className="call-tile-name">Tutor · {tutorStatus[status]}</span>
+        <aside className="call-participants" aria-label="Participants">
+          <div className="call-tile tutor-tile" data-speaking={status === "speaking" || undefined}>
+            <span className="call-tile-badge">AI tutor</span>
+            <div className="tutor-avatar" aria-hidden="true"><CallIcon name="spark" /></div>
+            <div className="call-tile-bottom"><span>Tutor</span><span className="call-tile-status">{tutorStatus[status]}</span></div>
+            {status === "speaking" && <span className="call-speaking-mark" aria-label="Tutor is speaking"><CallIcon name="wave" /></span>}
           </div>
-          <div className="call-tile you-tile" data-listening={status === "listening" ? "true" : undefined}>
-            {cameraOn ? <video ref={videoRef} autoPlay muted playsInline /> : <div className="you-avatar">You</div>}
-            <span className="call-tile-name">You{status === "listening" ? " · speaking" : ""}</span>
+          <div className="call-tile you-tile" data-speaking={status === "listening" || undefined}>
+            {cameraOn ? <video ref={videoRef} autoPlay muted playsInline aria-label="Your camera" /> : <div className="you-avatar" aria-hidden="true">Y</div>}
+            <span className="call-tile-mic" aria-label={micOn ? "Microphone on" : "Microphone muted"}><CallIcon name={micOn ? "mic" : "mic-off"} /></span>
+            <div className="call-tile-bottom"><span>You</span><span className="call-tile-status">{!micOn ? "Muted" : status === "listening" ? "Speaking" : !cameraOn ? "Camera off" : ""}</span></div>
           </div>
-          <div className="call-transcript">
-            {transcript.map((l, i) => (
-              <p key={i}>
-                <span className="who">{l.role === "tutor" ? "Tutor" : "You"}</span>
-                {l.text}
-              </p>
-            ))}
-            {error && <p className="text-red-300">{error}</p>}
+          <p className="call-voice-hint" role="status">{micHint}</p>
+        </aside>
+
+        {chatOpen && <aside className="call-chat" id="call-chat-panel" aria-label="In-call messages">
+          <div className="call-chat-header"><h2>In-call messages</h2><button type="button" onClick={() => setChatOpen(false)} aria-label="Close messages"><CallIcon name="close" /></button></div>
+          <p className="call-chat-note">Your conversation, all in one place. You can type here anytime.</p>
+          <div className="call-transcript" role="log" aria-label="Lesson conversation">
+            {transcript.map((line, i) => <div className="call-message" key={i}><span className="who">{line.role === "tutor" ? "Tutor" : "You"}</span><p>{line.text}</p></div>)}
             <div ref={transcriptEnd} />
           </div>
-        </aside>
+          <form onSubmit={onSubmitTyped} className="call-type"><input className="call-input" placeholder="Send a message" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Message your tutor" /><button type="submit" disabled={!typed.trim() || !connected} aria-label="Send message"><CallIcon name="send" /></button></form>
+        </aside>}
       </div>
 
+      {(error || cameraError || state === "disconnected") && <div className="call-notice" role="alert"><span>{error || cameraError || "The call disconnected. Reconnect to continue."}</span>{error || state === "disconnected" ? <button type="button" onClick={reconnect}>Reconnect</button> : <button type="button" onClick={() => setCameraError(null)}>Dismiss</button>}</div>}
       <footer className="call-controls">
-        <button
-          type="button"
-          className="call-btn"
-          data-active={status === "listening" ? "true" : undefined}
-          onClick={onMic}
-          disabled={!canListen || status === "thinking" || status === "ended"}
-          title={canListen ? "Talk (also interrupts the tutor)" : "Voice input needs Chrome or Edge; type instead"}
-        >
-          {status === "listening" ? "Listening… tap to send" : status === "speaking" ? "Interrupt" : "Talk"}
-        </button>
-        <button
-          type="button"
-          className="call-btn"
-          data-on={micOn ? "true" : "false"}
-          onClick={() => {
-            micOnRef.current = !micOn;
-            setMicOn(!micOn);
-          }}
-          title="Start listening automatically after the tutor asks you something"
-        >
-          Auto-listen {micOn ? "on" : "off"}
-        </button>
-        <button
-          type="button"
-          className="call-btn"
-          data-on={voiceOn ? "true" : "false"}
-          onClick={() => {
-            voiceOnRef.current = !voiceOn;
-            setVoiceOn(!voiceOn);
-            if (voiceOn) window.speechSynthesis?.cancel();
-          }}
-        >
-          Tutor voice {voiceOn ? "on" : "off"}
-        </button>
-        <button type="button" className="call-btn" data-on={cameraOn ? "true" : "false"} onClick={() => setCameraOn(!cameraOn)}>
-          Camera {cameraOn ? "on" : "off"}
-        </button>
-
-        <span className="call-pens" role="group" aria-label="Pen colour">
-          {PENS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className="pen-dot"
-              style={{ background: INK[c] }}
-              data-on={penColor === c ? "true" : undefined}
-              onClick={() => setPenColor(c)}
-              aria-label={`${c} pen`}
-            />
-          ))}
-        </span>
-        <button type="button" className="call-btn" onClick={undoStroke} disabled={!elements.some((e) => e.type === "stroke")}>
-          Undo
-        </button>
-        {pending > 0 && (
-          <button type="button" className="call-btn call-send" onClick={sendDrawing} disabled={status === "thinking"}>
-            {status === "drawing" ? "Done drawing" : "Show my drawing"}
-          </button>
-        )}
-
-        <form onSubmit={onSubmitTyped} className="call-type">
-          <input
-            className="call-input"
-            placeholder={status === "ended" ? "Ask a follow-up to keep going" : "Type a reply"}
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            aria-label="Type a reply to the tutor"
-          />
-        </form>
+        <div className="call-details"><span className="call-duration">{duration}</span><div><p>{lesson.title}</p><span>{tutorStatus[status]}</span></div></div>
+        <div className="call-primary-controls" role="group" aria-label="Call controls">
+          <div className="call-control"><button type="button" className="call-control-button" data-off={!micOn || undefined} onClick={toggleMic} aria-label={micLabel} aria-pressed={micOn} title={micLabel}><CallIcon name={micOn ? "mic" : "mic-off"} /></button><span>{micOn ? "Mute" : "Unmute"}</span></div>
+          <div className="call-control"><button type="button" className="call-control-button" data-off={!cameraOn || undefined} onClick={() => { setCameraError(null); setCameraOn(!cameraOn); }} aria-label={cameraOn ? "Turn camera off" : "Turn camera on"} aria-pressed={cameraOn} title={cameraOn ? "Turn camera off" : "Turn camera on"}><CallIcon name={cameraOn ? "camera" : "camera-off"} /></button><span>Camera</span></div>
+          <div className="call-control"><button type="button" className="call-control-button" data-selected={captionsOn || undefined} onClick={() => setCaptionsOn(!captionsOn)} aria-label={captionsOn ? "Turn captions off" : "Turn captions on"} aria-pressed={captionsOn} title="Toggle captions"><CallIcon name="captions" /></button><span>Captions</span></div>
+          <div className="call-control"><button type="button" className="call-control-button call-end" onClick={endCall} aria-label="Leave call" title="Leave call"><CallIcon name="hangup" /></button><span>Leave</span></div>
+        </div>
+        <div className="call-secondary-controls"><span className="call-people" title="2 participants"><CallIcon name="people" /><span>2</span></span><button type="button" className="call-control-button" data-selected={chatOpen || undefined} onClick={() => setChatOpen(!chatOpen)} aria-label={chatOpen ? "Hide messages" : "Show messages"} aria-expanded={chatOpen} aria-controls={chatOpen ? "call-chat-panel" : undefined} title="In-call messages"><CallIcon name="chat" /></button></div>
       </footer>
-    </div>
+    </dialog>
   );
 }
 
-/* ---------- Browser speech recognition ---------- */
-
-interface RecognitionResult {
-  isFinal: boolean;
-  0: { transcript: string };
-}
-interface Recognition {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((e: { resultIndex: number; results: ArrayLike<RecognitionResult> }) => void) | null;
-  onerror: ((e: unknown) => void) | null;
-  onend: (() => void) | null;
-}
-
-function recognitionCtor(): (new () => Recognition) | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => Recognition;
-    webkitSpeechRecognition?: new () => Recognition;
+type IconName = "mic" | "mic-off" | "camera" | "camera-off" | "captions" | "hangup" | "chat" | "people" | "present" | "board" | "undo" | "send" | "close" | "spark" | "wave";
+function CallIcon({ name }: { name: IconName }) {
+  const paths: Record<IconName, ReactNode> = {
+    mic: <><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8" /></>,
+    "mic-off": <><path d="M9 5V4a3 3 0 0 1 6 0v7M9 9v2a3 3 0 0 0 4 2.8M5 10v2a7 7 0 0 0 12 4.9M19 10v2c0 .6-.1 1.2-.2 1.8M12 19v3m-4 0h8M3 3l18 18" /></>,
+    camera: <><rect x="2" y="5" width="14" height="14" rx="3" /><path d="m16 10 6-4v12l-6-4" /></>,
+    "camera-off": <><path d="M7 5h6a3 3 0 0 1 3 3v2l6-4v12l-6-4M16 18a3 3 0 0 1-3 1H5a3 3 0 0 1-3-3V8c0-1 .4-1.8 1-2.3M3 3l18 18" /></>,
+    captions: <><rect x="2" y="4" width="20" height="16" rx="3" /><path d="M10 9H7v6h3m7-6h-3v6h3" /></>,
+    hangup: <path d="M3 16c-1 0-2-1-2-2v-2c6-6 16-6 22 0v2c0 1-1 2-2 2h-3c-1 0-2-1-2-2v-2a15 15 0 0 0-8 0v2c0 1-1 2-2 2Z" />,
+    chat: <path d="M21 14a3 3 0 0 1-3 3H8l-6 4V5a3 3 0 0 1 3-3h13a3 3 0 0 1 3 3ZM7 7h10M7 12h7" />,
+    people: <><circle cx="9" cy="7" r="3" /><path d="M2 21v-3a7 7 0 0 1 14 0v3M16 4a3 3 0 0 1 0 6M19 14a5 5 0 0 1 3 5v2" /></>,
+    present: <><rect x="2" y="3" width="20" height="15" rx="2" /><path d="M8 22h8m-4-4v4m0-8V7m-3 3 3-3 3 3" /></>,
+    board: <><rect x="3" y="3" width="18" height="15" rx="2" /><path d="m8 22 4-4 4 4M7 8h10m-10 5h6" /></>,
+    undo: <path d="M9 5 3 11l6 6M3 11h12a6 6 0 0 1 6 6" />,
+    send: <path d="m22 2-7 20-4-9-9-4 20-7ZM11 13 22 2" />,
+    close: <path d="m6 6 12 12M6 18 18 6" />,
+    spark: <><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z" /><path d="M20 2v4m-2-2h4" /></>,
+    wave: <path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4" />,
   };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

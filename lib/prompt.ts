@@ -121,6 +121,7 @@ export function planPrompt(req: LessonRequest): string {
 export const EXTRAS_SYSTEM_PROMPT = `You pick further reading and a video for one lesson inside a learning roadmap.
 
 Guidelines:
+- searchQuery: the web search you would run to find authoritative reading for exactly this lesson: documentation, Wikipedia, university course notes, textbooks. Pin the subject down in the roadmap's context so results are not about something that merely shares a word.
 - Resources: 3-5 real, well-known pages: official documentation, Wikipedia, university course notes, textbook sites, standards bodies. Give full https URLs and only ones you are confident exist. Never invent a URL.
 - videoQuery: the search you would type into YouTube to find a clear explainer for exactly this lesson. Pin the subject down in the roadmap's context so results are not about something that merely shares a word (for a Roman history roadmap, "Roman Empire Mediterranean trade routes", not "Italy geography"). Leave it empty if a video would add little beyond the written lesson.
 - Write in the same language the roadmap is written in.
@@ -204,6 +205,32 @@ ${PLAIN_STYLE}`;
 
 export function quizPrompt(lesson: LessonContent): string {
   return `Write a 5-question quiz for this lesson:\n${JSON.stringify(lesson)}`;
+}
+
+export const RESOURCE_PICK_SYSTEM_PROMPT = `You choose further reading for one lesson inside a learning roadmap from web search results: titles, URLs and snippets.
+
+Pick the 3-5 results a good teacher would put in the lesson's "read more" box, best first:
+- Prefer authoritative, educational pages: official documentation, Wikipedia, university course notes, textbooks, standards bodies, established reference sites.
+- Each pick must be about this lesson's actual subject in the roadmap's field. Skip pages about a different thing that shares words with the lesson.
+- Skip forums, product pages, ads, SEO listicles, paywalled news, PDFs of unknown origin, and near-duplicates of a page you already picked.
+- Say in a few words what each pick is good for, in the language the roadmap is written in.
+Pick fewer if few are good; an empty list is better than a bad page.`;
+
+export function resourcePickPrompt(
+  about: { topic: string; lesson: string; summary: string },
+  results: { title: string; url: string; description: string | null }[],
+): string {
+  return [
+    `Roadmap topic: ${about.topic}`,
+    `Lesson: ${about.lesson}. ${about.summary}`,
+    ``,
+    `Search results:`,
+    ...results.map((r, i) =>
+      [`${i}. "${r.title}"`, r.url, r.description?.replace(/\s+/g, " ").slice(0, 200)].filter(Boolean).join(" · "),
+    ),
+    ``,
+    `Pick the ones worth reading.`,
+  ].join("\n");
 }
 
 export const VIDEO_PICK_SYSTEM_PROMPT = `You decide whether a YouTube video belongs next to one lesson in a learning roadmap, and which one. You see search results: titles, channels, lengths, view counts and description snippets.
