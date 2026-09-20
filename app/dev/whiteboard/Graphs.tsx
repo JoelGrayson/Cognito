@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import Script from "next/script";
-import { Icon } from "./ui";
 import type { Plot } from "@/lib/whiteboard/graph";
 
 /** Desmos's own serialized graph. Opaque here: it is handed straight back. */
@@ -49,17 +48,13 @@ const SCRIPT_SRC = `https://www.desmos.com/api/v1.11/calculator.js?apiKey=${
 /** The tutor's red is the marking pen; its curves match it. */
 const TUTOR_COLOR = "#c74440";
 
-/** Fills the canvas box, above the ink and the dock: a tab, not a sidebar. */
-const SHELL = "wb wb-pop absolute inset-0 z-[350] flex flex-col overflow-hidden bg-(--wb-card)";
-
-const TAB = "rounded-lg px-3 py-1.5 text-sm transition-colors";
+/** Fills the canvas box edge to edge, above the ink and the dock, like the sheet itself. */
+const SHELL = "wb wb-pop absolute inset-0 z-[350] overflow-hidden bg-(--wb-card)";
 
 export function GraphsPanel({
   plots,
   stateRef,
   resetKey,
-  onClose,
-  onClear,
 }: {
   plots: Plot[];
   /** The learner's own work in the calculator, kept by the page so that closing
@@ -69,8 +64,6 @@ export function GraphsPanel({
    *  calculator that is open at the time has to be emptied here as well, or its
    *  cleanup would save the pre-reset graph straight back. */
   resetKey: number;
-  onClose: () => void;
-  onClear: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const calcRef = useRef<DesmosCalculator | null>(null);
@@ -142,59 +135,15 @@ export function GraphsPanel({
   return (
     <div className={SHELL}>
       <Script src={SCRIPT_SRC} strategy="lazyOnload" onReady={start} onError={() => setFailed(true)} />
-      <div className="flex items-center justify-between px-5 pt-4">
-        <div className="flex rounded-xl border border-(--wb-line) p-1" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={false}
-            onClick={onClose}
-            className={`${TAB} text-(--wb-muted) hover:text-(--wb-ink)`}
-          >
-            Worksheet
-          </button>
-          <button type="button" role="tab" aria-selected className={`${TAB} bg-(--wb-primary) text-(--wb-card)`}>
-            Graph
-          </button>
-        </div>
-        <div className="flex items-center gap-1">
-          {plots.length > 0 && (
-            <button
-              type="button"
-              onClick={onClear}
-              className="rounded-lg px-2.5 py-1.5 text-xs text-(--wb-muted) hover:bg-(--wb-hover)"
-            >
-              Clear the tutor&rsquo;s curves
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Back to the worksheet"
-            className="grid h-9 w-9 place-items-center rounded-full hover:bg-(--wb-hover)"
-          >
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-      </div>
-      <p className="px-5 pt-2 text-sm text-(--wb-muted)">
-        Yours to type in, and the tutor can graph here while you talk to it.
-      </p>
-
-      <div className="min-h-0 flex-1 px-5 pb-5 pt-3">
-        {failed ? (
-          <p className="text-sm text-(--wb-muted)">
-            Couldn&rsquo;t load Desmos — check the connection, or set NEXT_PUBLIC_DESMOS_API_KEY.
-          </p>
-        ) : (
-          <div
-            ref={hostRef}
-            // A definite height, for the same reason the canvas needs one: the
-            // calculator fills its parent and collapses to nothing without it.
-            className="h-full w-full overflow-hidden rounded-2xl border border-(--wb-line)"
-          />
-        )}
-      </div>
+      {failed ? (
+        <p className="p-5 text-sm text-(--wb-muted)">
+          Couldn&rsquo;t load Desmos — check the connection, or set NEXT_PUBLIC_DESMOS_API_KEY.
+        </p>
+      ) : (
+        // A definite height, for the same reason the canvas needs one: the
+        // calculator fills its parent and collapses to nothing without it.
+        <div ref={hostRef} className="h-full w-full" />
+      )}
     </div>
   );
 }
