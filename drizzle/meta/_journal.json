@@ -22,6 +22,13 @@
       "when": 1789861768495,
       "tag": "0002_parched_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789878869120,
+      "tag": "0003_fat_clea",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,8 @@ import type {
   ContentBody, DraftGraph, LearnerProfile, NodeId, OnboardingProfile,
   OnboardingStep, PlanGraph, Progress, ScheduleWeek, WorkshopMessage,
 } from "../types/learning";
+import type { Lesson, MindMap } from "../lib/schema";
+import type { ProviderId } from "../lib/providers/types";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true })
@@ -134,6 +136,42 @@ export const roadmaps = pgTable("roadmaps", {
 }, (table) => [
   index("roadmaps_user_created_idx").on(table.userId, table.createdAt.desc()),
   check("roadmaps_graph_object", sql`jsonb_typeof(${table.graph}) = 'object'`),
+]).enableRLS();
+
+/** A roadmap from the legacy (stage/block) learning flow at /legacy. Rows exist while the map streams in. */
+export const legacyRoadmaps = pgTable("legacy_roadmaps", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  topic: text("topic").notNull(),
+  details: text("details"),
+  provider: text("provider").$type<ProviderId>().notNull(),
+  /** For a revised map: the change the learner asked for. */
+  instruction: text("instruction"),
+  map: jsonb("map").$type<MindMap>().notNull(),
+  /** False while the map is still streaming in. */
+  complete: boolean("complete").default(false).notNull(),
+  /** Set when generation failed; the map is whatever arrived before. */
+  error: text("error"),
+  model: text("model"),
+  generationMs: integer("generation_ms"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  index("legacy_roadmaps_user_created_idx").on(table.userId, table.createdAt.desc()),
+  check("legacy_roadmaps_map_object", sql`jsonb_typeof(${table.map}) = 'object'`),
+]).enableRLS();
+
+/** One written lesson per block, keyed by the block's lesson key (its lowercased name). */
+export const legacyLessons = pgTable("legacy_lessons", {
+  roadmapId: uuid("roadmap_id").notNull().references(() => legacyRoadmaps.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  lesson: jsonb("lesson").$type<Lesson>().notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  primaryKey({ columns: [table.roadmapId, table.key] }),
+  check("legacy_lessons_key_nonempty", sql`length(btrim(${table.key})) > 0`),
+  check("legacy_lessons_lesson_object", sql`jsonb_typeof(${table.lesson}) = 'object'`),
 ]).enableRLS();
 
 export type StudyPlan = typeof studyPlans.$inferSelect;

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { draftFromLesson, type LessonDraft } from "@/lib/drafts";
 import type { ProviderId } from "@/lib/providers/types";
@@ -35,6 +36,8 @@ interface Props {
   /** Whether a block's lesson is fully written, for the mini map's borders. */
   isReady?: (node: MapNode) => boolean;
   onLessonChange: (lesson: Lesson) => void;
+  /** Address of the tutor's own page. Given one, the aside links there instead of holding the chat. */
+  chatHref?: string;
 }
 
 export function LessonView({
@@ -50,6 +53,7 @@ export function LessonView({
   lessonHref,
   isReady,
   onLessonChange,
+  chatHref,
 }: Props) {
   const [calling, setCalling] = useState(false);
   const [watching, setWatching] = useState(false);
@@ -230,7 +234,17 @@ export function LessonView({
       </div>
 
       <aside className="lesson-aside">
-        {lesson ? (
+        {chatHref ? (
+          <div className="chat-panel items-center justify-center">
+            {lesson ? (
+              <Link href={chatHref} className="lesson-link px-6 text-center text-sm">
+                Ask the tutor about this lesson →
+              </Link>
+            ) : (
+              <p className="px-6 text-center text-sm text-neutral-500">The tutor joins once the lesson is ready.</p>
+            )}
+          </div>
+        ) : lesson ? (
           <LessonChat topic={topic} lesson={lesson} providerId={providerId} onLessonChange={onLessonChange} />
         ) : (
           <div className="chat-panel items-center justify-center">

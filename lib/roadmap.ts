@@ -122,3 +122,16 @@ export function slotRefs(map: MindMap): NodeRef[] {
     { stage, kind: "supporting" as const, index: 1 },
   ]);
 }
+
+/** How many blocks a map has: each stage's core block plus its supporting ones. */
+export function countBlocks(map: MindMap): number {
+  return map.stages.reduce((n, s) => n + 1 + s.supporting.length, 0);
+}
+
+/** Every block in a map, in roadmap order: each stage's core block, then its supporting blocks. */
+export function allRefs(map: MindMap): NodeRef[] {
+  return map.stages.flatMap((stage, i) => [
+    { stage: i, kind: "core" as const, index: 0 },
+    ...stage.supporting.map((_, index) => ({ stage: i, kind: "supporting" as const, index })),
+  ]);
+}

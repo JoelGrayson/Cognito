@@ -26,6 +26,7 @@ import {
   type Quiz,
 } from "@/lib/schema";
 import { findHelpfulVideo } from "@/lib/video";
+import { legacyRouter } from "./legacy";
 import { publicProcedure, router } from "./trpc";
 import { tidyMap } from "@/lib/roadmap";
 
@@ -47,6 +48,8 @@ const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
 });
 
 export const appRouter = router({
+  legacy: legacyRouter,
+
   providers: publicProcedure.query(async ({ ctx }) => {
     const session = await getAuth().api.getSession({ headers: ctx.headers });
     return listProviders(session ? { userId: session.user.id } : undefined);
