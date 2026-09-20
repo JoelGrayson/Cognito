@@ -3,14 +3,14 @@
  *
  * A geometric five-point star has thin arms, so the face is crammed into a small middle
  * and the points read as sharp at the sizes this renders (38-72px). The arms here are
- * a little fatter, and the corners are rounded by a stroke trick rather than a
+ * fatter (inner radius 57% of the outer, up from 38%), and the corners are rounded by a stroke trick rather than a
  * hand-rounded path: the star is drawn with a round-joined stroke in its own colour,
  * which turns every corner into a small curve. The lower copy is a shade darker and
  * 1.4 wider, and that sliver is the whole outline - a thin warm edge, not a dark border
  * that gets heavier as the star shrinks.
  */
-const STAR = "M32.0 9.5 L39.6 24.0 L55.8 26.8 L44.4 38.5 L46.7 54.7 L32.0 47.5 L17.3 54.7 L19.6 38.5 L8.2 26.8 L24.4 24.0Z";
-const ROUNDING = 5;
+const STAR = "M32.0 10.5 L40.0 23.5 L54.8 27.1 L44.9 38.7 L46.1 53.9 L32.0 48.1 L17.9 53.9 L19.1 38.7 L9.2 27.1 L24.0 23.5Z";
+const ROUNDING = 6.5;
 
 export function Mascot({ listening = false, size = 64 }: { listening?: boolean; size?: number }) {
   const look = listening ? 1.3 : 0;
