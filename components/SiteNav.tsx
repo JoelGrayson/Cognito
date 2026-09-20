@@ -8,7 +8,6 @@ import { Mascot } from "./Mascot";
 import { ProfileMenu } from "./ProfileMenu";
 
 const LINKS = [
-  { href: "/", label: "Home", short: "Home", match: (path: string) => path === "/" },
   { href: "/onboarding?new=1", label: "New learning plan", short: "New plan", match: (path: string) => path.startsWith("/onboarding") },
   { href: "/topics", label: "Topics", short: "Topics", match: (path: string) => path.startsWith("/topics") },
   { href: "/teacher", label: "For teachers", short: "Teach", match: (path: string) => path.startsWith("/teacher") },
@@ -31,7 +30,7 @@ function Nav({ pathname }: { pathname: string | null }) {
           {LINKS.map((link) => {
             const active = pathname !== null && link.match(pathname);
             return (
-              <li key={link.href} className={link.href === "/" ? "hidden sm:list-item" : undefined}>
+              <li key={link.href}>
                 <Button
                   asChild
                   variant="ghost"
