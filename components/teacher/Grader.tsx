@@ -3,6 +3,7 @@
 import { useMemo, useReducer, useState } from "react";
 import { Board } from "@/components/Board";
 import { ProviderSelect } from "@/components/ProviderSelect";
+import { ensureAnonymousSession } from "@/lib/auth-client";
 import { applyActions } from "@/lib/board";
 import { ensureOk } from "@/lib/ndjson";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
@@ -101,6 +102,13 @@ export function Grader({ providers }: { providers: ProviderInfo[] }) {
     const queue = [...waiting];
     setRunning(true);
     setError(null);
+    try {
+      await ensureAnonymousSession();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't start a session.");
+      setRunning(false);
+      return;
+    }
     const worker = async () => {
       for (let s = queue.shift(); s; s = queue.shift()) {
         dispatch({ type: "start", id: s.id });
@@ -140,7 +148,7 @@ export function Grader({ providers }: { providers: ProviderInfo[] }) {
             }}
           >
             <span className="text-lg">{reading ? "Reading pages…" : "Drop scans or photos here, or click to choose"}</span>
-            <span className="text-sm text-(--wb-muted)">PDF, PNG or JPEG. Pick as many as you like.</span>
+            <span className="text-sm text-(--wb-muted)">PDF, PNG or JPEG. Pick as many as you like; up to {MAX_STACK_PAGES} pages per PDF.</span>
             <input
               type="file"
               multiple

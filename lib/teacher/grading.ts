@@ -61,7 +61,7 @@ const POINTS: Record<ProblemStatus, number> = { correct: 1, partial: 0.5, wrong:
 export const NEXT_STATUS: Record<ProblemStatus, ProblemStatus> = {
   correct: "partial",
   partial: "wrong",
-  wrong: "correct",
+  wrong: "blank",
   blank: "correct",
 };
 
@@ -131,6 +131,16 @@ export function percent(score: Score): number {
   return score.possible === 0 ? 0 : Math.round((score.earned / score.possible) * 100);
 }
 
+/**
+ * What identifies a problem across students. The model's labels are only unique within a
+ * page, so a label that repeats across a submission's pages is qualified with its page:
+ * "1" on a one-page sheet, "1 (p2)" when both pages print a problem 1.
+ */
+export function problemKey(problems: GradedProblem[], p: GradedProblem): string {
+  const repeated = problems.some((q) => q !== p && q.label === p.label && q.page !== p.page);
+  return repeated ? `${p.label} (p${p.page + 1})` : p.label;
+}
+
 export interface ProblemStat {
   label: string;
   /** Students who lost credit on it, out of `of` who were graded on it. */
@@ -154,14 +164,16 @@ export function classSummary(all: Submission[]): ClassSummary {
     if (s.state.kind !== "graded") continue;
     const score = scoreOf(s.state);
     if (score) percents.push(percent(score));
-    for (const p of finalProblems(s.state)) {
-      const stat = stats.get(p.label) ?? { label: p.label, missed: 0, of: 0, notes: [] };
+    const problems = finalProblems(s.state);
+    for (const p of problems) {
+      const key = problemKey(problems, p);
+      const stat = stats.get(key) ?? { label: key, missed: 0, of: 0, notes: [] };
       stat.of += 1;
       if (p.status !== "correct") {
         stat.missed += 1;
         if (p.note) stat.notes.push(p.note);
       }
-      stats.set(p.label, stat);
+      stats.set(key, stat);
     }
   }
   return {
@@ -178,13 +190,16 @@ function cell(value: string | number): string {
 
 /** A gradebook: one row per graded student, one column per problem. */
 export function toCsv(all: Submission[]): string {
-  const rows = all.flatMap((s) => (s.state.kind === "graded" ? [{ s, state: s.state }] : []));
-  const labels = [...new Set(rows.flatMap(({ state }) => state.problems.map((p) => p.label)))];
-  const header = ["Student", "Score", "Out of", "Percent", ...labels.map((l) => `Q${l}`), "Feedback"];
-  const lines = rows.map(({ s, state }) => {
+  const rows = all.flatMap((s) => {
+    if (s.state.kind !== "graded") return [];
+    const problems = finalProblems(s.state);
+    return [{ s, state: s.state, byKey: new Map(problems.map((p) => [problemKey(problems, p), p.status])) }];
+  });
+  const keys = [...new Set(rows.flatMap(({ byKey }) => [...byKey.keys()]))];
+  const header = ["Student", "Score", "Out of", "Percent", ...keys.map((k) => `Q${k}`), "Feedback"];
+  const lines = rows.map(({ s, state, byKey }) => {
     const score = scoreOf(state) ?? { earned: 0, possible: 0 };
-    const byLabel = new Map(finalProblems(state).map((p) => [p.label, p.status]));
-    return [s.student, score.earned, score.possible, percent(score), ...labels.map((l) => byLabel.get(l) ?? ""), state.feedback];
+    return [s.student, score.earned, score.possible, percent(score), ...keys.map((k) => byKey.get(k) ?? ""), state.feedback];
   });
   return [header, ...lines].map((row) => row.map(cell).join(",")).join("\n");
 }

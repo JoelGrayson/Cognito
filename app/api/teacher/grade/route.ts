@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { gradePage } from "@/lib/ai";
 import { apiHandler, PAGE_IMAGE_MAX_CHARS, pageReaderFrom, readJson } from "@/lib/api";
 import type { ResolvedAction } from "@/lib/board";
-import { GRADE_PAGE_SYSTEM_PROMPT, gradePagePrompt } from "@/lib/prompt";
-import { GradedPageSchema } from "@/lib/schema";
+import { getUserId } from "@/lib/session";
 
 export const maxDuration = 120;
 
@@ -18,22 +18,21 @@ const BodySchema = z.object({
 
 /** Grade one page of one student's worksheet. The class is graded a page at a time. */
 export const POST = apiHandler(async (request) => {
+  const userId = await getUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Your session has expired. Please try again." }, { status: 401 });
+  }
   const body = await readJson(request, BodySchema);
   const provider = pageReaderFrom(body.provider, body.image);
 
   const started = Date.now();
-  const { output, model } = await provider.structured(
-    {
-      name: "graded_page",
-      schema: GradedPageSchema,
-      system: GRADE_PAGE_SYSTEM_PROMPT,
-      user: gradePagePrompt({ width: body.width, height: body.height, answerKey: body.answerKey }),
-      image: body.image,
-      effort: "low",
-    },
+  const { page, model } = await gradePage(
+    { image: body.image, width: body.width, height: body.height, answerKey: body.answerKey },
+    provider,
     body.model,
+    { userId },
   );
 
-  const marks = output.marks.filter((m): m is ResolvedAction => m.type !== "image").slice(0, 12);
-  return NextResponse.json({ ...output, marks, model, ms: Date.now() - started });
+  const marks = page.marks.filter((m): m is ResolvedAction => m.type !== "image").slice(0, 12);
+  return NextResponse.json({ ...page, marks, model, ms: Date.now() - started });
 });

@@ -58,7 +58,7 @@ export const PAGE_IMAGE_MAX_CHARS = 8_000_000;
 
 /** The provider for a route that sends a page picture; only some of them can see. */
 export function pageReaderFrom(id: unknown, image: string): Provider {
-  if (!/^data:image\/(png|jpeg|webp);base64,/.test(image)) {
+  if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(image)) {
     throw new BadRequest("The page must be a PNG, JPEG or WebP picture.");
   }
   const provider = providerFrom(id);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classSummary, reduce, scoreOf, splitPages, studentFromFile, toCsv, type PageGrade, type Submission } from "./grading";
+import { NEXT_STATUS, classSummary, reduce, scoreOf, splitPages, studentFromFile, toCsv, type PageGrade, type Submission } from "./grading";
 
 const page = (studentName: string, statuses: PageGrade["problems"][number]["status"][]): PageGrade => ({
   studentName,
@@ -47,6 +47,19 @@ describe("grading", () => {
     expect(toCsv(gradedClass())).toBe(
       'Student,Score,Out of,Percent,Q1,Q2,Q3,Feedback\n"Maria, L",1.5,3,50,correct,partial,wrong,Nice work.\nscan 02,2,3,67,correct,wrong,correct,Nice work.',
     );
+  });
+
+  it("keeps a problem label that repeats across pages apart in the gradebook and summary", () => {
+    let all = reduce([], { type: "add", submissions: [queued("a", "two pages")] });
+    all = reduce(all, { type: "graded", id: "a", pages: [page("", ["correct"]), page("", ["wrong"])] });
+    expect(toCsv(all)).toBe("Student,Score,Out of,Percent,Q1 (p1),Q1 (p2),Feedback\ntwo pages,1,2,50,correct,wrong,Nice work. Nice work.");
+    expect(classSummary(all).trouble).toEqual([{ label: "1 (p2)", missed: 1, of: 1, notes: ["slip on 1"] }]);
+  });
+
+  it("cycles a click through every status, blank included", () => {
+    const seen = new Set<string>();
+    for (let status: keyof typeof NEXT_STATUS = "correct"; !seen.has(status); status = NEXT_STATUS[status]) seen.add(status);
+    expect([...seen].sort()).toEqual(["blank", "correct", "partial", "wrong"]);
   });
 
   it("splits a stacked scan per student and reads a name from a file", () => {
