@@ -45,6 +45,8 @@ export default function App() {
 
   const docRef = useRef(doc);
   docRef.current = doc;
+  const inkRef = useRef(ink.value);
+  inkRef.current = ink.value;
   useEffect(() => {
     if (!doc) openSample(0);
   }, [doc, openSample]);
@@ -74,8 +76,9 @@ export default function App() {
   const check = async () => {
     if (!doc) return;
     const seq = ++checkSeq.current;
-    const docId = doc.id;
-    const stillCurrent = () => seq === checkSeq.current && docRef.current?.id === docId;
+    const snapshot = { doc, ink: ink.value };
+    const stillCurrent = () =>
+      seq === checkSeq.current && docRef.current === snapshot.doc && inkRef.current === snapshot.ink;
     setChecking(true);
     setError(null);
     try {
