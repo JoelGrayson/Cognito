@@ -30,9 +30,10 @@ export const topicsRouter = router({
 
   delete: protectedProcedure.input(roadmapInput).mutation(async ({ input, ctx }) => {
     const userId = ctx.session.user.id;
-    await roadmapRepo.delete(input.id, userId);
-    // The workshop shows the active roadmap's draft; don't leave it pointing at a deleted one.
+    // The workshop shows the active roadmap's draft; read before deleting because the
+    // database nulls activeRoadmapId on delete.
     const state = await onboardingRepo.get(userId);
+    await roadmapRepo.delete(input.id, userId);
     if (state.activeRoadmapId === input.id) {
       await onboardingRepo.update(userId, { activeRoadmapId: null, draftGraph: null });
     }
