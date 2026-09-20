@@ -9,6 +9,7 @@ const emptyState = (): OnboardingState => ({
   step: "questionnaire",
   profile: {},
   draftGraph: null,
+  activeRoadmapId: null,
   messages: [],
 });
 
@@ -17,6 +18,7 @@ const toState = (row: Row): OnboardingState => ({
   step: row.step,
   profile: row.profile,
   draftGraph: row.draftGraph ?? null,
+  activeRoadmapId: row.activeRoadmapId ?? null,
   messages: row.messages,
 });
 
@@ -43,7 +45,14 @@ export const drizzleOnboardingRepo: OnboardingRepo = {
         ...rest,
         profile: profile ? mergeProfile(current.profile, profile) : current.profile,
       };
-      const values = { userId, step: next.step, profile: next.profile, draftGraph: next.draftGraph, messages: next.messages };
+      const values = {
+        userId,
+        step: next.step,
+        profile: next.profile,
+        draftGraph: next.draftGraph,
+        activeRoadmapId: next.activeRoadmapId,
+        messages: next.messages,
+      };
       await tx
         .insert(onboardingSessions)
         .values(values)

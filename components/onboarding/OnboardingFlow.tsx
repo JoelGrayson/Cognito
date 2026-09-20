@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { useOnboarding } from "@/lib/stores/onboarding";
@@ -10,12 +9,13 @@ import { Step2Start } from "./Step2Start";
 
 const STEPS = { 1: Step1Goal, 2: Step2Start } as const;
 
-/** `edit` reopens the questionnaire after it was completed (Back from the workshop). */
-export function OnboardingFlow({ edit = false }: { edit?: boolean }) {
-  const router = useRouter();
+/**
+ * `edit` reopens the questionnaire on the last screen (Back from the workshop).
+ * `fresh` ("New learning plan" in the nav) always starts at the first screen.
+ */
+export function OnboardingFlow({ edit = false, fresh = false }: { edit?: boolean; fresh?: boolean }) {
   const status = useOnboarding((s) => s.status);
   const step = useOnboarding((s) => s.step);
-  const serverStep = useOnboarding((s) => s.serverStep);
   const hydrate = useOnboarding((s) => s.hydrate);
 
   useEffect(() => {
@@ -24,14 +24,9 @@ export function OnboardingFlow({ edit = false }: { edit?: boolean }) {
     // If sign-in fails, hydrate still runs and shows its error state.
     ensureAnonymousSession()
       .catch(() => {})
-      .then(() => { if (!cancelled) void hydrate({ edit }); });
+      .then(() => { if (!cancelled) void hydrate({ edit, fresh }); });
     return () => { cancelled = true; };
-  }, [hydrate, edit]);
-
-  const leaving = status === "ready" && serverStep === "workshop" && !edit;
-  useEffect(() => {
-    if (leaving) router.replace("/onboarding/workshop");
-  }, [leaving, router]);
+  }, [hydrate, edit, fresh]);
 
   const Step = STEPS[step];
 
@@ -42,13 +37,13 @@ export function OnboardingFlow({ edit = false }: { edit?: boolean }) {
           <p className="text-lg font-semibold">We could not load your answers.</p>
           <button
             type="button"
-            onClick={() => void hydrate({ edit })}
+            onClick={() => void hydrate({ edit, fresh })}
             className="mt-4 min-h-12 rounded-full bg-[var(--accent)] px-7 text-[15px] font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
           >
             Try again
           </button>
         </div>
-      ) : status === "loading" || leaving ? (
+      ) : status === "loading" ? (
         <div aria-busy="true" aria-label="Loading" className="space-y-4">
           <div className="skeleton !min-h-3" />
           <div className="skeleton !min-h-12 w-3/4" />

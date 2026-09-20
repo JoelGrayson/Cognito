@@ -65,6 +65,10 @@ export type LearnerProfile = z.infer<typeof LearnerProfile>;
 export const OnboardingProfile = LearnerProfile.partial().extend({
   preferences: LearnerProfile.shape.preferences.partial().optional(),
   availability: LearnerProfile.shape.availability.unwrap().partial().optional(),
+  /** The concept list shown for rating. Persisted so ratings survive revisits. */
+  concepts: z.array(z.string().min(1)).optional(),
+  /** AI provider chosen on screen 1; unset means the default (Anthropic). */
+  provider: z.enum(["anthropic", "openai", "chatgpt", "xai", "local"]).optional(),
 });
 export type OnboardingProfile = z.infer<typeof OnboardingProfile>;
 
@@ -119,6 +123,8 @@ export const OnboardingState = z.object({
   step: OnboardingStep,
   profile: OnboardingProfile,
   draftGraph: DraftGraph.nullable(),
+  /** The roadmap record the active draft came from — saves write through to it. */
+  activeRoadmapId: z.string().nullable(),
   messages: z.array(WorkshopMessage),
 });
 export type OnboardingState = z.infer<typeof OnboardingState>;
