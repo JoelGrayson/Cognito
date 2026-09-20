@@ -1,12 +1,12 @@
 /* Visual language for <TopicGraph>. Scoped under .tg-root so nothing leaks out. */
 
 .tg-root {
-  --tg-ink: #1c1b2e;
-  --tg-focus: #111111;
+  --tg-ink: #2b1d14;
+  --tg-focus: #3b2a1f;
   --tg-select: #3b2a1f;
-  --tg-pulse: #f59e0b;
-  --tg-edge: #6b6b66;
-  --tg-edge-soft: #9a9a95;
+  --tg-pulse: #d98e04;
+  --tg-edge: #a3948a;
+  --tg-edge-soft: #c4b5a6;
   font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
   background: #fffdfa;
 }
@@ -19,10 +19,10 @@
 /* ---------- Cards (leaves and standalone nodes) ---------- */
 
 .tg-card {
-  --bg: #dedbf8;
-  --line: #8f88e0;
-  --title: #221d63;
-  --meta: #453eaa;
+  --bg: #f8efc8;
+  --line: #e0cd84;
+  --title: #5c4c14;
+  --meta: #6d5b1c;
   position: relative;
   display: flex;
   width: 100%;
@@ -42,30 +42,30 @@
   transition: box-shadow 120ms ease, transform 120ms ease;
 }
 .tg-card[data-kind="optional"] {
-  --bg: #f7f7f4;
-  --line: #cbc9c1;
-  --title: #3f3f3c;
-  --meta: #6a6a66;
+  --bg: #f3ebe3;
+  --line: #d6c8ba;
+  --title: #5b4d42;
+  --meta: #7d6e63;
   border-width: 1.5px;
 }
 .tg-card[data-scope="known"] {
-  --bg: #f0f0ed;
-  --line: #d3d3ce;
-  --title: #6b6b67;
-  --meta: #74746f;
+  --bg: #f3ebe3;
+  --line: #d6c8ba;
+  --title: #7d6e63;
+  --meta: #7d6e63;
 }
 .tg-card[data-scope="excluded"] {
-  --bg: #f0f0ed;
-  --line: #d3d3ce;
-  --title: #6b6b67;
-  --meta: #74746f;
+  --bg: #fffdfa;
+  --line: #d6c8ba;
+  --title: #7d6e63;
+  --meta: #7d6e63;
   border-style: dashed;
 }
 .tg-card[data-scope="excluded"] .tg-title {
   text-decoration: line-through;
 }
 .tg-card:hover {
-  box-shadow: 0 4px 14px rgba(20, 20, 60, 0.14);
+  box-shadow: 0 4px 14px rgba(59, 42, 31, 0.16);
   transform: translateY(-1px);
 }
 .tg-card:focus-visible,
@@ -126,7 +126,7 @@
   background: #d98e04;
 }
 .tg-card[data-progress="done"]::before {
-  background: #1f9d63;
+  background: #2f6b3c;
 }
 .tg-card[data-progress="in_progress"],
 .tg-card[data-progress="done"] {
@@ -136,13 +136,13 @@
   color: #8a5a00;
 }
 .tg-progress-tag[data-progress="done"] {
-  color: #12703f;
+  color: #2f6b3c;
 }
 .tg-card[data-progress="done"]:not([data-scope="excluded"]) {
-  --bg: #d5f0e1;
-  --line: #4db184;
-  --title: #0f3d28;
-  --meta: #12703f;
+  --bg: #e4f1e3;
+  --line: #b3d2b2;
+  --title: #24552f;
+  --meta: #2f6b3c;
 }
 .tg-card[data-progress="in_progress"]:not([data-scope="excluded"]) {
   --bg: #fdf0d2;
@@ -157,27 +157,27 @@
   position: relative;
   width: 100%;
   height: 100%;
-  border: 2px solid #b7b3ee;
+  border: 2px solid #e0cd84;
   border-radius: 14px;
-  background: rgba(236, 235, 251, 0.6);
+  background: rgba(248, 239, 200, 0.45);
 }
 .tg-group[data-kind="optional"] {
-  border: 1.5px solid #cbc9c1;
-  background: rgba(247, 247, 244, 0.8);
+  border: 1.5px solid #d6c8ba;
+  background: rgba(243, 235, 227, 0.7);
 }
 .tg-group[data-scope="known"] {
-  border-color: #d3d3ce;
-  background: rgba(240, 240, 237, 0.55);
+  border-color: #d6c8ba;
+  background: rgba(243, 235, 227, 0.55);
 }
 .tg-group[data-scope="excluded"] {
-  border-color: #d3d3ce;
+  border-color: #d6c8ba;
   border-style: dashed;
-  background: rgba(240, 240, 237, 0.6);
+  background: rgba(243, 235, 227, 0.6);
 }
 .tg-group-head {
-  --bg: #3b3499;
-  --title: #ffffff;
-  --meta: #dcd9ff;
+  --bg: #3b2a1f;
+  --title: #fffdfa;
+  --meta: #d9c9b4;
   display: flex;
   width: 100%;
   height: 48px;
@@ -195,19 +195,19 @@
   appearance: none;
 }
 .tg-group[data-kind="optional"] .tg-group-head {
-  --bg: #e7e6e0;
-  --title: #33332f;
-  --meta: #5c5c58;
+  --bg: #f3ebe3;
+  --title: #5b4d42;
+  --meta: #7d6e63;
 }
 .tg-group[data-scope="known"] .tg-group-head {
-  --bg: #e2e2de;
-  --title: #6b6b67;
-  --meta: #74746f;
+  --bg: #f3ebe3;
+  --title: #7d6e63;
+  --meta: #7d6e63;
 }
 .tg-group[data-scope="excluded"] .tg-group-head {
-  --bg: #e2e2de;
-  --title: #6b6b67;
-  --meta: #74746f;
+  --bg: #f3ebe3;
+  --title: #7d6e63;
+  --meta: #7d6e63;
 }
 .tg-group[data-scope="excluded"] .tg-title {
   text-decoration: line-through;
@@ -224,13 +224,96 @@
   flex: none;
 }
 .tg-group[data-progress="done"] .tg-group-head:not([data-scope="excluded"]) {
-  box-shadow: inset 0 -4px 0 #4ade80;
+  box-shadow: inset 0 -4px 0 #86bfa0;
 }
 .tg-group[data-progress="in_progress"] .tg-group-head {
   box-shadow: inset 0 -4px 0 #fbbf24;
 }
 .tg-group .tg-progress-tag {
   color: var(--meta);
+}
+
+/* ---------- Hover actions (mark known / ignore / delete) ---------- */
+
+.tg-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 8;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #e8ded4;
+  border-radius: 999px;
+  background: #fffdfa;
+  box-shadow: 0 4px 14px rgba(59, 42, 31, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+/* A leaf's toolbar follows the whole node; a container's follows its header only —
+   otherwise hovering a child card would pop the parent's toolbar too. */
+.react-flow__node-topic:hover > .tg-actions,
+.react-flow__node-topic:focus-within > .tg-actions,
+.tg-group-head:hover ~ .tg-actions,
+.tg-group-head:focus-visible ~ .tg-actions,
+.tg-actions:hover,
+.tg-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+.tg-actions .tg-action {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #7d6e63;
+  cursor: pointer;
+}
+.tg-actions .tg-action svg {
+  width: 14px;
+  height: 14px;
+}
+.tg-actions .tg-action:hover {
+  background: #f3ebe3;
+  color: #2b1d14;
+}
+.tg-actions .tg-action[data-danger]:hover {
+  background: #fbe5e1;
+  color: #a23a2f;
+}
+.tg-actions .tg-action[aria-pressed="true"] {
+  background: #3b2a1f;
+  color: #fffdfa;
+}
+.tg-actions .tg-action:focus-visible {
+  outline: 2px solid #3b2a1f;
+  outline-offset: 1px;
+}
+
+/* ---------- Add-topic composer (right-click on empty canvas) ---------- */
+
+.tg-composer {
+  position: absolute;
+  z-index: 12;
+  display: flex;
+  width: 260px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #e8ded4;
+  border-radius: 12px;
+  background: #fffdfa;
+  box-shadow: 0 10px 30px rgba(59, 42, 31, 0.18);
+}
+.tg-composer-hint {
+  padding: 0 2px;
+  color: #7d6e63;
+  font-size: 11.5px;
 }
 
 /* ---------- Highlight pulse ---------- */
@@ -240,7 +323,7 @@
   inset: -7px;
   border: 3px solid var(--tg-pulse);
   border-radius: 16px;
-  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.28), 0 0 22px 4px rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 0 6px rgba(217, 142, 4, 0.28), 0 0 22px 4px rgba(217, 142, 4, 0.45);
   opacity: 0;
   pointer-events: none;
   animation: tg-pulse 2s ease-out forwards;
@@ -289,10 +372,10 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  border: 1px solid #dddcd7;
-  background: #ffffff;
-  box-shadow: 0 10px 40px rgba(20, 20, 40, 0.18);
-  color: var(--fg, #111);
+  border: 1px solid #e8ded4;
+  background: #fffdfa;
+  box-shadow: 0 10px 40px rgba(59, 42, 31, 0.18);
+  color: var(--fg, #2b1d14);
   /* Bottom sheet on phones. */
   left: 0;
   right: 0;
@@ -323,10 +406,10 @@
 .tg-field {
   width: 100%;
   padding: 8px 10px;
-  border: 1.5px solid #cfcdc6;
+  border: 1.5px solid #d6c8ba;
   border-radius: 8px;
-  background: #fff;
-  color: #111;
+  background: #fffdfa;
+  color: #2b1d14;
   font: inherit;
   font-size: 14px;
   line-height: 1.35;
@@ -343,17 +426,17 @@
   justify-content: center;
   gap: 6px;
   padding: 0 14px;
-  border: 1.5px solid #cfcdc6;
+  border: 1.5px solid #d6c8ba;
   border-radius: 8px;
-  background: #fff;
-  color: #222;
+  background: #fffdfa;
+  color: #2b1d14;
   font: inherit;
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
 }
 .tg-btn:hover:not(:disabled) {
-  background: #f3f3ef;
+  background: #f3ebe3;
 }
 .tg-btn:focus-visible {
   outline: 3px solid var(--tg-focus);
@@ -369,34 +452,34 @@
   color: #fff;
 }
 .tg-btn[data-variant="primary"]:hover:not(:disabled) {
-  background: #2f47bd;
+  background: #584233;
 }
 .tg-btn[data-variant="danger"] {
-  border-color: #e3b1af;
-  color: #a12622;
+  border-color: #f0c4be;
+  color: #a23a2f;
 }
 .tg-btn[data-variant="danger"]:hover:not(:disabled) {
-  background: #fbeceb;
+  background: #fbe5e1;
 }
 .tg-seg {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  border: 1.5px solid #cfcdc6;
+  border: 1.5px solid #d6c8ba;
   border-radius: 9px;
   overflow: hidden;
 }
 .tg-seg button {
   min-height: 36px;
   border: 0;
-  background: #fff;
-  color: #333;
+  background: #fffdfa;
+  color: #2b1d14;
   font: inherit;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 .tg-seg button + button {
-  border-left: 1.5px solid #cfcdc6;
+  border-left: 1.5px solid #d6c8ba;
 }
 .tg-seg button[aria-checked="true"] {
   background: #3b2a1f;

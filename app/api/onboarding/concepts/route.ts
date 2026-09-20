@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const userId = await requireUserId();
     const body = await parseBody(request, ConceptsRequest);
     if (!body.ok) return body.response;
-    const providerId = pickProvider(body.data.provider);
+    const providerId = await pickProvider(body.data.provider, { userId });
     const concepts = providerId
       ? await generateConceptsWithProvider(providerId, body.data.goal, { userId })
       : await generateConcepts(body.data.goal);
