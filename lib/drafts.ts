@@ -1,4 +1,4 @@
-import type { Lesson, MapNode, MindMap, Phase, StageLink, QuizQuestion, Resource, Video } from "@/lib/schema";
+import type { Lesson, MapNode, QuizQuestion, Resource, Video } from "@/lib/schema";
 
 /* Shapes of things while they are still streaming in, plus the sanitisers
    that turn a half-parsed JSON object into one of them. Client-safe. */
@@ -56,10 +56,6 @@ export interface QuestionDraft {
   explanation?: string;
 }
 
-const PHASES = new Set<Phase>(["prerequisite", "core", "advanced"]);
-const LINKS = new Set<StageLink>(["requires", "any-order", "recommended"]);
-const ORDERS = new Set<MindMap["order"]>(["chronological", "difficulty", "parts", "mixed"]);
-
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
@@ -70,45 +66,6 @@ function strings(value: unknown): string[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function node(value: unknown): MapNode | null {
-  if (!isRecord(value) || typeof value.name !== "string" || !value.name) return null;
-  return { name: value.name, subtitle: str(value.subtitle), description: str(value.description) };
-}
-
-/** Whatever complete-enough stages a partially streamed roadmap has. */
-export function partialMindMap(raw: unknown): MindMap | null {
-  if (!isRecord(raw)) return null;
-  const stages: MindMap["stages"] = [];
-  if (Array.isArray(raw.stages)) {
-    for (const s of raw.stages) {
-      if (!isRecord(s)) continue;
-      const core = node(s.core);
-      if (!core) continue;
-      const phase = PHASES.has(s.phase as Phase) ? (s.phase as Phase) : "core";
-      const link = LINKS.has(s.link as StageLink) ? (s.link as StageLink) : "recommended";
-      const supporting = Array.isArray(s.supporting)
-        ? s.supporting.map(node).filter((n): n is MapNode => n !== null)
-        : [];
-      stages.push({ link, why: str(s.why), phase, core, supporting });
-    }
-  }
-  return {
-    topic: str(raw.topic),
-    summary: str(raw.summary),
-    order: ORDERS.has(raw.order as MindMap["order"]) ? (raw.order as MindMap["order"]) : "mixed",
-    plan: str(raw.plan),
-    startingPoint: strings(raw.startingPoint),
-    outcome: strings(raw.outcome),
-    stages,
-    nextSteps: Array.isArray(raw.nextSteps)
-      ? raw.nextSteps
-          .filter(isRecord)
-          .filter((n) => typeof n.topic === "string" && n.topic)
-          .map((n) => ({ topic: n.topic as string, why: str(n.why) }))
-      : [],
-  };
 }
 
 export function partialOutline(raw: unknown): OutlineDraft | null {

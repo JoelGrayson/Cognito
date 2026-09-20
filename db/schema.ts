@@ -7,6 +7,7 @@ import type {
   ContentBody, DraftGraph, LearnerProfile, NodeId, OnboardingProfile,
   OnboardingStep, PlanGraph, Progress, ScheduleWeek, WorkshopMessage,
 } from "../types/learning";
+import type { Lesson } from "../lib/schema";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true })
@@ -134,6 +135,19 @@ export const roadmaps = pgTable("roadmaps", {
 }, (table) => [
   index("roadmaps_user_created_idx").on(table.userId, table.createdAt.desc()),
   check("roadmaps_graph_object", sql`jsonb_typeof(${table.graph}) = 'object'`),
+]).enableRLS();
+
+/** One written lesson per roadmap node; the module the learner opens from the graph. */
+export const roadmapLessons = pgTable("roadmap_lessons", {
+  roadmapId: uuid("roadmap_id").notNull().references(() => roadmaps.id, { onDelete: "cascade" }),
+  nodeId: text("node_id").notNull(),
+  lesson: jsonb("lesson").$type<Lesson>().notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (table) => [
+  primaryKey({ columns: [table.roadmapId, table.nodeId] }),
+  check("roadmap_lessons_node_id_valid", sql`${table.nodeId} ~ '^[a-z0-9_]{1,60}$'`),
+  check("roadmap_lessons_lesson_object", sql`jsonb_typeof(${table.lesson}) = 'object'`),
 ]).enableRLS();
 
 export type StudyPlan = typeof studyPlans.$inferSelect;

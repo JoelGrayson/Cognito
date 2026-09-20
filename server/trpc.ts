@@ -1,4 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
+import { getAuth } from "@/lib/auth";
 import { ProviderError } from "@/lib/providers";
 
 export interface TRPCContext {
@@ -34,3 +35,14 @@ const handleProviderErrors = t.middleware(async ({ next }) => {
 
 export const router = t.router;
 export const publicProcedure = t.procedure.use(handleProviderErrors);
+
+export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  const session = await getAuth().api.getSession({ headers: ctx.headers });
+  if (!session) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Your session has expired. Please try again.",
+    });
+  }
+  return next({ ctx: { session } });
+});
