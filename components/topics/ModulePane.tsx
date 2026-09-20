@@ -41,9 +41,9 @@ export function ModulePane({ roadmap, node, lesson, written, providerId }: Props
       draft = next;
       setState({ status: "streaming", draft: next });
     };
-    setState({ status: "loading" });
     void (async () => {
       try {
+        setState({ status: "loading" });
         const res = await fetch("/api/lesson", {
           method: "POST",
           signal: controller.signal,
