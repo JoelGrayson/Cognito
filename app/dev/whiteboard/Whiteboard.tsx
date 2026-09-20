@@ -1349,7 +1349,8 @@ function Notebook({
                         {s.asked === null ? `Structure ${i + 1}` : `Question ${s.asked}`}
                       </span>
                       {!s.verdict ? (
-                        <Tag tone="quiet">Couldn&apos;t read</Tag>
+                        // A molecule was read but not trusted enough to judge by.
+                        <Tag tone="quiet">{s.svg ? "Not sure I read this right" : "Couldn\u2019t read"}</Tag>
                       ) : s.verdict.kind === "correct" ? (
                         <Tag tone="good">Right</Tag>
                       ) : (

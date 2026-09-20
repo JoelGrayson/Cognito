@@ -3,7 +3,7 @@
  *
  *   node --experimental-strip-types lib/whiteboard/structure-key.test.ts
  */
-import { judgeStructure, type KeyEntry } from "./structure-key.ts";
+import { judgeStructure, trustedVerdict, type KeyEntry } from "./structure-key.ts";
 
 let pass = 0, total = 0;
 function check(label: string, got: unknown, want: unknown) {
@@ -30,6 +30,14 @@ check("on question 7 it is simply correct", judgeStructure("CCCC(=O)O", KEY, 7),
 check("another question's mistake is just wrong here", judgeStructure("CCCC(=O)O", KEY.slice(0, 2), 1), { kind: "no-match", asked: 1 });
 check("matches nothing", judgeStructure("c1ccccc1", KEY, null), { kind: "no-match", asked: null });
 check("matches nothing, question known", judgeStructure("c1ccccc1", KEY, 5), { kind: "no-match", asked: 5 });
+
+// REGRESSION, seen with a real stylus: a correct answer misread at 0.58 was circled.
+const WRONG = { kind: "no-match", asked: 6 } as const;
+const RIGHT = { kind: "correct", problem: 6, name: "2-bromo-2-methylbutane" } as const;
+check("a shaky reading never accuses", trustedVerdict(WRONG, 0.58), null);
+check("a sure reading does", trustedVerdict(WRONG, 0.97), WRONG);
+check("a shaky reading that matches the key still ticks", trustedVerdict(RIGHT, 0.64), RIGHT);
+check("no confidence reported: judge as read", trustedVerdict(WRONG, null), WRONG);
 
 console.log(`\n${pass}/${total} correct`);
 if (pass !== total) process.exit(1);
