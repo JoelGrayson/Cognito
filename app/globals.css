@@ -7,8 +7,8 @@
 @source "../node_modules/streamdown/dist/*.js";
 
 @theme inline {
-  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-wb-sans), var(--font-geist), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-wb-serif), ui-serif, Georgia, serif;
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
   --color-brand-soft: var(--brand-soft);
@@ -57,46 +57,46 @@
   /* Legacy tokens used by the roadmap, whiteboard and call styles below. */
   --bg: var(--background);
   --fg: var(--foreground);
-  --pill: #ececea;
-  --pill-placeholder: #8c8c8c;
-  --panel: #f7f7f5;
-  --arrow: #9a9a9a;
-  /* Brand indigo: --brand for accents and links, --brand-strong for filled buttons (about 6:1 contrast). */
-  --brand: #4f6ff2;
-  --brand-strong: #3a55d9;
-  --brand-soft: #ecebfb;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --pill: #efe6dd;
+  --pill-placeholder: #9a8b7f;
+  --panel: #fffdfa;
+  --arrow: #a3948a;
+  /* One brown for accents, links and filled buttons. --brand-soft is the butter highlight. */
+  --brand: #3b2a1f;
+  --brand-strong: #3b2a1f;
+  --brand-soft: #f8efc8;
+  --background: #f5eee8;
+  --foreground: #2b1d14;
+  --card: #fffdfa;
+  --card-foreground: #2b1d14;
+  --popover: #fffdfa;
+  --popover-foreground: #2b1d14;
   --primary: var(--brand-strong);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --primary-foreground: #fffdfa;
+  --secondary: #f3ebe3;
+  --secondary-foreground: #2b1d14;
+  --muted: #f3ebe3;
+  --muted-foreground: #7d6e63;
+  --accent: #f3ebe3;
+  --accent-foreground: #2b1d14;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: #e8ded4;
+  --input: #e8ded4;
   --ring: var(--brand);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.875rem;
+  --sidebar: #fffdfa;
+  --sidebar-foreground: #2b1d14;
+  --sidebar-primary: #3b2a1f;
+  --sidebar-primary-foreground: #fffdfa;
+  --sidebar-accent: #f3ebe3;
+  --sidebar-accent-foreground: #2b1d14;
+  --sidebar-border: #e8ded4;
+  --sidebar-ring: #a3948a;
 
   /* Warm notebook palette used by the whiteboard. */
   --wb-bg: #f5eee8;
@@ -123,6 +123,14 @@
 
 .wb-serif {
   font-family: var(--font-wb-serif), ui-serif, Georgia, serif;
+}
+
+/* Page titles are set in the serif everywhere, without each page opting in. */
+@layer base {
+  h1 {
+    font-family: var(--font-heading);
+    font-weight: 500;
+  }
 }
 
 html {

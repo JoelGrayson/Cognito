@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import { DefaultColorStyle, DefaultSizeStyle, useValue, type Editor } from "tldraw";
 import type { SavedSheet } from "@/lib/whiteboard/library";
+import type { SubjectPanel } from "@/lib/subjects";
+import type { Mastery } from "@/lib/whiteboard/mastery";
 
 const ICONS = {
   pen: ["M12 20h9", "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"],
@@ -34,6 +36,7 @@ const ICONS = {
   ],
   check: ["M20 6 9 17l-5-5"],
   graph: ["M3 3v16a2 2 0 0 0 2 2h16", "m19 9-5 5-4-4-3 3"],
+  award: ["M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z", "m9 14-1.5 7L12 18.5l4.5 2.5L15 14"],
 } as const;
 
 export type IconName = keyof typeof ICONS;
@@ -110,7 +113,7 @@ function DockButton({
   );
 }
 
-const Divider = () => <span className="mx-0.5 h-6 w-px shrink-0 bg-(--wb-line)" />;
+const Divider = () => <span className="mx-0.5 hidden h-6 w-px shrink-0 bg-(--wb-line) sm:block" />;
 
 /** Replaces tldraw's toolbar: the same three tools and undo, plus the tutor's controls,
  *  so everything the learner touches while writing sits in one place. */
@@ -144,7 +147,7 @@ export function Dock({
   const canRedo = useValue("canRedo", () => editor?.getCanRedo() ?? false, [editor]);
 
   return (
-    <div className="flex max-w-full items-center overflow-x-auto rounded-full border border-(--wb-line) bg-(--wb-card) p-1.5 shadow-[0_6px_24px_rgb(59_42_31/0.12)]">
+    <div className="flex max-w-full flex-wrap items-center justify-center gap-y-1 rounded-3xl border border-(--wb-line) bg-(--wb-card) p-1.5 sm:flex-nowrap sm:rounded-full shadow-[0_6px_24px_rgb(59_42_31/0.12)]">
       {TOOLS.map(([id, icon, label]) => (
         <DockButton key={id} label={label} active={tool === id} onClick={() => editor?.setCurrentTool(id)}>
           <Icon name={icon} />
@@ -232,10 +235,10 @@ export function Dock({
   );
 }
 
-/** What the tutor last said, with the tail pointing down at the mascot. */
+/** What the tutor last said, with the tail pointing left at the mascot. */
 export function TutorBubble({ text, onDismiss }: { text: string; onDismiss?: () => void }) {
   return (
-    <div className="wb-pop relative max-w-xs rounded-2xl bg-(--wb-primary) px-4 py-3 text-[15px] leading-snug text-(--wb-card) shadow-lg">
+    <div className="wb-pop relative w-fit max-w-full rounded-2xl bg-(--wb-primary) px-4 py-3 text-[15px] leading-snug text-(--wb-card)">
       {onDismiss && (
         <button
           type="button"
@@ -247,7 +250,7 @@ export function TutorBubble({ text, onDismiss }: { text: string; onDismiss?: () 
         </button>
       )}
       {text}
-      <span className="absolute -bottom-1.5 left-7 h-3.5 w-3.5 rotate-45 rounded-[3px] bg-(--wb-primary)" />
+      <span className="absolute -left-1.5 top-4 h-3.5 w-3.5 rotate-45 rounded-[3px] bg-(--wb-primary)" />
     </div>
   );
 }
@@ -336,7 +339,7 @@ export function Library({
     /* A docked panel beside the canvas on desktop; on a phone there is no room beside
        it, so it covers the screen instead. */
     <div
-      className="wb wb-pop fixed inset-0 z-[500] overflow-y-auto xl:static xl:z-auto xl:w-80 xl:shrink-0 xl:rounded-3xl xl:border xl:border-(--wb-line) xl:bg-(--wb-card)"
+      className={PANEL_SHELL}
       aria-busy={busy}
     >
       <div className="px-5 py-5">
@@ -431,17 +434,110 @@ function RailButton({
   );
 }
 
-/** What opens beside the canvas. Graphs has its slot already so the rail does not
- *  reshuffle when it lands. */
-export function Rail({ libraryOpen, onLibrary }: { libraryOpen: boolean; onLibrary: () => void }) {
+const PANEL_SHELL =
+  "wb wb-pop fixed inset-0 z-[500] overflow-y-auto xl:static xl:z-auto xl:w-80 xl:shrink-0 xl:rounded-3xl xl:border xl:border-(--wb-line) xl:bg-(--wb-card)";
+
+const STATE_TAG = {
+  "not-started": ["quiet", "Not started"],
+  "in-progress": ["butter", "In progress"],
+  "needs-a-look": ["bad", "Needs a look"],
+  "on-track": ["good", "On track"],
+} as const;
+
+const STEP_DOT = {
+  followed: "bg-(--wb-good-ink)",
+  flagged: "bg-[#d9534f]",
+  unjudged: "bg-(--wb-line)",
+} as const;
+
+/** Progress per problem, one dot per written step. */
+export function MasteryPanel({ mastery, onClose }: { mastery: Mastery; onClose: () => void }) {
   return (
-    <nav aria-label="Whiteboard panels" className="flex shrink-0 gap-2 lg:flex-col">
-      <RailButton label="My worksheets" active={libraryOpen} onClick={onLibrary}>
-        <Icon name="folder" size={22} />
-      </RailButton>
-      <RailButton label="Graphs" soon>
-        <Icon name="graph" size={22} />
-      </RailButton>
+    <div className={PANEL_SHELL}>
+      <div className="px-5 py-5">
+        <div className="flex items-center justify-between">
+          <h2 className="wb-serif text-xl">Mastery</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-9 w-9 place-items-center rounded-full hover:bg-(--wb-hover)"
+          >
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+
+        <p className="mt-4 text-[11px] font-medium uppercase tracking-widest text-(--wb-muted)">This session</p>
+        <div className="mt-2 flex items-center gap-3">
+          <div
+            role="progressbar"
+            aria-label="Problems on track"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={mastery.percent}
+            className="h-2 flex-1 overflow-hidden rounded-full bg-(--wb-butter)"
+          >
+            <div className="h-full rounded-full bg-(--wb-primary) transition-[width] duration-300" style={{ width: `${mastery.percent}%` }} />
+          </div>
+          <span className="w-10 text-right text-sm tabular-nums">{mastery.percent}%</span>
+        </div>
+
+        <ul className="mt-5 space-y-2.5">
+          {mastery.problems.map((problem) => {
+            const [tone, label] = STATE_TAG[problem.state];
+            return (
+              <li key={problem.id ?? "loose"} className="rounded-2xl border border-(--wb-line) p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span>{problem.label}</span>
+                  <Tag tone={tone}>{label}</Tag>
+                </div>
+                <div className="mt-2.5 flex min-h-3 flex-wrap gap-1.5" aria-label={`${problem.steps.length} steps written`}>
+                  {problem.steps.map((mark, i) => (
+                    <span key={i} title={mark} className={`h-3 w-3 rounded-full ${STEP_DOT[mark]}`} />
+                  ))}
+                  {problem.steps.length === 0 && <span className="text-xs text-(--wb-muted)">No steps yet</span>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+
+        <p className="mt-5 text-xs leading-relaxed text-(--wb-muted)">
+          One dot per step: green follows, red needs another look, grey has not been judged. This resets when you
+          leave the page.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** What opens beside the canvas, for the panels this subject has. */
+export function Rail({
+  panels,
+  open,
+  onToggle,
+}: {
+  panels: readonly SubjectPanel[];
+  open: "worksheets" | "mastery" | null;
+  onToggle: (panel: "worksheets" | "mastery") => void;
+}) {
+  return (
+    <nav aria-label="Whiteboard panels" className="flex shrink-0 gap-2 lg:flex-col lg:justify-end">
+      {panels.includes("worksheets") && (
+        <RailButton label="My worksheets" active={open === "worksheets"} onClick={() => onToggle("worksheets")}>
+          <Icon name="folder" size={22} />
+        </RailButton>
+      )}
+      {panels.includes("mastery") && (
+        <RailButton label="Mastery" active={open === "mastery"} onClick={() => onToggle("mastery")}>
+          <Icon name="award" size={22} />
+        </RailButton>
+      )}
+      {panels.includes("graphs") && (
+        <RailButton label="Graphs" soon>
+          <Icon name="graph" size={22} />
+        </RailButton>
+      )}
     </nav>
   );
 }
