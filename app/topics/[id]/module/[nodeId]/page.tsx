@@ -5,7 +5,7 @@ import { module } from "../../data";
 export async function generateMetadata({ params }: PageProps<"/topics/[id]/module/[nodeId]">) {
   const { id, nodeId } = await params;
   const found = await module(id, nodeId);
-  return { title: found ? `${found.lesson?.title ?? found.node.title} | Cognition` : "Lesson | Cognition" };
+  return { title: found ? `${found.lesson?.title ?? found.node.title} | Cognito` : "Lesson | Cognito" };
 }
 
 export default async function ModulePage({ params }: PageProps<"/topics/[id]/module/[nodeId]">) {

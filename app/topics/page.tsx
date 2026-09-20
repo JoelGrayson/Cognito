@@ -5,7 +5,7 @@ import { topicPath } from "@/lib/modules";
 import type { RoadmapSummary } from "@/lib/repo";
 import { serverTrpc } from "@/server/caller";
 
-export const metadata = { title: "Topics | Cognition" };
+export const metadata = { title: "Topics | Cognito" };
 
 export default async function TopicsPage() {
   const trpc = await serverTrpc();
