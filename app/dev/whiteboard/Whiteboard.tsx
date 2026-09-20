@@ -272,7 +272,7 @@ function Notebook({
   }, [voiceOn]);
   const [said, setSaid] = useState<string | null>(null);
   /** Utterance for a line that was read provisionally and hasn't been spoken yet. */
-  const pendingSpeechRef = useRef<{ lineId: number; text: string } | null>(null);
+  const pendingSpeechRef = useRef<{ lineId: number; text: string; gen: number } | null>(null);
   /** Lines already settled by a line break. Kept separately because the two halves
    *  race: the idle OCR request is async, so a fast next line can finalize before
    *  the reading even exists. Whichever arrives second speaks. */
@@ -367,12 +367,14 @@ function Notebook({
    *  the checker never made. Queued rather than interrupting, so the tutor never
    *  talks over the learner; the words are on screen either way. */
   const speak = useCallback(
-    (text: string) => {
+    (text: string, gen: number = genRef.current) => {
       if (!voiceOnRef.current) return;
       if (agentStateRef.current !== "connected") {
         // Connecting takes a second or two, and the first line can be written and
         // checked inside it. Hold the words rather than dropping them silently.
-        heldRef.current = { text, gen: genRef.current };
+        // Stamped with the read these words came FROM, not the newest one: reads can
+        // land out of order, and a later one may already have superseded this.
+        heldRef.current = { text, gen };
         return;
       }
       session.injectAgentMessage(text, "queue");
@@ -429,7 +431,7 @@ function Notebook({
       if (pending?.lineId === lineId) {
         pendingSpeechRef.current = null;
         finalizedRef.current.delete(lineId);
-        speak(pending.text);
+        speak(pending.text, pending.gen);
       }
       return;
     }
@@ -555,16 +557,16 @@ function Notebook({
           // on the next read; a spoken accusation cannot be taken back, and an idle
           // commit is explicitly provisional - the learner may still be writing.
           if (reason === "line-break") {
-            speak(utterance);
+            speak(utterance, gen);
           } else if (wasFinalized) {
             // Finalization won the race and arrived before this reading existed.
             // Consume it now rather than waiting for an event that already passed.
-            speak(utterance);
+            speak(utterance, gen);
           } else {
             // Provisional: hold the words until the line is settled, so a half-read
             // line never becomes a spoken accusation - but the step is not silenced
             // forever either, which is what happened before "finalized" existed.
-            pendingSpeechRef.current = { lineId, text: utterance };
+            pendingSpeechRef.current = { lineId, text: utterance, gen };
           }
         }
       }
