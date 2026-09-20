@@ -98,14 +98,16 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
-    return NextResponse.json(
-      { error: `Could not reach ElevenLabs: ${error instanceof Error ? error.message : "unknown"}` },
-      { status: 502 },
-    );
+    // Log as well as return. The body reaches a browser that may drop it, so a 502
+    // that is not logged here leaves no record of why the tutor went quiet.
+    const message = error instanceof Error ? error.message : "unknown";
+    console.error(`[voice] speak unreachable after ${Date.now() - started}ms: ${message}`);
+    return NextResponse.json({ error: `Could not reach ElevenLabs: ${message}` }, { status: 502 });
   }
 
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => "");
+    console.error(`[voice] speak ElevenLabs ${res.status} after ${Date.now() - started}ms: ${detail.slice(0, 200)}`);
     return NextResponse.json({ error: `ElevenLabs ${res.status}: ${detail.slice(0, 200)}` }, { status: 502 });
   }
 
