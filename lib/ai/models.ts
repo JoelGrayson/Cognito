@@ -2,6 +2,9 @@
 export const FAST_MODEL = "claude-haiku-4-5-20251001";
 export const STRONG_MODEL = "claude-sonnet-5";
 
+// Typed decisions, not text. Pin the versioned id here if thresholds get tuned against one.
+export const JEV_MODEL = "jev-latest";
+
 // Live calls use Deepgram-managed providers; no separate LLM API key is needed.
 export const VOICE_THINK_MODEL = "gpt-5.6-terra";
 export const VOICE_LISTEN_MODEL = "flux-general-en";
