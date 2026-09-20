@@ -1,3 +1,4 @@
+import { pickVideoWithJev } from "@/lib/ai/decide/video";
 import { VIDEO_PICK_SYSTEM_PROMPT, videoPickPrompt } from "@/lib/prompt";
 import type { Provider, ProviderContext } from "@/lib/providers";
 import { VideoPickSchema, type Video } from "@/lib/schema";
@@ -37,7 +38,11 @@ export async function findHelpfulVideo(
   return chosen ? { id: chosen.id, title: chosen.title, searchUrl: none.searchUrl } : none;
 }
 
-/** The model's pick among search results, or null. Failures count as no pick. */
+/**
+ * The pick among search results, or null. Jev rates the candidates when it is
+ * configured; the generative picker answers when it is not, or when the call
+ * fails. Failures count as no pick.
+ */
 export async function chooseVideo(
   provider: Provider,
   about: VideoContext,
@@ -46,6 +51,12 @@ export async function chooseVideo(
   providerContext?: ProviderContext,
 ): Promise<{ chosen: VideoCandidate | null; reason: string }> {
   if (candidates.length === 0) return { chosen: null, reason: "No usable search results." };
+
+  // A decision Jev did make stands, including "none of these fit": that is an
+  // answer, not a failure, so it is not worth a second opinion from the LLM.
+  const decided = await pickVideoWithJev(about, candidates);
+  if (decided) return { chosen: decided.index === null ? null : candidates[decided.index], reason: decided.reason };
+
   try {
     const { output } = await provider.structured(
       {

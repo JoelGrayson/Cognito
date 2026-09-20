@@ -333,6 +333,9 @@ export const CodeReviewSchema = z.object({
   hint: z.string().describe("One next step that nudges toward the fix without giving the full answer; empty if correct"),
 });
 
+/** The review with the verdict already settled elsewhere: prose only. */
+export const CodeReviewProseSchema = CodeReviewSchema.omit({ verdict: true });
+
 export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
 export type Exercise = z.infer<typeof ExerciseSchema>;
 export type CodeReview = z.infer<typeof CodeReviewSchema>;

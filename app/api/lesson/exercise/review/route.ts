@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { settledVerdict, triageExercise } from "@/lib/ai/decide/exercise";
 import { apiHandler, providerFrom, readJson } from "@/lib/api";
-import { CODE_REVIEW_SYSTEM_PROMPT, codeReviewPrompt } from "@/lib/prompt";
-import { CodeReviewSchema } from "@/lib/schema";
+import { CODE_REVIEW_FEEDBACK_SYSTEM_PROMPT, CODE_REVIEW_SYSTEM_PROMPT, codeReviewPrompt } from "@/lib/prompt";
+import { CodeReviewProseSchema, CodeReviewSchema, type CodeReview } from "@/lib/schema";
 
 export const maxDuration = 60;
 
@@ -32,6 +33,28 @@ const BodySchema = z.object({
 export const POST = apiHandler(async (request) => {
   const body = await readJson(request, BodySchema);
   const provider = providerFrom(body.provider);
+
+  // Whether the code works is a judgement about the code, not about how to word
+  // the feedback, and the run already holds most of the evidence. Jev answers it
+  // on its own; when it is sure, the provider is told the verdict and writes only
+  // the prose. Unsure, or Jev unavailable, and the provider decides as before.
+  const verdict = settledVerdict(await triageExercise(body));
+
+  if (verdict) {
+    const { output, model } = await provider.structured(
+      {
+        name: "code_review",
+        schema: CodeReviewProseSchema,
+        system: CODE_REVIEW_FEEDBACK_SYSTEM_PROMPT,
+        user: codeReviewPrompt(body, verdict),
+        effort: "minimal",
+      },
+      body.model,
+    );
+    const review: CodeReview = { verdict, ...output };
+    return NextResponse.json({ review, model });
+  }
+
   const { output, model } = await provider.structured(
     {
       name: "code_review",
