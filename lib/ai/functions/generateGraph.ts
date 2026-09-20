@@ -1,6 +1,6 @@
 import { validateGraph } from "@/lib/graph/validate";
 import type { DraftGraph, LearnerProfile } from "@/types/learning";
-import { STRONG_MODEL } from "../models";
+import { FAST_MODEL } from "../models";
 import { availableStudyTime, serializeProfile } from "../serialize";
 import { callForcedTool, setGraphTool, type AiCallOptions } from "../tools";
 
@@ -45,7 +45,9 @@ export function buildGenerateGraphPrompt(profile: LearnerProfile, now: Date = ne
  */
 export async function generateGraph(profile: LearnerProfile, options: AiCallOptions = {}): Promise<DraftGraph> {
   return callForcedTool({
-    model: STRONG_MODEL,
+    // Haiku, not Sonnet: the draft generates during the questionnaire and needs to be
+    // finished by the workshop, not perfect. Validation + one retry guard the output.
+    model: FAST_MODEL,
     system: GENERATE_GRAPH_SYSTEM,
     prompt: buildGenerateGraphPrompt(profile),
     tool: setGraphTool,

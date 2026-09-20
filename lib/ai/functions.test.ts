@@ -35,14 +35,14 @@ describe("tool definitions", () => {
 });
 
 describe("generateGraph (fake client)", () => {
-  it("forces set_graph on the strong model and returns a valid graph", async () => {
+  it("forces set_graph on the fast model and returns a valid graph", async () => {
     const graph = await draft();
     const { client, create } = fakeClient(toolUse("set_graph", graph));
     const reports: AttemptReport[] = [];
     const result = await generateGraph(sampleProfile, { client, onAttempt: (r) => reports.push(r) });
     expect(result).toEqual(graph);
     const params = create.mock.calls[0][0];
-    expect(params.model).toBe(STRONG_MODEL);
+    expect(params.model).toBe(FAST_MODEL);
     expect(params.tool_choice).toEqual({ type: "tool", name: "set_graph" });
     expect(params.tools[0].name).toBe("set_graph");
     expect(params.messages[0].content).toContain(sampleProfile.goal);

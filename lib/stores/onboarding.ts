@@ -192,8 +192,7 @@ export const useOnboarding = create<OnboardingStore>()((set, get) => {
     },
 
     prefetchGraph() {
-      const { profile, concepts } = get();
-      if (concepts.status !== "ready") return;
+      const { profile } = get();
       if (!goalIsValid(profile.goal) || !profile.preferences?.formats?.length) return;
       void enqueueSave().then((ok) => {
         // The workshop route shares in-flight work, so a later fetch just waits on this.
