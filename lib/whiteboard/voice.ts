@@ -21,13 +21,15 @@ export interface Speaker {
 }
 
 export function createSpeaker(): Speaker {
-  let current: HTMLAudioElement | null = null;
+  /** The url is held alongside the element because revoking it needs the string we
+   *  created, and reading it back off `audio.src` breaks once the element is reused. */
+  let current: { audio: HTMLAudioElement; url: string } | null = null;
   let speaking = false;
 
   function stop() {
     if (current) {
-      current.pause();
-      URL.revokeObjectURL(current.src);
+      current.audio.pause();
+      URL.revokeObjectURL(current.url);
       current = null;
     }
     speaking = false;
@@ -49,20 +51,23 @@ export function createSpeaker(): Speaker {
         const detail = await res.json().catch(() => ({ error: "speak failed" }));
         throw new Error(detail.error ?? "speak failed");
       }
-      const blob = await res.blob();
-      const audio = new Audio(URL.createObjectURL(blob));
-      current = audio;
+      const url = URL.createObjectURL(await res.blob());
+      const audio = new Audio(url);
+      current = { audio, url };
       speaking = true;
-      audio.onended = () => {
-        speaking = false;
+      const finish = () => {
+        if (current?.audio === audio) stop();
       };
+      audio.onended = finish;
+      audio.onerror = finish;
       try {
         await audio.play();
       } catch {
-        // Browsers block audio until the page has had a user gesture. Not fatal --
-        // the first click anywhere unlocks it, so fail quietly rather than throwing
-        // in the middle of a tutoring turn.
-        speaking = false;
+        finish();
+        // Browsers block audio until the page has had a user gesture. Swallowing this
+        // made a blocked tutor look identical to a silent one, which cost an evening
+        // of looking for a broken key. Say it out loud; the caller decides what to show.
+        throw new Error("The browser blocked playback. Click the page once, then try again.");
       }
     },
   };
