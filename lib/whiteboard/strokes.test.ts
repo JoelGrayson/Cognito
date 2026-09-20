@@ -38,6 +38,12 @@ const CASES: [string, TimedStroke, boolean][] = [
   ["superscript above-right",                    stroke(305, 92),       false],
   ["second stroke of a letter, same height",     stroke(60, 104),       false],
   ["crossing a 't' mid-line",                    stroke(120, 102, 12, 4), false],
+
+  // A worksheet is not written top to bottom.
+  ["hopping to a problem in the other column",   stroke(520, 104),      true],
+  ["hopping back up the page",                   stroke(200, 10),       true],
+  ["far below but NOT at the margin",            stroke(200, 260),      true],
+  ["a wide gap inside one line",                 stroke(400, 104),      false],
 ];
 
 let pass = 0;
