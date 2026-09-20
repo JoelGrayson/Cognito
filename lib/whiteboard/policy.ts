@@ -37,6 +37,7 @@ export type SilenceReason =
   | "still-writing"
   | "checker-abstained"
   | "low-recognition-confidence"
+  | "low-error-confidence"
   | "already-offered"
   | "student-is-working-on-it"
   | "student-self-corrected";
@@ -52,6 +53,12 @@ export interface StepState {
   lineId: number;
   verdict: Equivalence;
   recognitionConfidence: number;
+  /**
+   * How sure we are the step is really wrong, rather than a legitimate move the
+   * checker cannot model. `null` when nobody asked, which keeps the verdict as
+   * the only evidence, exactly as before.
+   */
+  errorConfidence?: number | null;
   /** Set when rung 1 was offered for this step. */
   offeredAt: number | null;
   /** Highest rung the student has pulled down for this step. */
@@ -67,6 +74,10 @@ export interface Config {
    *  Accusing a student of a mistake they didn't make costs more trust than missing
    *  one costs learning. */
   recognitionConfidenceFloor: number;
+  /** Below this, a not-equivalent verdict isn't enough to speak on. Same asymmetry
+   *  as the checker's: "not equivalent" proves nothing on its own, so a second
+   *  opinion that comes back unsure buys silence, not an interruption. */
+  errorConfidenceFloor: number;
   /** Having offered once, don't nag; they know something is wrong. */
   reofferCooldownMs: number;
 }
@@ -74,6 +85,7 @@ export interface Config {
 export const DEFAULT_CONFIG: Config = {
   minIdleMsBeforeSpeaking: 900,
   recognitionConfidenceFloor: 0.6,
+  errorConfidenceFloor: 0.7,
   reofferCooldownMs: 15000,
 };
 
@@ -106,6 +118,12 @@ export function decide(input: PolicyInput, cfg: Config = DEFAULT_CONFIG): Move {
   // Abstention is not an error. "I couldn't tell" must never become an interruption.
   if (step.verdict.kind === "undetermined") {
     return { act: "stay-silent", because: "checker-abstained" };
+  }
+
+  // A verdict that survived the checker but not a second look. Unasked (null) is
+  // not the same as unsure: only a number below the floor buys silence.
+  if (typeof step.errorConfidence === "number" && step.errorConfidence < cfg.errorConfidenceFloor) {
+    return { act: "stay-silent", because: "low-error-confidence" };
   }
 
   // Still writing: they may be mid-thought, and the step isn't a claim yet.

@@ -58,6 +58,25 @@ import {
   type StrokeRecorder,
 } from "@/lib/whiteboard/strokes";
 
+/**
+ * Jev's second opinion on a wrong-looking step, as a probability, or null when it
+ * is unavailable — in which case the checker's verdict decides alone, as before.
+ */
+async function confirmError(premise: string, current: string, verdict: Equivalence): Promise<number | null> {
+  try {
+    const res = await fetch("/api/whiteboard/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ premise, current, verdict }),
+    });
+    if (!res.ok) return null;
+    const data: { confidence?: unknown } = await res.json();
+    return typeof data.confidence === "number" ? data.confidence : null;
+  } catch {
+    return null;
+  }
+}
+
 /** When the tutor speaks up: on every line as it is written, or only once asked. */
 type CheckMode = "live" | "when-done";
 
@@ -415,7 +434,16 @@ export function Whiteboard({ subject }: { subject: Subject }) {
         if (!held) redrawMarks();
       }
       const wrong = verdict && verdict.kind !== "equivalent" && verdict.kind !== "undetermined";
-      if (wrong && trusted && premise) {
+
+      // "Not equivalent" is a reason to look, never a reason to speak: the learner may
+      // have substituted, operated on both sides, or started fresh work the checker
+      // cannot model. Jev reads both lines and the finding and says how likely the
+      // mistake is real; below the policy's floor the board stays quiet. Jev
+      // unavailable returns null, and nothing about this path changes.
+      const errorConfidence = wrong && trusted && premise ? await confirmError(premise.text, parsed, verdict) : null;
+      const doubted = errorConfidence !== null && errorConfidence < DEFAULT_CONFIG.errorConfidenceFloor;
+
+      if (wrong && trusted && premise && !doubted) {
         const finding: Finding = {
           verdict,
           lineId,
