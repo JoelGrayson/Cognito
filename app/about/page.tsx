@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import RoadmapPreview from "@/components/landing/RoadmapPreview";
 import { ctaTarget, type LandingState } from "@/components/landing/cta-target";
@@ -118,9 +119,7 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="border-t px-5 py-6 text-center text-sm text-muted-foreground sm:px-8">
-        Built at HackMIT 2026
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
