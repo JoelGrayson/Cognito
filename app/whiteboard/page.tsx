@@ -5,7 +5,7 @@ import { Worksheet } from "@/components/Worksheet";
 import { Button } from "@/components/ui/button";
 import { listProviders } from "@/lib/providers";
 
-export const metadata: Metadata = { title: "Mark my work · StructuredLearning.ai" };
+export const metadata: Metadata = { title: "Mark my work · Cognito" };
 export const dynamic = "force-dynamic";
 
 export default async function WhiteboardPage() {
