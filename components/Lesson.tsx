@@ -19,7 +19,7 @@ import { RichText } from "./RichText";
 import { Explainer } from "./Explainer";
 import { VideoCall } from "./VideoCall";
 import type { VideoJudging as Judging } from "@/lib/video";
-import { VideoJudging } from "./VideoJudging";
+import { VideoJudging, VideoSlot, useScoresOnScreen } from "./VideoJudging";
 import { CodeExercise, lessonWantsCode } from "./CodeExercise";
 
 export type LessonState =
@@ -65,6 +65,7 @@ export function LessonView({
 }: Props) {
   const [calling, setCalling] = useState(false);
   const [watching, setWatching] = useState(false);
+  const [scoresOpen, setScoresOpen] = useState(false);
 
   const lesson = state.status === "ready" ? state.lesson : null;
   const draft: LessonDraft | null =
@@ -76,6 +77,7 @@ export function LessonView({
           ? draftFromLesson(lesson)
           : null;
   const judging = draft?.videoJudging ?? videoJudging;
+  const racing = useScoresOnScreen(judging, draft?.video ?? null);
   const streaming = state.status === "streaming" || state.status === "loading";
 
   return (
@@ -185,7 +187,7 @@ export function LessonView({
               </Card>
             )}
 
-            <div className={`mt-8 grid gap-6 ${draft.video && !draft.video.id ? "" : "md:grid-cols-2 md:items-start"}`}>
+            <div className={`mt-8 grid gap-6 ${draft.video && !draft.video.id && !racing ? "" : "md:grid-cols-2 md:items-start"}`}>
               <Card>
                 <CardHeader>
                   <CardTitle>Useful resources</CardTitle>
@@ -230,16 +232,16 @@ export function LessonView({
                   )}
                 </CardContent>
               </Card>
-              {draft.video === null ? (
-                <div className="video flex items-center justify-center text-sm text-muted-foreground" aria-busy="true">
-                  Finding a video…
-                </div>
-              ) : draft.video.id ? (
-                <VideoBox id={draft.video.id} title={draft.video.title} />
-              ) : null}
+              <VideoSlot
+                video={draft.video}
+                judging={judging}
+                racing={racing}
+                onShowScores={() => setScoresOpen((open) => !open)}
+                renderVideo={(id, title) => <VideoBox id={id} title={title} />}
+              />
             </div>
 
-            {judging && (
+            {judging?.judgement && scoresOpen && (
               <div className="mt-6">
                 <VideoJudging judging={judging} />
               </div>

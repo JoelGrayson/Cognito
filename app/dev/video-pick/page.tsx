@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { VideoJudging } from "@/components/VideoJudging";
+import { VideoJudging, VideoSlot, useScoresOnScreen } from "@/components/VideoJudging";
 import type { VideoJudging as Judging } from "@/lib/video";
 
 /**
@@ -35,21 +35,28 @@ const CAPTURED: Judging = {
   },
 };
 
+const PICKED = CAPTURED.candidates[CAPTURED.judgement?.picked ?? 0];
+
 export default function VideoPickPreview() {
-  // Replays what a lesson does: the results arrive first, the scores a moment later.
+  // Replays what a lesson does: the results arrive, Jev answers about a second later,
+  // and the pick comes with the answer.
   const [run, setRun] = useState(0);
   const [scored, setScored] = useState(false);
+  const [scoresOpen, setScoresOpen] = useState(true);
   useEffect(() => {
-    const id = setTimeout(() => setScored(true), 900);
+    const id = setTimeout(() => setScored(true), CAPTURED.judgement?.ms ?? 1000);
     return () => clearTimeout(id);
   }, [run]);
 
+  const judging: Judging = scored ? CAPTURED : { candidates: CAPTURED.candidates, judgement: null };
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl tracking-tight">Video pick preview</h1>
-          <p className="mt-1 text-muted-foreground">One real run, replayed: the search results for a lesson, then Jev’s scores.</p>
+          <p className="mt-1 text-muted-foreground">
+            One real run, replayed at its real speed: the search results for a lesson, then Jev&rsquo;s scores.
+          </p>
         </div>
         <Button
           variant="outline"
@@ -61,7 +68,47 @@ export default function VideoPickPreview() {
           Replay
         </Button>
       </div>
-      <VideoJudging key={run} judging={scored ? CAPTURED : { candidates: CAPTURED.candidates, judgement: null }} />
+      <Replay key={run} judging={judging} scored={scored} scoresOpen={scoresOpen} onToggle={() => setScoresOpen((o) => !o)} />
     </main>
+  );
+}
+
+function Replay({
+  judging,
+  scored,
+  scoresOpen,
+  onToggle,
+}: {
+  judging: Judging;
+  scored: boolean;
+  scoresOpen: boolean;
+  onToggle: () => void;
+}) {
+  const video = scored ? { id: PICKED.id, title: PICKED.title, searchUrl: "" } : null;
+  const racing = useScoresOnScreen(judging, video);
+  return (
+    <>
+      <div className="max-w-xl">
+        <VideoSlot
+          video={video}
+          judging={judging}
+          racing={racing}
+          onShowScores={onToggle}
+          renderVideo={(id, title) => (
+            <div>
+              <div className="video ring-1 ring-foreground/10">
+                <iframe src={`https://www.youtube-nocookie.com/embed/${id}`} title={title ?? "Lesson video"} allowFullScreen />
+              </div>
+              {title && <p className="mt-2 truncate text-sm text-muted-foreground">{title}</p>}
+            </div>
+          )}
+        />
+      </div>
+      {scored && scoresOpen && (
+        <div className="mt-8">
+          <VideoJudging judging={judging} />
+        </div>
+      )}
+    </>
   );
 }

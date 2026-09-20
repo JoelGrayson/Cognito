@@ -6,7 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VIDEO_FACETS } from "@/lib/ai/decide/video";
 import { cn } from "@/lib/utils";
+import type { Video } from "@/lib/schema";
 import type { VideoJudging as Judging } from "@/lib/video";
+
+/** Between one bar starting and the next. Jev answers every question at once, in about
+ *  a second, so the whole sweep finishes in well under half of one. */
+const STAGGER_MS = 9;
+
+export const thumbnail = (id: string) => `/api/video-thumb/${id}`;
 
 const VIEWS = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
@@ -30,8 +37,8 @@ function Bar({ value, order, className }: { value: number | undefined; order: nu
   return (
     <div className="h-full overflow-hidden rounded-full bg-muted">
       <div
-        className={cn("h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none", className)}
-        style={{ width: `${shown * 100}%`, transitionDelay: `${order * 35}ms` }}
+        className={cn("h-full rounded-full transition-[width] duration-200 ease-out motion-reduce:transition-none", className)}
+        style={{ width: `${shown * 100}%`, transitionDelay: `${order * STAGGER_MS}ms` }}
       />
     </div>
   );
@@ -46,8 +53,8 @@ function Landed({ order, className, children }: { order: number; className?: str
   }, []);
   return (
     <span
-      className={cn("transition-opacity duration-300 motion-reduce:transition-none", shown ? "opacity-100" : "opacity-0", className)}
-      style={{ transitionDelay: `${order * 35 + 350}ms` }}
+      className={cn("transition-opacity duration-150 motion-reduce:transition-none", shown ? "opacity-100" : "opacity-0", className)}
+      style={{ transitionDelay: `${order * STAGGER_MS + 150}ms` }}
     >
       {children}
     </span>
@@ -105,9 +112,8 @@ export function VideoJudging({ judging }: { judging: Judging }) {
                 <div className="flex min-w-0 items-center gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element -- a YouTube thumbnail, not an app asset */}
                   <img
-                    src={`https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`}
+                    src={thumbnail(video.id)}
                     alt=""
-                    loading="lazy"
                     className="aspect-video w-24 shrink-0 rounded-lg bg-muted object-cover sm:w-28"
                   />
                   <div className="min-w-0">
@@ -163,5 +169,142 @@ export function VideoJudging({ judging }: { judging: Judging }) {
         </ol>
       </CardContent>
     </Card>
+  );
+}
+
+/** A number that changes every frame or so: what "being scored right now" looks like. */
+function useTick(active: boolean): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!active || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => setTick((t) => t + 1), 45);
+    return () => clearInterval(id);
+  }, [active]);
+  return tick;
+}
+
+/**
+ * The same judging, sized for the lesson's video slot: every result as a thumbnail,
+ * its score spinning until Jev answers, then snapping to the real number. The winner
+ * is lifted, and the caller swaps this for the video itself a beat later.
+ */
+export function VideoRace({ judging }: { judging: Judging }) {
+  const { candidates, judgement } = judging;
+  const tick = useTick(judgement === null);
+  const floor = judgement?.floor ?? 0.75;
+
+  return (
+    <div>
+      <div className="video !bg-card p-2.5 ring-1 ring-foreground/10" aria-busy={judgement === null}>
+        <ol className="grid h-full grid-cols-3 grid-rows-2 gap-2">
+          {candidates.slice(0, 6).map((video, i) => {
+            const fit = judgement?.scores[i]?.fit;
+            // Unscored, the reading is noise on purpose; each tile gets its own.
+            const reading = fit ?? ((tick * 37 + i * 53) % 97) / 100;
+            const picked = judgement?.picked === i;
+            const out = fit !== undefined && !picked;
+            return (
+              <li
+                key={video.id}
+                className={cn(
+                  "relative overflow-hidden rounded-lg bg-muted transition-all duration-300",
+                  picked && "z-10 scale-[1.03] shadow-lg ring-2 ring-primary",
+                  out && (fit < floor ? "opacity-35 grayscale" : "opacity-70"),
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- a YouTube thumbnail, not an app asset */}
+                <img src={thumbnail(video.id)} alt={video.title} className="h-full w-full object-cover" />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-1.5 pt-4 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/30">
+                      <div
+                        className={cn("h-full rounded-full", picked ? "bg-[#f8efc8]" : "bg-white")}
+                        style={{ width: `${reading * 100}%`, transition: fit === undefined ? "none" : "width 160ms ease-out" }}
+                      />
+                    </div>
+                    <span className="w-7 text-right text-[11px] font-medium text-white tabular-nums">
+                      {Math.round(reading * 100)}
+                    </span>
+                  </div>
+                </div>
+                {picked && (
+                  <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded-md bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                    <Check className="size-3" aria-hidden="true" />
+                    Picked
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      <p className="mt-2 truncate text-sm text-muted-foreground" aria-live="polite">
+        {judgement
+          ? `Jev scored ${candidates.length} videos in ${judgement.ms} ms${judgement.picked === null ? ". None was good enough to embed." : "."}`
+          : `Jev is scoring ${candidates.length} videos…`}
+      </p>
+    </div>
+  );
+}
+
+/** How long the scored thumbnails stay up before the winner becomes the video. Jev's
+ *  answer and the pick arrive together, so without this the scores would never be seen. */
+const SCORES_ON_SCREEN_MS = 1400;
+
+/** True while the race should hold the video slot: from the first search result until
+ *  a beat after Jev has answered. */
+export function useScoresOnScreen(judging: Judging | undefined, video: Video | null): boolean {
+  const scored = Boolean(judging?.judgement);
+  const [released, setReleased] = useState(false);
+  useEffect(() => {
+    if (!scored) return;
+    const id = setTimeout(() => setReleased(true), SCORES_ON_SCREEN_MS);
+    return () => clearTimeout(id);
+  }, [scored]);
+  return Boolean(judging) && (video === null || (scored && !released));
+}
+
+/**
+ * Where the lesson's video goes. While it is being chosen this is the race between the
+ * search results; once Jev has answered, the winner is shown for a beat and then plays.
+ */
+export function VideoSlot({
+  video,
+  judging,
+  racing,
+  onShowScores,
+  renderVideo,
+}: {
+  video: Video | null;
+  judging: Judging | undefined;
+  racing: boolean;
+  onShowScores: () => void;
+  renderVideo: (id: string, title: string | null) => ReactNode;
+}) {
+  if (judging && racing) return <VideoRace judging={judging} />;
+  if (video === null) {
+    return (
+      <div className="video flex items-center justify-center text-sm text-muted-foreground" aria-busy="true">
+        Finding a video…
+      </div>
+    );
+  }
+  if (!video.id) return null;
+
+  const judgement = judging?.judgement;
+  const fit = judgement?.picked == null ? null : judgement.scores[judgement.picked]?.fit;
+  return (
+    <div>
+      {renderVideo(video.id, video.title)}
+      {judging && judgement && fit != null && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Picked by Jev from {judging.candidates.length} results · {Math.round(fit * 100)}% likely to help ·{" "}
+          {judgement.ms} ms ·{" "}
+          <button type="button" onClick={onShowScores} className="lesson-link">
+            see the scores
+          </button>
+        </p>
+      )}
+    </div>
   );
 }
