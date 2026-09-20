@@ -19,6 +19,10 @@ export function marksFor(
    *  circling the whole step, which is a lower rung anyway - so being unsure gives
    *  away LESS rather than pointing at the wrong glyph. */
   symbol?: Bounds | null,
+  /** The step this one was judged against. Not always the line before it: on a
+   *  worksheet it may be the printed problem, or an earlier line of the same problem
+   *  with another problem's working in between. */
+  premiseLineId: number = Math.max(0, lineId - 1),
 ): Mark[] {
   if (verdict.kind === "equivalent" || verdict.kind === "undetermined") return [];
 
@@ -53,7 +57,7 @@ export function marksFor(
     case 5:
       return [
         { kind: "circle", lineId, tone: "problem", ...(symbol ? { bounds: symbol } : {}) },
-        { kind: "arrow", lineId, toLineId: Math.max(0, lineId - 1) },
+        { kind: "arrow", lineId, toLineId: premiseLineId },
         { kind: "margin-note", lineId, text: noteFor(verdict), tone: "problem" },
       ];
   }
