@@ -24,13 +24,13 @@ async function loadState(): Promise<LandingState | null> {
 const PROBLEMS = [
   { q: "What should I learn?", a: "A map of the topics your goal actually needs, trimmed to what you already know." },
   { q: "In what order?", a: "Prerequisites come first, so you never hit a wall halfway through." },
-  { q: "How long will it take?", a: "Time per topic and a weekly schedule that fits the hours you really have." },
+  { q: "How long will it take?", a: "A time estimate per topic, so you know what fits in an evening." },
 ];
 
 const STEPS = [
   { title: "Tell us your goal", body: "Two quick screens: what you want to learn and what you already know." },
-  { title: "Shape the map", body: "Chat with the AI or edit the graph yourself. Your edits always win." },
-  { title: "Get your plan", body: "An ordered roadmap with a week-by-week schedule, ready to start." },
+  { title: "Shape the map", body: "Mark what you know, drop what you don't, add topics of your own — your edits always win." },
+  { title: "Get your plan", body: "An ordered roadmap with lessons ready to open — practice on the whiteboard when it's math or chemistry." },
 ];
 
 export default async function Home() {
