@@ -15,7 +15,7 @@ import { useOnboarding } from "@/lib/stores/onboarding";
 import type { LearnerProfile } from "@/types/learning";
 import { Choice, ChoiceGroup, StepShell } from "./ui";
 
-const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]";
+const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--wb-primary)]";
 
 type Format = LearnerProfile["preferences"]["formats"][number];
 
@@ -97,7 +97,7 @@ export function Step2Start() {
       busy={save === "saving"}
       notice={save === "error" ? `${saveError ?? "Could not save."} Press Finish to retry.` : null}
     >
-      <p className="mb-2 text-sm font-medium text-[#444]">Formats (at least one)</p>
+      <p className="mb-2 text-sm font-medium text-(--wb-muted)">Formats (at least one)</p>
       <ChoiceGroup label="Formats" className="flex flex-wrap gap-2">
         {FORMATS.map((format) => (
           <Choice
@@ -114,14 +114,14 @@ export function Step2Start() {
       </ChoiceGroup>
 
       <div className="mt-7">
-        <p className="mb-2 text-sm font-medium text-[#444]">What do you already know?</p>
+        <p className="mb-2 text-sm font-medium text-(--wb-muted)">What do you already know?</p>
         {loading && <ConceptSkeleton />}
 
         {ready && (
           <ul className="space-y-3">
             {concepts.items.map((concept) => (
-              <li key={concept} className="rounded-2xl bg-[var(--panel)] p-3">
-                <p className="mb-2 px-1 text-[15px] font-semibold">{concept}</p>
+              <li key={concept} className="rounded-2xl bg-(--wb-hover) p-3">
+                <p className="mb-2 px-1 text-[15px] font-medium">{concept}</p>
                 <ChoiceGroup label={`How well do you know ${concept}?`} className="grid grid-cols-3 gap-1.5">
                   {LEVELS.map(({ level, short }) => (
                     <Choice
@@ -148,9 +148,9 @@ export function Step2Start() {
 
         {!ready && !loading && (
           <div>
-            <p className="mb-4 text-sm text-[#6b6b6b]">
+            <p className="mb-4 text-sm text-(--wb-muted)">
               We could not tailor a list for this goal.{" "}
-              <button type="button" onClick={retry} className={`font-medium text-[var(--accent)] underline ${focus}`}>
+              <button type="button" onClick={retry} className={`font-medium text-[var(--wb-primary)] underline ${focus}`}>
                 Try again
               </button>
             </p>
