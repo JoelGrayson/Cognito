@@ -48,9 +48,10 @@ export async function routeTutorTurn(
     },
     {
       route: choice(QUESTION, {
-        answer: "An answer: a question about the material, a request for an example or a walkthrough, or chat. The lesson text stays as it is.",
+        answer:
+          "An answer: a question about the material, an example or a walkthrough in the reply, or chat. The lesson text stays as it is.",
         rewrite:
-          "A change to the lesson itself: simpler or deeper, add or remove a section, shift the focus, fix a mistake in it.",
+          "A change to the lesson itself: simpler or deeper, add an example to it, add or remove a section, shift the focus, fix a mistake in it.",
       }),
     },
     // Nothing is streamed until this returns, and the wait comes out of the
