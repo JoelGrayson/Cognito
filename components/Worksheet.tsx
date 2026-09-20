@@ -61,7 +61,8 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
       setChecks({});
       setIndex(0);
       setName(file.name);
-      setPages(await readFile(file));
+      // Show each page the moment it is ready; a long PDF should not block page 1.
+      await readFile(file, (ready) => setPages((all) => [...all, ready]));
     } catch (err) {
       setError(err instanceof Error ? err.message : "That file could not be opened.");
     } finally {
@@ -97,7 +98,8 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.lineWidth = 3.5;
+    // A touch heavier than on screen, so thin pen lines survive the model's downscaling.
+    ctx.lineWidth = 5;
     for (const element of ink[index] ?? []) {
       if (element.type !== "stroke") continue;
       ctx.strokeStyle = INK[element.color];
@@ -254,10 +256,10 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
 
 /* ---------- Files ---------- */
 
-async function readFile(file: File): Promise<Page[]> {
-  if (file.type.startsWith("image/")) return [await loadImage(file)];
-  if (file.name.toLowerCase().endsWith(".note")) return renderPdf(await pdfInsideNote(file));
-  return renderPdf(await file.arrayBuffer());
+async function readFile(file: File, onPage: (page: Page) => void): Promise<void> {
+  if (file.type.startsWith("image/")) return onPage(await loadImage(file));
+  if (file.name.toLowerCase().endsWith(".note")) return renderPdf(await pdfInsideNote(file), onPage);
+  return renderPdf(await file.arrayBuffer(), onPage);
 }
 
 /**
@@ -275,11 +277,10 @@ async function pdfInsideNote(file: File): Promise<ArrayBuffer> {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
-async function renderPdf(data: ArrayBuffer): Promise<Page[]> {
+async function renderPdf(data: ArrayBuffer, onPage: (page: Page) => void): Promise<void> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
   const doc = await pdfjs.getDocument({ data }).promise;
-  const pages: Page[] = [];
   for (let n = 1; n <= doc.numPages; n++) {
     const page = await doc.getPage(n);
     const base = page.getViewport({ scale: 1 });
@@ -287,10 +288,12 @@ async function renderPdf(data: ArrayBuffer): Promise<Page[]> {
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(viewport.width);
     canvas.height = Math.round(viewport.height);
-    await page.render({ canvas, canvasContext: canvas.getContext("2d")!, viewport }).promise;
-    pages.push({ url: canvas.toDataURL("image/jpeg", 0.9), width: canvas.width, height: canvas.height });
+    // "print" intent, not "display": display finishes long pages on
+    // requestAnimationFrame, which Chrome freezes in a background tab.
+    await page.render({ canvas, canvasContext: null as unknown as CanvasRenderingContext2D, viewport, intent: "print" }).promise;
+    onPage({ url: canvas.toDataURL("image/jpeg", 0.9), width: canvas.width, height: canvas.height });
+    page.cleanup();
   }
-  return pages;
 }
 
 async function loadImage(file: File): Promise<Page> {
