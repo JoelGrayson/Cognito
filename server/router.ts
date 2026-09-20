@@ -9,7 +9,7 @@ import { findHelpfulVideo } from "@/lib/video";
 import { topicsRouter } from "./topics";
 import { publicProcedure, router } from "./trpc";
 
-const ProviderIdSchema = z.enum(["anthropic", "openai", "chatgpt", "xai", "local"]);
+const ProviderIdSchema = z.enum(["cerebras", "anthropic", "openai", "chatgpt", "xai", "local"]);
 const providerInput = {
   provider: ProviderIdSchema,
   model: z.string().optional(),

@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-export type ProviderId = "anthropic" | "openai" | "chatgpt" | "xai" | "local";
+export type ProviderId = "cerebras" | "anthropic" | "openai" | "chatgpt" | "xai" | "local";
 
 export interface ProviderContext {
   userId?: string;
