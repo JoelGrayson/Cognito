@@ -524,6 +524,15 @@ export default function SpikePage() {
       const open = openRef.current;
       if (!open) {
         setExplanations((e) => [...e, { text: transcript, ms, outcome: "" }]);
+        // Always answer. Showing the learner's words with nothing after them looks
+        // like the tutor heard and ignored them. The held-back line is the same
+        // whether or not anything is wrong, so it gives nothing away.
+        const line =
+          modeRef.current === "when-done"
+            ? "I'm saving my comments until you press check my work."
+            : "Nothing's marked right now, so keep going.";
+        setSaid(line);
+        if (voiceOnRef.current) speakOrReport(speakerRef.current, setError, line, voiceIdRef.current);
         return;
       }
 
@@ -567,7 +576,10 @@ export default function SpikePage() {
           const d = await r.json();
           // Discard a reply whose discussion has been superseded - the learner may
           // have fixed the line while the model was thinking.
-          if (openRef.current !== open) return;
+          if (openRef.current !== open) {
+            setExplanations((e) => [...e, { text: transcript, ms, outcome: "" }]);
+            return;
+          }
           if (d.reply) {
             line = d.reply;
             fromModel = true;
