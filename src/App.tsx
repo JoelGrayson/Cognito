@@ -22,6 +22,8 @@ export default function App() {
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState<string>(PEN_COLORS[0]);
   const [width, setWidth] = useState(3.5);
+  const [penOnly, setPenOnly] = useState(() => localStorage.getItem("draw.penOnly") === "1");
+  useEffect(() => localStorage.setItem("draw.penOnly", penOnly ? "1" : "0"), [penOnly]);
   const [layers, setLayers] = useState<Record<LayerId, LayerState>>({
     document: { visible: true },
     ink: { visible: true },
@@ -30,7 +32,7 @@ export default function App() {
 
   const fileInput = useRef<HTMLInputElement>(null);
   const canvasWrap = useRef<HTMLDivElement>(null);
-  const zoom = useZoomPan(canvasWrap);
+  const zoom = useZoomPan(canvasWrap, penOnly);
   const checkSeq = useRef(0);
 
   const resetInk = ink.reset;
@@ -145,6 +147,8 @@ export default function App() {
           width={width}
           canUndo={ink.canUndo}
           canRedo={ink.canRedo}
+          penOnly={penOnly}
+          onPenOnly={setPenOnly}
           onTool={setTool}
           onColor={setColor}
           onWidth={setWidth}
@@ -186,6 +190,7 @@ export default function App() {
               color={color}
               width={width}
               interactive={layers.ink.visible}
+              penOnly={penOnly}
               visible={layers.ink.visible}
               onAdd={(s) => ink.set([...ink.value, s])}
               onErase={(ids) => ink.set(ink.value.filter((s) => !ids.includes(s.id)))}

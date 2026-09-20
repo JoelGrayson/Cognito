@@ -12,17 +12,23 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 /**
  * Two-finger pinch / pan on touch, ctrl+wheel or trackpad pinch on desktop.
+ * With `fingerPans`, a single finger (not a stylus) also pans.
  */
-export function useZoomPan(ref: RefObject<HTMLElement | null>) {
+export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boolean) {
   const [view, setView] = useState<View>({ scale: 1, x: 0, y: 0 });
   const viewRef = useRef(view);
   viewRef.current = view;
+  const fingerPansRef = useRef(fingerPans);
+  fingerPansRef.current = fingerPans;
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     let last: { d: number; cx: number; cy: number } | null = null;
+    let drag: { x: number; y: number } | null = null;
+
+    const isFinger = (t: Touch) => !("touchType" in t && (t as Touch & { touchType: string }).touchType === "stylus");
 
     const zoomAt = (factor: number, cx: number, cy: number, dx = 0, dy = 0) => {
       const v = viewRef.current;
@@ -41,18 +47,30 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>) {
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 2) {
         e.preventDefault();
+        drag = null;
         last = pinch(e.touches);
+      } else if (e.touches.length === 1 && fingerPansRef.current && isFinger(e.touches[0])) {
+        e.preventDefault();
+        drag = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }
     };
     const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 2 || !last) return;
-      e.preventDefault();
-      const cur = pinch(e.touches);
-      zoomAt(cur.d / last.d, cur.cx, cur.cy, cur.cx - last.cx, cur.cy - last.cy);
-      last = cur;
+      if (e.touches.length === 2 && last) {
+        e.preventDefault();
+        const cur = pinch(e.touches);
+        zoomAt(cur.d / last.d, cur.cx, cur.cy, cur.cx - last.cx, cur.cy - last.cy);
+        last = cur;
+      } else if (e.touches.length === 1 && drag) {
+        e.preventDefault();
+        const t = e.touches[0];
+        const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
+        drag = { x: t.clientX, y: t.clientY };
+        setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+      }
     };
     const onTouchEnd = (e: TouchEvent) => {
       if (e.touches.length < 2) last = null;
+      if (e.touches.length === 0) drag = null;
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();

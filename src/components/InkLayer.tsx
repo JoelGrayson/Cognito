@@ -9,13 +9,15 @@ interface Props {
   width: number;
   /** When false the layer is drawn but ignores the pointer. */
   interactive: boolean;
+  /** Only stylus (and mouse) input draws; finger touches are left for panning. */
+  penOnly: boolean;
   visible: boolean;
   onAdd: (s: Stroke) => void;
   onErase: (ids: string[]) => void;
 }
 
 /** The learner's ink: an SVG the pointer draws into. */
-export function InkLayer({ strokes, tool, color, width, interactive, visible, onAdd, onErase }: Props) {
+export function InkLayer({ strokes, tool, color, width, interactive, penOnly, visible, onAdd, onErase }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [current, setCurrent] = useState<number[] | null>(null);
   const erasing = useRef(false);
@@ -59,7 +61,7 @@ export function InkLayer({ strokes, tool, color, width, interactive, visible, on
           setCurrent(null);
           return;
         }
-        if (!interactive) return;
+        if (!interactive || (penOnly && e.pointerType === "touch")) return;
         const p = toPage(e);
         if (!p) return;
         e.currentTarget.setPointerCapture(e.pointerId);

@@ -6,6 +6,8 @@ interface Props {
   width: number;
   canUndo: boolean;
   canRedo: boolean;
+  penOnly: boolean;
+  onPenOnly: (v: boolean) => void;
   onTool: (t: Tool) => void;
   onColor: (c: string) => void;
   onWidth: (w: number) => void;
@@ -13,7 +15,7 @@ interface Props {
   onRedo: () => void;
 }
 
-export function Toolbar({ tool, color, width, canUndo, canRedo, onTool, onColor, onWidth, onUndo, onRedo }: Props) {
+export function Toolbar({ tool, color, width, canUndo, canRedo, penOnly, onPenOnly, onTool, onColor, onWidth, onUndo, onRedo }: Props) {
   const tools: { id: Tool; label: string; icon: string }[] = [
     { id: "pen", label: "Pen", icon: "✎" },
     { id: "highlighter", label: "Highlighter", icon: "▮" },
@@ -61,6 +63,16 @@ export function Toolbar({ tool, color, width, canUndo, canRedo, onTool, onColor,
             <span style={{ width: w * 2.2, height: w * 2.2 }} />
           </button>
         ))}
+      </div>
+      <div className="group">
+        <button
+          className={`tool ${penOnly ? "active" : ""}`}
+          aria-pressed={penOnly}
+          title="Pencil only: stylus draws, finger pans"
+          onClick={() => onPenOnly(!penOnly)}
+        >
+          <span aria-hidden>✍</span> Pencil only
+        </button>
       </div>
       <div className="group">
         <button className="tool" onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)">
