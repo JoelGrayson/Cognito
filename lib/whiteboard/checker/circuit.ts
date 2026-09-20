@@ -20,7 +20,7 @@
  *   not-holding  none of the above; the line contradicts the circuit
  *   undetermined nothing to judge (not an equation, a symbol the circuit has no name for)
  */
-import { create, all, type MathNode, type OperatorNode, type ParenthesisNode, type SymbolNode } from "mathjs";
+import { create, all, type ConstantNode, type MathNode, type OperatorNode, type ParenthesisNode, type SymbolNode } from "mathjs";
 import type { Equivalence } from "./numeric.ts";
 
 const math = create(all);
@@ -159,13 +159,97 @@ function normalise(name: string): string {
   return name.replace(/_/g, "").toLowerCase();
 }
 
-/** Units the pen writes and the circuit does not: 12 V, 4 Ω, 2 A. Applied to the
- *  mathjs source (after latexToMathjs, which has already turned "2A" into "2*A"). */
+/** Units the pen writes and the circuit does not: 12 V, 4 Ω, 2 A. A prefix scales the
+ *  number, so 2000 mA stays 2 A. Applied to the mathjs source (after latexToMathjs,
+ *  which has already turned "2A" into "2*A"). */
 export function stripUnits(source: string): string {
   return source
     .replace(/~/g, " ")
-    .replace(/(\d)\s*\*?\s*(kΩ|Ω|\\[Oo]mega|kV|mV|V|mA|A)(?![a-zA-Z_0-9])/g, "$1")
+    .replace(/(\d+(?:\.\d+)?)\s*\*?\s*(k|m)?(Ω|\\[Oo]mega|V|A)(?![a-zA-Z_0-9])/g, (_, num: string, prefix?: string) =>
+      prefix === "k" ? `(${num}*1000)` : prefix === "m" ? `(${num}/1000)` : num,
+    )
     .trim();
+}
+
+/** Exponents of volt and ampere: a resistance is V/A, a bare number is [0, 0]. */
+export type Dimension = [volt: number, ampere: number];
+
+const DIMENSION_NAMES: [Dimension, string][] = [
+  [[1, 0], "a voltage"],
+  [[0, 1], "a current"],
+  [[1, -1], "a resistance"],
+  [[0, 0], "a plain number"],
+];
+
+function sameDimension(a: Dimension, b: Dimension): boolean {
+  return a[0] === b[0] && a[1] === b[1];
+}
+
+function describeDimension(d: Dimension): string {
+  return DIMENSION_NAMES.find(([dim]) => sameDimension(dim, d))?.[1] ?? "a mixed unit";
+}
+
+/** What each named quantity measures, by the same names solveCircuit gives. */
+export function dimensionsOf(circuit: Circuit): Record<string, Dimension> {
+  const out: Record<string, Dimension> = {};
+  for (const e of circuit.elements) out[e.name] = e.kind === "R" ? [1, -1] : e.kind === "V" ? [1, 0] : [0, 1];
+  for (const label of circuit.labels) out[label.name] = "through" in label ? [0, 1] : [1, 0];
+  return out;
+}
+
+class DimensionMismatch extends Error {
+  readonly left: Dimension;
+  readonly right: Dimension;
+  constructor(left: Dimension, right: Dimension) {
+    super("dimension mismatch");
+    this.left = left;
+    this.right = right;
+  }
+}
+
+/** A written number has had its unit stripped, so "12" may be volts or a plain factor:
+ *  it takes whatever dimension it is combined with. */
+type Dim = Dimension | "any";
+
+/** The dimension of an expression, or null where the rules here do not reach. Adding
+ *  two different dimensions throws: volts plus amps is not a mistake in a value, it
+ *  is a line that is not about the circuit. */
+function dimensionOf(node: MathNode, dims: Record<string, Dimension>): Dim | null {
+  if (node.type === "ConstantNode") return "any";
+  if (node.type === "SymbolNode") return dims[(node as SymbolNode).name] ?? null;
+  if (node.type === "ParenthesisNode") return dimensionOf((node as ParenthesisNode).content, dims);
+  if (node.type !== "OperatorNode") return null;
+  const op = node as OperatorNode;
+  const args = op.args.map((a) => dimensionOf(a, dims));
+  if (args.some((a) => a === null)) return null;
+  const [a, b] = args as Dim[];
+  switch (op.fn) {
+    case "unaryMinus":
+    case "unaryPlus":
+      return a;
+    case "add":
+    case "subtract":
+      if (a === "any") return b;
+      if (b === "any") return a;
+      if (!sameDimension(a, b)) throw new DimensionMismatch(a, b);
+      return a;
+    case "multiply":
+      if (a === "any") return b;
+      if (b === "any") return a;
+      return [a[0] + b[0], a[1] + b[1]];
+    case "divide":
+      if (b === "any") return a;
+      if (a === "any") return [-b[0], -b[1]];
+      return [a[0] - b[0], a[1] - b[1]];
+    case "pow": {
+      const exponent = op.args[1];
+      if (a === "any" || exponent.type !== "ConstantNode") return a === "any" ? "any" : null;
+      const k = Number((exponent as ConstantNode).value);
+      return Number.isInteger(k) ? [a[0] * k, a[1] * k] : null;
+    }
+    default:
+      return null;
+  }
 }
 
 /** Top-level additive terms of a side, each with its sign. */
@@ -183,7 +267,7 @@ function terms(node: MathNode, sign = 1): { node: MathNode; sign: number }[] {
 /**
  * Judge one handwritten line (mathjs source, see ink.ts) against the solved circuit.
  */
-export function checkCircuitLine(line: string, known: Quantities): CircuitVerdict {
+export function checkCircuitLine(line: string, known: Quantities, dims: Record<string, Dimension> = {}): CircuitVerdict {
   const sides = line.split("=");
   if (sides.length !== 2 || sides.some((s) => s.trim() === "")) {
     return { kind: "undetermined", why: /[<>]/.test(line) ? "an inequality says nothing about a circuit" : "not an equation" };
@@ -213,6 +297,24 @@ export function checkCircuitLine(line: string, known: Quantities): CircuitVerdic
   if (unknown.length > 0) {
     return { kind: "undetermined", why: `the circuit has nothing called ${[...new Set(unknown)].join(", ")}` };
   }
+  if (![lhs, rhs].some((side) => side.filter((n) => n.type === "SymbolNode").length > 0)) {
+    return { kind: "undetermined", why: "the line names nothing in the circuit" };
+  }
+
+  // A line that equates a current with a resistance can come out numerically true and
+  // still say nothing about the circuit. Units are checked before values.
+  try {
+    const dl = dimensionOf(lhs, dims);
+    const dr = dimensionOf(rhs, dims);
+    if (dl && dr && dl !== "any" && dr !== "any" && !sameDimension(dl, dr)) {
+      return { kind: "undetermined", why: `the left side is ${describeDimension(dl)} and the right side ${describeDimension(dr)}` };
+    }
+  } catch (e) {
+    if (e instanceof DimensionMismatch) {
+      return { kind: "undetermined", why: `it adds ${describeDimension(e.left)} to ${describeDimension(e.right)}` };
+    }
+    throw e;
+  }
 
   const evaluate = (n: MathNode): number | null => {
     try {
@@ -239,10 +341,11 @@ export function checkCircuitLine(line: string, known: Quantities): CircuitVerdic
     }
   }
 
+  const numeric = (n: MathNode) => n.filter((x) => x.type === "SymbolNode").length === 0;
   const claim =
-    lhs.type === "SymbolNode" && rhs.type === "ConstantNode"
+    lhs.type === "SymbolNode" && numeric(rhs)
       ? { variable: (lhs as SymbolNode).name, got: r, expected: l }
-      : rhs.type === "SymbolNode" && lhs.type === "ConstantNode"
+      : rhs.type === "SymbolNode" && numeric(lhs)
         ? { variable: (rhs as SymbolNode).name, got: l, expected: r }
         : null;
   if (claim) return { kind: "wrong-value", ...claim };

@@ -515,13 +515,16 @@ function Notebook({
       if (checksCircuits) {
         // The premise of a circuit line is the circuit it is written under, never the
         // line above: every KVL sum, KCL sum and value is judged against the solution.
-        const { checkCircuitLine, solveCircuit, stripUnits } = await import("@/lib/whiteboard/checker/circuit");
+        const { checkCircuitLine, dimensionsOf, solveCircuit, stripUnits } = await import("@/lib/whiteboard/checker/circuit");
         parsed = stripUnits(parsed);
         const circuit = problem ? circuitsRef.current.get(problem.id) : undefined;
         premise = problem && circuit ? { text: `the circuit of question ${-problem.id}`, lineId: problem.id } : null;
         if (circuit) {
           const t0 = performance.now();
-          judged = { verdict: checkCircuitLine(parsed, solveCircuit(circuit)), checkMs: performance.now() - t0 };
+          judged = {
+            verdict: checkCircuitLine(parsed, solveCircuit(circuit), dimensionsOf(circuit)),
+            checkMs: performance.now() - t0,
+          };
         }
       } else {
         // The previous STEP is the newest trusted earlier line of the same problem, or
@@ -1005,7 +1008,7 @@ function Notebook({
           // A circuit question poses no statement to step from, so its anchor only says
           // which circuit the line beneath belongs to. Ids are negated like the algebra
           // anchors' so they never collide with a lineId; -id is the printed number.
-          anchorsRef.current = questionsRef.current.map((q) => ({ ...q, id: -q.id }));
+          anchorsRef.current = questionsRef.current.map((q) => ({ ...q, id: -q.id, keyed: true }));
           circuitsRef.current = new Map(
             (circuitKeyFor(file.name) ?? [])
               .filter((c) => anchorsRef.current.some((a) => a.id === -c.problem))
@@ -1027,7 +1030,9 @@ function Notebook({
         });
         if (unread > 0) {
           setError(
-            "Couldn't read the printed problems, so steps are only checked against each other. Reset between problems.",
+            checksCircuits
+              ? "Couldn't read the question numbers, so equations can't be matched to their circuits and won't be checked."
+              : "Couldn't read the printed problems, so steps are only checked against each other. Reset between problems.",
           );
         }
       } catch (e) {
