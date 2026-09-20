@@ -374,7 +374,8 @@ function Notebook({
         // checked inside it. Hold the words rather than dropping them silently.
         // Stamped with the read these words came FROM, not the newest one: reads can
         // land out of order, and a later one may already have superseded this.
-        heldRef.current = { text, gen };
+        const previous = heldRef.current;
+        if (!previous || gen >= previous.gen) heldRef.current = { text, gen };
         return;
       }
       session.injectAgentMessage(text, "queue");
