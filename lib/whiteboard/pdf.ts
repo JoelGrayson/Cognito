@@ -14,7 +14,8 @@ export interface PageImage {
 }
 
 /** Worksheets are a page or two. The cap is against a textbook dropped in by mistake:
- *  every page is an OCR call and a multi-megabyte image on the canvas. */
+ *  every page is an OCR call and a multi-megabyte image on the canvas. A longer PDF is
+ *  rejected with its page count rather than quietly cut short. */
 export const MAX_PAGES = 8;
 /** Long edge of a rendered page. Enough for Mathpix to read small print, small enough
  *  that a page stays a few hundred KB. */
@@ -50,8 +51,11 @@ async function pagesOfPdf(file: File, maxPages: number): Promise<PageImage[]> {
   const task = pdfjs.getDocument({ data: await file.arrayBuffer() });
   try {
     const doc = await task.promise;
+    if (doc.numPages > maxPages) {
+      throw new Error(`That PDF has ${doc.numPages} pages; the limit is ${maxPages}. Split it into smaller files.`);
+    }
     const out: PageImage[] = [];
-    for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) {
+    for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: TARGET_LONG_EDGE / Math.max(base.width, base.height) });
