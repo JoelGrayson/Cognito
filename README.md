@@ -1,4 +1,4 @@
-# StructuredLearning.ai
+# Cognition
 
 Type what you want to learn and get a structured roadmap: the stages you need to work through, what to learn at each one, and what to learn alongside it. Then type modifications ("more on transformers", "assume I know calculus") to reshape the map.
 

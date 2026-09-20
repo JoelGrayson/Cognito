@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "StructuredLearning.ai",
+  title: "Cognition",
   description:
     "Tell us what you want to learn and get a personalized, editable roadmap with a weekly schedule in under 3 minutes. No sign-up.",
 };

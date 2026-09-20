@@ -16,7 +16,7 @@ function Nav({ pathname }: { pathname: string | null }) {
     <header className="sticky top-0 z-50 border-b border-[#ecebe7] bg-white/90 backdrop-blur">
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-3 sm:px-8">
         <Link href="/" className={`text-base font-semibold tracking-tight ${focus}`}>
-          StructuredLearning.ai
+          Cognition
         </Link>
         <ul className="flex items-center gap-1 sm:gap-2">
           {LINKS.map((link) => {

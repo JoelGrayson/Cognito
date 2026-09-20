@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SettingsForm } from "@/components/SettingsForm";
 
 export const metadata: Metadata = {
-  title: "Settings · StructuredLearning.ai",
+  title: "Settings · Cognition",
 };
 
 export default function SettingsPage() {
