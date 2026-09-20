@@ -62,7 +62,10 @@ export function isMultiLineReading(latex: string): boolean {
 }
 
 export function latexToMathjs(latex: string): string {
-  const FUNCS = "sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan|sinh|cosh|tanh|log|ln|exp|max|min";
+  // sqrt and abs belong here too: the closing rule below repairs "fn*(" back to
+  // "fn(", which the variable-before-bracket rule would otherwise mangle.
+  const FUNCS =
+    "sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan|sinh|cosh|tanh|log|ln|exp|sqrt|abs|max|min";
 
   return (
     latex
@@ -72,12 +75,18 @@ export function latexToMathjs(latex: string): string {
       .replace(/\\left|\\right/g, "")
       // Mathpix wraps bare operators and stray symbols in \text{...}; unwrap, keep contents.
       .replace(/\\(?:text|mathrm|mathit|operatorname)\s*\{([^{}]*)\}/g, "$1")
-      .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "($1)/($2)")
+      // Same nesting problem as \sqrt below: \frac{x^{2}}{2} has braces in the numerator.
+      .replace(
+        /\\frac\s*\{((?:[^{}]|\{[^{}]*\})*)\}\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g,
+        "($1)/($2)",
+      )
       .replace(/\\cdot|\\times/g, "*")
       .replace(/\\div/g, "/")
       .replace(/\\leq/g, "<=")
       .replace(/\\geq/g, ">=")
-      .replace(/\\sqrt\s*\{([^{}]+)\}/g, "sqrt($1)")
+      // One level of nesting matters: \sqrt{x^{2}} has braces INSIDE the braces, and
+      // a [^{}]+ body silently fails to match, stranding the backslash as "\sqrtx".
+      .replace(/\\sqrt\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g, "sqrt($1)")
       // LaTeX puts the exponent on the FUNCTION NAME: \sin^{2}(x) means (sin(x))^2.
       // Must run before the generic ^{...} rewrite, or it becomes sin^(2)(x) and dies.
       .replace(
@@ -91,6 +100,10 @@ export function latexToMathjs(latex: string): string {
       .replace(/\\\\|\\,|\\;|\s+/g, " ")
       // implicit multiplication: "2x" -> "2*x", "3(x+2)" -> "3*(x+2)"
       .replace(/(\d)\s*([a-zA-Z(])/g, "$1*$2")
+      // ...and a VARIABLE before a bracket: "P(1+r)" -> "P*(1+r)", "x(1.1)" -> "x*(1.1)".
+      // Deliberately not applied between two letters: "pq" is ambiguous in handwriting
+      // (two variables, or one named pq?) and splitting it would break PV, EV, NPV.
+      .replace(/([a-zA-Z])\s*\(/g, "$1*(")
       // ")(" and ") x" are implicit products too: sin(x) cos(x) -> sin(x)*cos(x)
       .replace(/\)\s*\(/g, ")*(")
       .replace(/\)\s+([a-zA-Z])/g, ")*$1")

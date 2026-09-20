@@ -53,13 +53,18 @@ const CASES: Case[] = [
   ["\\left( x + 1 \\right)^{2}", "x^{2} + 2 x + 1", "equivalent", "expand"],
   ["\\left( x + 1 \\right)^{2}", "x^{2} + 1", "caught", "the classic expansion error"],
 
+  // ---- nested braces: found live, both silently stranded the backslash ---------
+  ["\\sqrt{x^{2}}", "x", "caught", "sqrt of a square is |x| - and the body has its OWN braces"],
+  ["\\frac{x^{2}}{2}", "\\frac{x^{2}}{2}", "equivalent", "\\frac with a braced numerator must parse"],
+  ["\\frac{2x^{2}}{4}", "\\frac{x^{2}}{2}", "equivalent", "reduce a fraction with exponents"],
+
   // ---- trig ------------------------------------------------------------------
   ["\\sin^{2}( x ) + \\cos^{2}( x )", "1", "equivalent", "pythagorean identity"],
   ["\\sin ( 2 x )", "2 \\sin ( x ) \\cos ( x )", "equivalent", "double angle"],
   ["\\sin ( 2 x )", "\\sin ( x ) \\cos ( x )", "rescaled", "dropped the 2 -- sin(2x)=2 sin x cos x, so this IS exactly a rescale"],
 
   // ---- fractions with radicals ----------------------------------------------
-  ["\\sqrt{ x^{2} }", "x", "undetermined", "true only for x>=0 -- abstaining is correct"],
+  ["\\sqrt{ x^{2} }", "x", "caught", "sqrt(x^2) is |x|; the prober samples negatives, so it catches this"],
   ["\\frac{ 2 x }{ 4 }", "\\frac{ x }{ 2 }", "equivalent", "reduce fraction"],
   ["\\frac{ 2 x }{ 4 }", "\\frac{ x }{ 4 }", "rescaled", "reduced only the numerator"],
 ];
