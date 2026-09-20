@@ -659,6 +659,8 @@ function Notebook({
       const nameIt = rungRef.current >= 4;
       annotatorRef.current?.draw(
         read.flatMap((r, i): Mark[] => {
+          // A question, not a circle: see StructureReading.suspected.
+          if (r.suspected) return [{ kind: "margin-note", lineId: i, text: "?", tone: "problem" }];
           if (!r.verdict) return [];
           if (r.verdict.kind === "correct") return [{ kind: "tick", lineId: i }];
           const circle: Mark = { kind: "circle", lineId: i, tone: "problem" };
@@ -674,7 +676,10 @@ function Notebook({
       const unread = read.length - judged.length;
       let line: string;
       if (read.length === 0) line = "There's nothing drawn yet.";
-      else if (judged.length === 0) line = "I couldn't read those as structures. Try drawing them a little larger, with the letters clear of the lines.";
+      else if (wrong.length === 0 && read.some((r) => r.suspected)) {
+        const q = read.find((r) => r.suspected)?.asked;
+        line = `${q ? `Question ${q}` : "One of them"} doesn't look like the answer to me, but I'm not sure I read it right. Compare it with what I read, in the side panel.`;
+      } else if (judged.length === 0) line = "I couldn't read those as structures. Try drawing them a little larger, with the letters clear of the lines.";
       else if (wrong.length === 0) line = `${judged.length === 1 ? "That structure is" : `All ${judged.length} structures are`} right.${unread ? " One I couldn't read." : ""}`;
       else line = `${wrong.length === 1 ? "" : `I've circled ${wrong.length}. `}${verdictLine(wrong[0], nameIt)}`;
       setSaid(line);
@@ -1350,7 +1355,9 @@ function Notebook({
                       </span>
                       {!s.verdict ? (
                         // A molecule was read but not trusted enough to judge by.
-                        <Tag tone="quiet">{s.svg ? "Not sure I read this right" : "Couldn\u2019t read"}</Tag>
+                        <Tag tone={s.suspected ? "butter" : "quiet"}>
+                          {s.suspected ? "Is this what you drew?" : s.svg ? "Not sure I read this right" : "Couldn\u2019t read"}
+                        </Tag>
                       ) : s.verdict.kind === "correct" ? (
                         <Tag tone="good">Right</Tag>
                       ) : (
