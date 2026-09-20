@@ -52,7 +52,7 @@ async function gradePage(page: Submission["pages"][number], answerKey: string, p
   return (await res.json()) as PageGrade;
 }
 
-export function Grader({ providers }: { providers: ProviderInfo[] }) {
+export function Grader({ providers, mock = false }: { providers: ProviderInfo[]; mock?: boolean }) {
   const [submissions, dispatch] = useReducer(reduce, []);
   const [answerKey, setAnswerKey] = useState("");
   const [stacked, setStacked] = useState(false);
@@ -205,7 +205,7 @@ export function Grader({ providers }: { providers: ProviderInfo[] }) {
         </span>
       </div>
       {error && <p className="rounded-2xl bg-(--wb-bad) px-4 py-3 text-(--wb-bad-ink)">{error}</p>}
-      {usable.length === 0 && (
+      {usable.length === 0 && !mock && (
         <p className="rounded-2xl bg-(--wb-butter) px-4 py-3 text-(--wb-butter-ink)">
           Grading needs a model that reads pictures. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.
         </p>

@@ -62,7 +62,7 @@ export function pageReaderFrom(id: unknown, image: string): Provider {
     throw new BadRequest("The page must be a PNG, JPEG or WebP picture.");
   }
   const provider = providerFrom(id);
-  if (provider.id === "local" || provider.id === "xai") {
+  if (provider.id !== "openai" && provider.id !== "anthropic") {
     throw new BadRequest(`${provider.label} cannot read pictures here. Switch the model to OpenAI or Claude.`);
   }
   return provider;

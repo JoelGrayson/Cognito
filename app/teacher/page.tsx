@@ -18,7 +18,7 @@ export default async function TeacherPage() {
           Upload your students&rsquo; worksheets. Every page comes back marked in red pen, scored problem by problem, with
           the mistakes your class keeps making. You have the last word on every mark.
         </p>
-        <Grader providers={await listProviders()} />
+        <Grader providers={await listProviders()} mock={process.env.MOCK_AI === "true"} />
       </main>
     </div>
   );
