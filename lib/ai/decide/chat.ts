@@ -17,6 +17,9 @@ import type { ChatMessage, LessonContent } from "@/lib/schema";
 /** How sure Jev must be that nothing needs rewriting before we drop the lesson schema. */
 export const ANSWER_FLOOR = 0.85;
 
+/** Jev answers in well under a second, and the tutor reply is still waiting behind it. */
+const DEADLINE_MS = 1500;
+
 export type TutorRoute = "answer" | "rewrite";
 
 export interface TutorRouting {
@@ -50,6 +53,10 @@ export async function routeTutorTurn(
           "A change to the lesson itself: simpler or deeper, add or remove a section, shift the focus, fix a mistake in it.",
       }),
     },
+    // Nothing is streamed until this returns, and the wait comes out of the
+    // route's own deadline. A routing decision that has not landed by now is
+    // not worth delaying the answer for: take the wide schema and generate.
+    { timeoutMs: DEADLINE_MS },
   );
   if (!result) return null;
 
