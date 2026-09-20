@@ -97,7 +97,11 @@ export default async function Home() {
                   <div className="flex flex-1 flex-col p-6">
                     <p className="flex-1 text-lg leading-snug">{subject.blurb}</p>
                     <p className="mt-2 text-sm text-(--wb-muted)">
-                      {subject.checker ? "Steps checked as you write" : "Step checking coming soon"}
+                      {subject.checker === "algebra-steps"
+                        ? "Steps checked as you write"
+                        : subject.checker === "structure-key"
+                          ? "Structures checked against the answer key"
+                          : "Checking coming soon"}
                     </p>
                     <Link
                       href={`/dev/whiteboard?subject=${subject.id}`}

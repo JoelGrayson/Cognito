@@ -322,6 +322,7 @@ export function Library({
   onUpload,
   onBlank,
   onSample,
+  sample,
   onOpen,
   onDelete,
 }: {
@@ -332,6 +333,7 @@ export function Library({
   onUpload: () => void;
   onBlank: () => void;
   onSample: () => void;
+  sample: { file: string; title: string; caption: string };
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
@@ -386,8 +388,8 @@ export function Library({
               <img src={sheet.thumb} alt="" className="h-full w-full object-cover object-top" />
             </SheetTile>
           ))}
-          {!sheets.some((sheet) => sheet.name === "algebra-practice.pdf") && (
-            <SheetTile title="Algebra practice" caption="Sample · 6 problems" onOpen={onSample}>
+          {!sheets.some((sheet) => sheet.name === sample.file) && (
+            <SheetTile title={sample.title} caption={sample.caption} onOpen={onSample}>
               <Tag tone="butter">Sample</Tag>
             </SheetTile>
           )}

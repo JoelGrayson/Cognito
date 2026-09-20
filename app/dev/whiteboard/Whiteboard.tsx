@@ -29,14 +29,24 @@ import "./whiteboard.css";
 import { Mascot } from "@/components/Mascot";
 import { Dock, Icon, Library, MasteryPanel, Rail, Tag, TutorBubble, type PenColor, type PenSize } from "./ui";
 import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
-import { createAnnotator, type Annotator } from "@/lib/whiteboard/annotate";
+import { createAnnotator, type Annotator, type Mark } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
 import { locateOperator } from "@/lib/whiteboard/locate";
 import { pagesOf } from "@/lib/whiteboard/pdf";
 import { masteryOf } from "@/lib/whiteboard/mastery";
 import type { Subject, SubjectPanel } from "@/lib/subjects";
 import { deleteSheet, fileOf, listSheets, saveSheet, sheetId, type SavedSheet } from "@/lib/whiteboard/library";
-import { anchorsFrom, premiseFor, problemFor, type PrintedLine, type ProblemAnchor } from "@/lib/whiteboard/worksheet";
+import {
+  anchorsFrom,
+  premiseFor,
+  problemFor,
+  questionsFrom,
+  type PrintedLine,
+  type ProblemAnchor,
+} from "@/lib/whiteboard/worksheet";
+import { answerKeyFor } from "@/lib/whiteboard/answer-keys";
+import { canonicalKey, loadRDKit } from "@/lib/whiteboard/rdkit";
+import { readStructures, verdictLine, type StructureReading } from "@/lib/whiteboard/structures";
 import { assessExplanation } from "@/lib/whiteboard/explanation";
 import { spokenFor, ASK_WHY } from "@/lib/whiteboard/voice";
 import { workContext, type StepView } from "@/lib/whiteboard/context";
@@ -68,7 +78,7 @@ const SHEET_WIDTH = 900;
 const SHEET_GAP = 32;
 /** Six open-ended problems the step checker can judge end to end: equations,
  *  inequalities, one expression. One per row, so no two read as a single line. */
-const SAMPLE_SHEET = "/worksheets/algebra-practice.pdf";
+
 
 /** A notebook, not a diagramming tool: drop everything that floats over the page or
  *  leads off it. The style panel in particular opens on top of the worksheet's
@@ -303,7 +313,16 @@ function Notebook({
   /** Steps judged to follow, by lineId, and whether the learner may see that yet.
    *  Drawn as ticks by redrawMarks, alongside the findings. */
   const followedRef = useRef<Map<number, { verdict: Equivalence; revealed: boolean }>>(new Map());
-  const [mode, setMode] = useState<CheckMode>("live");
+  /** A drawing has no "next line" to say it is finished, so structures are only ever
+   *  checked when asked. */
+  const checksSteps = subject.checker === "algebra-steps";
+  const [mode, setMode] = useState<CheckMode>(checksSteps ? "live" : "when-done");
+  /** Numbered questions on the sheet, for subjects whose questions are prose. */
+  const questionsRef = useRef<ProblemAnchor[]>([]);
+  const [structures, setStructures] = useState<StructureReading[]>([]);
+  /** Bumped by reset. A structure check that comes back to a different generation was
+   *  for a board that has since been cleared, and must not draw on the new one. */
+  const structureGenRef = useRef(0);
   const modeRef = useRef<CheckMode>(mode);
   useEffect(() => {
     modeRef.current = mode;
@@ -454,7 +473,7 @@ function Notebook({
 
     // The only checker there is reads algebra. Running it over a drawn molecule would
     // produce confident nonsense, so a subject without a checker is just a notebook.
-    if (!subject.checker) return;
+    if (subject.checker !== "algebra-steps") return;
 
     const payload = toStrokePayload(strokes);
     if (!payload) return;
@@ -616,8 +635,69 @@ function Notebook({
     }
   }, [redrawMarks, speak, subject.checker]);
 
+  /** Chemistry's "check my work": read every drawn structure, judge each against the
+   *  sheet's answer key, tick the right ones and circle the rest. */
+  const checkStructures = useCallback(async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const rawKey = answerKeyFor(worksheet?.name);
+    if (!rawKey) {
+      const line = "I don't have an answer key for this sheet, so I can't check it. Open the organic chemistry practice sheet from your worksheets.";
+      setSaid(line);
+      return speak(line);
+    }
+
+    setChecking(true);
+    setError(null);
+    const gen = ++structureGenRef.current;
+    try {
+      const rdkit = await loadRDKit();
+      const read = await readStructures(editor, rdkit, canonicalKey(rdkit, rawKey), questionsRef.current);
+      if (gen !== structureGenRef.current) return;
+      setStructures(read);
+
+      annotatorRef.current?.clear();
+      const bounds = new Map(read.map((r, i) => [i, r.bounds]));
+      // Same hint ladder as the steps: below rung 4 a wrong structure is circled and
+      // nothing more; from rung 4 the margin says what was actually drawn.
+      const nameIt = rungRef.current >= 4;
+      annotatorRef.current?.draw(
+        read.flatMap((r, i): Mark[] => {
+          // A question, not a circle: see StructureReading.suspected.
+          if (r.suspected) return [{ kind: "margin-note", lineId: i, text: "?", tone: "problem" }];
+          if (!r.verdict) return [];
+          if (r.verdict.kind === "correct") return [{ kind: "tick", lineId: i }];
+          const circle: Mark = { kind: "circle", lineId: i, tone: "problem" };
+          return nameIt && r.verdict.kind !== "no-match"
+            ? [circle, { kind: "margin-note", lineId: i, text: r.verdict.name, tone: "problem" }]
+            : [circle];
+        }),
+        (i) => bounds.get(i),
+      );
+
+      const judged = read.flatMap((r) => (r.verdict ? [r.verdict] : []));
+      const wrong = judged.filter((v) => v.kind !== "correct");
+      const unread = read.length - judged.length;
+      let line: string;
+      if (read.length === 0) line = "There's nothing drawn yet.";
+      else if (wrong.length === 0 && read.some((r) => r.suspected)) {
+        const q = read.find((r) => r.suspected)?.asked;
+        line = `${q ? `Question ${q}` : "One of them"} doesn't look like the answer to me, but I'm not sure I read it right. Compare it with what I read, in the side panel.`;
+      } else if (judged.length === 0) line = "I couldn't read those as structures. Try drawing them a little larger, with the letters clear of the lines.";
+      else if (wrong.length === 0) line = `${judged.length === 1 ? "That structure is" : `All ${judged.length} structures are`} right.${unread ? " One I couldn't read." : ""}`;
+      else line = `${wrong.length === 1 ? "" : `I've circled ${wrong.length}. `}${verdictLine(wrong[0], nameIt)}`;
+      setSaid(line);
+      speak(line);
+    } catch (e) {
+      if (gen === structureGenRef.current) setError(e instanceof Error ? e.message : "Couldn't check the structures.");
+    } finally {
+      setChecking(false);
+    }
+  }, [speak, worksheet?.name]);
+
   /** "I'm done" - settle the last line, wait for every read, then say it all at once. */
   const checkNow = useCallback(async () => {
+    if (subject.checker === "structure-key") return checkStructures();
     recorderRef.current?.flush();
     setChecking(true);
     while (inflightRef.current.size > 0) await Promise.allSettled([...inflightRef.current]);
@@ -652,7 +732,7 @@ function Notebook({
     }
     setSaid(utterance);
     speak(utterance);
-  }, [redrawMarks, speak]);
+  }, [checkStructures, redrawMarks, speak, subject.checker]);
 
   const beginTalking = useCallback(() => {
     if (holdingRef.current) return;
@@ -791,6 +871,9 @@ function Notebook({
   /** Clears the learner's ink and the tutor's marks. An uploaded sheet stays. */
   const reset = useCallback(() => {
     setReadings([]);
+    setStructures([]);
+    structureGenRef.current += 1;
+    annotatorRef.current?.clear();
     setError(null);
     recorderRef.current?.clear();
     setSaid(null);
@@ -943,12 +1026,13 @@ function Notebook({
           }),
         );
         anchorsRef.current = anchorsFrom(printed);
+        questionsRef.current = questionsFrom(printed);
         setProblems(anchorsRef.current);
         setWorksheet({
           id: sheetId(file),
           name: file.name,
           pages: pages.length,
-          problems: anchorsRef.current.filter((a) => a.parsed).length,
+          problems: checksSteps ? anchorsRef.current.filter((a) => a.parsed).length : questionsRef.current.length,
         });
         if (unread > 0) {
           setError(
@@ -961,15 +1045,15 @@ function Notebook({
         setUploading(false);
       }
     },
-    [reset, removeWorksheet, refreshSheets],
+    [checksSteps, reset, removeWorksheet, refreshSheets],
   );
 
-  /** The bundled algebra sheet, fetched as a File so it goes through the same load path as an upload. */
+  /** The subject's bundled sheet, fetched as a File so it goes through the same load path as an upload. */
   const loadSampleSheet = useCallback(async () => {
-    const res = await fetch(SAMPLE_SHEET);
+    const res = await fetch(subject.sampleSheet.path);
     if (!res.ok) return setError("Couldn't load the sample worksheet.");
-    await loadWorksheet(new File([await res.blob()], "algebra-practice.pdf", { type: "application/pdf" }));
-  }, [loadWorksheet]);
+    await loadWorksheet(new File([await res.blob()], subject.sampleSheet.file, { type: "application/pdf" }));
+  }, [loadWorksheet, subject.sampleSheet]);
 
   /** Below xl the library covers the canvas, so choosing something has to dismiss it;
    *  docked beside the canvas it stays put, like a sidebar. */
@@ -1012,7 +1096,7 @@ function Notebook({
             <span className="text-sm text-(--wb-muted)">{checking ? "checking…" : "reading…"}</span>
           )}
           {uploading && <span className="text-sm text-(--wb-muted)">opening…</span>}
-          {subject.checker && (
+          {checksSteps && (
             <div className="flex rounded-xl border border-(--wb-line) bg-(--wb-card) p-1 text-sm">
               {MODE_OPTIONS.map(([value, label]) => (
                 <button
@@ -1122,6 +1206,7 @@ function Notebook({
               removeWorksheet();
               closeLibraryIfCovering();
             }}
+            sample={subject.sampleSheet}
             onSample={() => {
               closeLibraryIfCovering();
               void loadSampleSheet();
@@ -1213,7 +1298,11 @@ function Notebook({
             </div>
           )}
 
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[300] flex items-center justify-center gap-2 sm:bottom-4">
+          {/* wrap-reverse: on a tablet the dock and the check button are wider than the
+              canvas together, and a single row pushed the pen off one edge and the button
+              off the other. When they do not fit, the button takes its own row ABOVE the
+              dock, so the dock stays where the hand expects it. */}
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[300] flex flex-wrap-reverse items-center justify-center gap-2 sm:bottom-4">
             <div className="pointer-events-auto max-w-full">
               <Dock
                 editor={editor}
@@ -1256,16 +1345,51 @@ function Notebook({
                 <TutorBubble text={said} onDismiss={() => setSaid(null)} />
               ) : (
                 <p className="pt-2.5 text-sm text-(--wb-muted)">
-                  {subject.checker
+                  {checksSteps
                     ? "I'll speak up if a step doesn't follow. Hold space, or the mic, to ask me something."
-                    : "Draw away. Hold space, or the mic, to ask me something."}
+                    : subject.checker
+                      ? "Draw your structures, then press Check my work. Hold space, or the mic, to ask me something."
+                      : "Draw away. Hold space, or the mic, to ask me something."}
                 </p>
               )}
             </div>
           </div>
-          <h2 className="wb-serif shrink-0 px-5 pb-2 pt-4 text-xl">Your steps</h2>
+          <h2 className="wb-serif shrink-0 px-5 pb-2 pt-4 text-xl">{checksSteps ? "Your steps" : "Your structures"}</h2>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-            {readings.length === 0 && (
+            {structures.length > 0 && (
+              <ol className="space-y-2.5">
+                {structures.map((s, i) => (
+                  <li key={i} className="rounded-2xl border border-(--wb-line) p-3.5">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium uppercase tracking-widest text-(--wb-muted)">
+                        {s.asked === null ? `Structure ${i + 1}` : `Question ${s.asked}`}
+                      </span>
+                      {!s.verdict ? (
+                        // A molecule was read but not trusted enough to judge by.
+                        <Tag tone={s.suspected ? "butter" : "quiet"}>
+                          {s.suspected ? "Is this what you drew?" : s.svg ? "Not sure I read this right" : "Couldn\u2019t read"}
+                        </Tag>
+                      ) : s.verdict.kind === "correct" ? (
+                        <Tag tone="good">Right</Tag>
+                      ) : (
+                        <Tag tone="bad">Take another look</Tag>
+                      )}
+                    </div>
+                    {s.svg && (
+                      <div
+                        className="h-24 overflow-hidden rounded-xl bg-white [&>svg]:h-full [&>svg]:w-full"
+                        dangerouslySetInnerHTML={{ __html: s.svg }}
+                      />
+                    )}
+                    <p className="mt-1.5 text-[11px] text-(--wb-muted)">
+                      {s.svg ? "What I read from your drawing" : "Nothing I could read as a molecule"}
+                      {s.confidence !== null && ` · confidence ${s.confidence.toFixed(2)}`}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {readings.length === 0 && structures.length === 0 && (
               <div className="grid place-items-center gap-3 px-6 py-10 text-center">
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-(--wb-butter) text-(--wb-butter-ink)">
                   <Icon name="pen" />
@@ -1273,6 +1397,8 @@ function Notebook({
                 <p className="text-sm text-(--wb-muted)">
                   {!subject.checker
                     ? `Step checking for ${subject.name.toLowerCase()} is coming soon. For now this is your notebook: upload a worksheet and draw on it.`
+                    : !checksSteps
+                    ? "Open a worksheet, draw each structure under its question, then press Check my work."
                     : mode === "live"
                     ? "Write a line, then start the next one underneath. Nothing to press."
                     : "Work the whole thing through, then press Check my work."}

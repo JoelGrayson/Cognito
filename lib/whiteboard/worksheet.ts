@@ -82,6 +82,19 @@ export function anchorsFrom(lines: PrintedLine[]): ProblemAnchor[] {
 }
 
 /**
+ * Numbered questions, for subjects whose questions are prose ("4. Cyclohexanol is
+ * oxidised with PCC. Draw the product."). There is no statement to check a step
+ * against; the anchor only says WHICH question a drawing sits under, and its id is the
+ * printed question number so it can be looked up in an answer key.
+ */
+export function questionsFrom(lines: PrintedLine[]): ProblemAnchor[] {
+  return lines.flatMap((l) => {
+    const n = l.text.match(/^\s*\(?(\d{1,2})[.)]\s/)?.[1];
+    return n ? [{ id: Number(n), bounds: l.bounds, raw: l.text, parsed: null }] : [];
+  });
+}
+
+/**
  * Which printed problem a handwritten line is working on: the nearest anchor that
  * starts above the line's middle. Distance is the gap between the two boxes, so
  * working written beside a problem and working written beneath it both count as

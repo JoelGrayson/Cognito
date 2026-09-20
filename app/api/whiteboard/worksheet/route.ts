@@ -61,6 +61,12 @@ export async function POST(request: Request) {
 
   const ms = Date.now() - started;
   const data = await res.json().catch(() => null);
+  // A blank page is not a failure. Mathpix reports it as an error, and passing that on
+  // told the learner their whole sheet could not be read because of its empty last page.
+  if (data?.error_info?.id === "image_no_content") {
+    console.log(`[wb] worksheet page ${ms}ms blank`);
+    return NextResponse.json({ lines: [], ms });
+  }
   if (!res.ok || data?.error) {
     return NextResponse.json(
       { error: `Mathpix ${res.status}: ${data?.error ?? "no detail"}`, ms },

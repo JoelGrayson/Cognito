@@ -61,3 +61,18 @@ export function isProviderId(value: unknown): value is ProviderId {
 export async function listProviders(ctx?: ProviderContext): Promise<ProviderInfo[]> {
   return Promise.all(PROVIDER_ORDER.map((id) => PROVIDERS[id].info(ctx)));
 }
+
+/**
+ * The provider to use when the profile names none: the first configured one in
+ * dropdown order (what screen 1 shows selected), or Anthropic when none is.
+ */
+export async function defaultProviderId(ctx?: ProviderContext): Promise<ProviderId> {
+  for (const id of PROVIDER_ORDER) {
+    try {
+      if ((await PROVIDERS[id].info(ctx)).configured) return id;
+    } catch {
+      // One unavailable provider must not hide the remaining configured ones.
+    }
+  }
+  return "anthropic";
+}
