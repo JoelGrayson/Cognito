@@ -2,7 +2,9 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { MARK_GRID, type CheckResponse } from "../shared/types.ts";
 
-const model = () => process.env.OPENAI_MODEL ?? "gpt-4.1";
+const model = () => process.env.OPENAI_MODEL ?? "gpt-5";
+/** Only reasoning models accept `reasoning_effort`; older chat models reject it. */
+const isReasoningModel = (m: string) => /^(gpt-5|o\d)/.test(m);
 
 const coord = z.number().min(0).max(MARK_GRID);
 const markSchema = z.discriminatedUnion("kind", [
@@ -59,7 +61,9 @@ function getClient() {
 export async function check(imageDataUrl: string, question?: string): Promise<CheckResponse> {
   const res = await getClient().chat.completions.create({
     model: model(),
-    max_completion_tokens: 3000,
+    // Reasoning tokens count against this budget too.
+    max_completion_tokens: 8000,
+    ...(isReasoningModel(model()) ? { reasoning_effort: "low" as const } : {}),
     tools: [
       {
         type: "function",
