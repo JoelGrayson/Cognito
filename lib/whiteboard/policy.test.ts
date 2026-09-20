@@ -32,6 +32,11 @@ check("correct step -> silence", move(step({ verdict: RIGHT })), { act: "stay-si
 check("checker abstained -> silence", move(step({ verdict: ABSTAIN })), { act: "stay-silent", because: "checker-abstained" });
 check("misread handwriting -> silence, not an accusation",
   move(step({ recognitionConfidence: 0.3 })), { act: "stay-silent", because: "low-recognition-confidence" });
+check("second opinion says the error isn't real -> silence",
+  move(step({ errorConfidence: 0.3 })), { act: "stay-silent", because: "low-error-confidence" });
+check("second opinion agrees -> offer rung 1", move(step({ errorConfidence: 0.95 })), { act: "offer-check" });
+check("nobody asked for a second opinion -> the verdict still decides",
+  move(step({ errorConfidence: null })), { act: "offer-check" });
 check("still writing -> silence", move(step(), 100), { act: "stay-silent", because: "still-writing" });
 check("real error, pen idle -> offer rung 1", move(step()), { act: "offer-check" });
 check("already offered, student thinking -> silence",

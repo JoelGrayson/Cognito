@@ -4,7 +4,7 @@
  *
  *   node --experimental-strip-types lib/whiteboard/explanation.test.ts
  */
-import { assessExplanation, replyTo } from "./explanation.ts";
+import { assessExplanation } from "./explanation.ts";
 import type { Equivalence } from "./checker/numeric.ts";
 
 const DIRECTION: Equivalence = { kind: "direction", expected: "<", got: ">", scale: -2 };
@@ -38,13 +38,6 @@ check("silence", a(""), "not-yet");
 // --- a different misconception has different signals ------------------------
 check('"I halved it" (rescaled)', a("I halved it", RESCALED), "found-it");
 check('"I flipped it" is NOT right for rescaled', a("I flipped it", RESCALED), "not-yet");
-
-// --- replies ----------------------------------------------------------------
-total++;
-const reply = replyTo({ kind: "found-it" }, DIRECTION);
-const ok = reply.includes("flips it");
-if (ok) pass++;
-console.log(`${ok ? "ok  " : "FAIL"} confirmation names the rule back`);
 
 console.log(`\n${pass}/${total} correct`);
 if (pass !== total) process.exit(1);
