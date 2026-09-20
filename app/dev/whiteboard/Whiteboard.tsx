@@ -22,6 +22,7 @@ import {
   createShapeId,
   type Editor,
   type TLComponents,
+  type TLShapePartial,
 } from "tldraw";
 import "tldraw/tldraw.css";
 import "./whiteboard.css";
@@ -36,7 +37,7 @@ import { locateOperator } from "@/lib/whiteboard/locate";
 import { pagesOf } from "@/lib/whiteboard/pdf";
 import { masteryOf } from "@/lib/whiteboard/mastery";
 import type { Subject, SubjectPanel } from "@/lib/subjects";
-import { deleteSheet, fileOf, listSheets, saveSheet, sheetId, type SavedSheet } from "@/lib/whiteboard/library";
+import { deleteSheet, fileOf, listSheets, loadSession, saveSession, saveSheet, sheetId, type SavedSheet } from "@/lib/whiteboard/library";
 import {
   anchorsFrom,
   premiseFor,
@@ -75,6 +76,8 @@ type CheckMode = "live" | "when-done";
 /** Worksheet pages are tagged like the tutor's marks are, so Reset can clear the
  *  learner's ink and leave the sheet they are working on. */
 const WORKSHEET_META = { worksheetPage: true } as const;
+/** How long the board must be still before it is written to IndexedDB. */
+const SAVE_IDLE_MS = 800;
 /** Page-space width of an uploaded sheet, and the gap between its pages. */
 const SHEET_WIDTH = 900;
 const SHEET_GAP = 32;
@@ -286,6 +289,11 @@ function Notebook({
   const { mode: agentMode } = useAgentMode();
   const { holding, listening, beginTalking, endTalking } = usePushToTalk(onMicLive);
   usePenInput(editor);
+  /** The open sheet, for the session saver: it listens outside React's render. */
+  const worksheetIdRef = useRef<string | null>(null);
+  /** False until the board has finished coming back from disk. Saving before that
+   *  would overwrite the very session being restored with the empty canvas. */
+  const restoredRef = useRef(false);
   const { setOutputMuted } = useAgentPlayer();
   const [voiceOn, setVoiceOn] = useState(true);
   const voiceOnRef = useRef(voiceOn);
@@ -874,6 +882,51 @@ function Notebook({
     if (ink.length > 0) editor.deleteShapes(ink);
   }, [session]);
 
+  /** The learner's ink, as createShapes can put it back. The sheet itself is restored
+   *  from its file, and the tutor's marks belong to a conversation that is over. */
+  const inkOf = (editor: Editor): TLShapePartial[] =>
+    editor
+      .getCurrentPageShapes()
+      .filter((sh) => {
+        const meta = sh.meta as { worksheetPage?: boolean; whiteboardMark?: boolean };
+        return !meta.worksheetPage && !meta.whiteboardMark;
+      })
+      .map(
+        // The cast is the union: TypeScript reads the object against one member of
+        // TLShapePartial at a time rather than against the union of them.
+        ({ id, type, x, y, rotation, opacity, props, meta }) =>
+          ({ id, type, x, y, rotation, opacity, props, meta }) as TLShapePartial,
+      );
+
+  useEffect(() => {
+    worksheetIdRef.current = worksheet?.id ?? null;
+  }, [worksheet]);
+
+  /** Keep the board on disk as it is written, so a reload can restore it. Debounced:
+   *  a stroke in progress fires a store change per pointer move. */
+  useEffect(() => {
+    if (!editor) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unlisten = editor.store.listen(
+      () => {
+        if (timer || !restoredRef.current) return;
+        timer = setTimeout(() => {
+          timer = null;
+          void saveSession({
+            sheetId: worksheetIdRef.current,
+            shapes: inkOf(editor),
+            savedAt: Date.now(),
+          }).catch(() => {});
+        }, SAVE_IDLE_MS);
+      },
+      { scope: "document" },
+    );
+    return () => {
+      if (timer) clearTimeout(timer);
+      unlisten();
+    };
+  }, [editor]);
+
   const removeWorksheet = useCallback(() => {
     anchorsRef.current = [];
     circuitsRef.current = new Map();
@@ -1037,6 +1090,27 @@ function Notebook({
       }
     },
     [checksCircuits, checksSteps, reset, removeWorksheet, refreshSheets],
+  );
+
+  /**
+   * Put the board back the way the tab last saw it. A tablet browser short of memory
+   * reloads the page without warning, and the board is held in memory alone: the
+   * sheet and everything written on it looked, to the learner, simply deleted.
+   */
+  const restoreSession = useCallback(
+    async (editor: Editor) => {
+      const saved = await loadSession().catch(() => null);
+      if (!saved) return;
+      // The sheet comes back from its own file, so the printed problems are read
+      // again and the ink lands on the page it was written on.
+      if (saved.sheetId) {
+        const file = await fileOf(saved.sheetId).catch(() => null);
+        if (file) await loadWorksheet(file);
+      }
+      if (saved.shapes.length === 0) return;
+      editor.run(() => editor.createShapes(saved.shapes), { history: "ignore" });
+    },
+    [loadWorksheet],
   );
 
   /** The subject's bundled sheet, fetched as a File so it goes through the same load path as an upload. */
@@ -1254,19 +1328,25 @@ function Notebook({
 
                 annotatorRef.current = createAnnotator(editor);
                 // ?sheet=sample lands straight on the algebra worksheet, e.g. from a lesson page.
-                if (autoSheet) void loadSampleSheet();
-                // React dev-mode mounts twice. Without this, two store listeners end up
-                // registered and every line is submitted twice.
-                recorderRef.current?.stop();
-                recorderRef.current = recordStrokes(
-                  editor,
-                  (commit) => {
-                    const read = submitLine(commit);
-                    inflightRef.current.add(read);
-                    void read.finally(() => inflightRef.current.delete(read));
-                  },
-                  { ...DEFAULT_ENDPOINT_CONFIG, finalLineIdleMs: idleMs },
-                );
+                const opening = autoSheet ? loadSampleSheet() : restoreSession(editor);
+                // Only once the board is back: restored ink reaches the recorder as one
+                // batch of "added" strokes, which merges every line of it into a single
+                // commit and sends that to the checker as though it had just been written.
+                void opening.catch(() => {}).then(() => {
+                  restoredRef.current = true;
+                  // React dev-mode mounts twice. Without this, two store listeners end up
+                  // registered and every line is submitted twice.
+                  recorderRef.current?.stop();
+                  recorderRef.current = recordStrokes(
+                    editor,
+                    (commit) => {
+                      const read = submitLine(commit);
+                      inflightRef.current.add(read);
+                      void read.finally(() => inflightRef.current.delete(read));
+                    },
+                    { ...DEFAULT_ENDPOINT_CONFIG, finalLineIdleMs: idleMs },
+                  );
+                });
               }}
             />
           </div>

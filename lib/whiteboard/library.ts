@@ -6,6 +6,8 @@
  * as-is. The original file is kept, not the rendered pages, so reopening goes through
  * the same pagesOf() path as a fresh upload.
  */
+import type { TLShapePartial } from "tldraw";
+
 import type { PageImage } from "./pdf";
 
 export interface SavedSheet {
@@ -23,24 +25,41 @@ interface StoredSheet extends SavedSheet {
   type: string;
 }
 
+/** What was on the board when the tab went away, so a reload can put it back. */
+export interface SavedSession {
+  /** The sheet being worked on, or null for a blank board. */
+  sheetId: string | null;
+  /** The learner's ink. The tutor's marks are left out: they belong to a reading
+   *  that is no longer in the conversation, and would come back unexplained. */
+  shapes: TLShapePartial[];
+  savedAt: number;
+}
+
 const DB_NAME = "whiteboard-library";
 const STORE = "sheets";
+const SESSION_STORE = "session";
+/** There is only ever one board, so the session needs only one key. */
+const SESSION_KEY = "current";
 const THUMB_WIDTH = 360;
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: "id" });
+    const req = indexedDB.open(DB_NAME, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(SESSION_STORE)) db.createObjectStore(SESSION_STORE);
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-async function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>, name = STORE): Promise<T> {
   const db = await open();
   try {
     return await new Promise<T>((resolve, reject) => {
-      const req = op(db.transaction(STORE, mode).objectStore(STORE));
+      const req = op(db.transaction(name, mode).objectStore(name));
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
@@ -90,4 +109,18 @@ export async function fileOf(id: string): Promise<File | null> {
 
 export async function deleteSheet(id: string): Promise<void> {
   await run("readwrite", (s) => s.delete(id));
+}
+
+/**
+ * The board as it stands. Saved as the learner writes, because a tablet browser
+ * short of memory reloads the tab without warning, and the board lives in memory:
+ * the sheet and everything written on it would otherwise be gone for good.
+ */
+export async function saveSession(session: SavedSession): Promise<void> {
+  await run("readwrite", (s) => s.put(session, SESSION_KEY), SESSION_STORE);
+}
+
+export async function loadSession(): Promise<SavedSession | null> {
+  const saved = await run<SavedSession | undefined>("readonly", (s) => s.get(SESSION_KEY), SESSION_STORE);
+  return saved ?? null;
 }
