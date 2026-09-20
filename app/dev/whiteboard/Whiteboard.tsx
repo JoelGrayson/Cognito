@@ -1187,8 +1187,6 @@ function Notebook({
               plots={plots}
               stateRef={graphStateRef}
               resetKey={graphReset}
-              onClose={() => setPanel(null)}
-              onClear={() => setPlots([])}
             />
           )}
           <div className="absolute inset-0">
