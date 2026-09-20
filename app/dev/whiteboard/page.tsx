@@ -70,11 +70,16 @@ interface Reading {
  *  from a tutor that had nothing to say. */
 function speakOrReport(
   speaker: Speaker | null,
-  report: (message: string) => void,
+  report: (message: string | null) => void,
   text: string,
   voice?: string,
 ): void {
-  speaker?.say(text, voice).catch((e) => report(e instanceof Error ? e.message : "Voice failed."));
+  speaker
+    ?.say(text, voice)
+    // Clear on success too. A "playback blocked" banner left standing while the next
+    // line plays aloud is worse than the silence it was added to explain.
+    .then(() => report(null))
+    .catch((e) => report(e instanceof Error ? e.message : "Voice failed."));
 }
 
 export default function SpikePage() {

@@ -25,8 +25,14 @@ export function createSpeaker(): Speaker {
    *  created, and reading it back off `audio.src` breaks once the element is reused. */
   let current: { audio: HTMLAudioElement; url: string } | null = null;
   let speaking = false;
+  /** Bumped by every say() and every stop(). An utterance still downloading when the
+   *  next one starts holds a stale turn, and stop() cannot reach it: it has no
+   *  element to pause yet. Without this, two lines committed in quick succession both
+   *  arrive and both play, over each other. */
+  let turn = 0;
 
   function stop() {
+    turn++;
     if (current) {
       current.audio.pause();
       URL.revokeObjectURL(current.url);
@@ -42,6 +48,7 @@ export function createSpeaker(): Speaker {
     stop,
     async say(text: string, voiceId?: string) {
       stop(); // never let two utterances overlap
+      const mine = turn;
       const res = await fetch("/api/voice/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,6 +59,10 @@ export function createSpeaker(): Speaker {
         throw new Error(detail.error ?? "speak failed");
       }
       const url = URL.createObjectURL(await res.blob());
+      if (mine !== turn) {
+        URL.revokeObjectURL(url);
+        return;
+      }
       const audio = new Audio(url);
       current = { audio, url };
       speaking = true;
