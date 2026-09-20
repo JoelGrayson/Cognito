@@ -28,6 +28,7 @@ import "./whiteboard.css";
 import { Mascot } from "@/components/Mascot";
 import { Dock, Icon, Library, MasteryPanel, Rail, Tag, TutorBubble, type PenColor, type PenSize } from "./ui";
 import { usePushToTalk } from "./usePushToTalk";
+import { usePenInput } from "./usePenInput";
 import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator, type Mark } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
@@ -283,6 +284,7 @@ function Notebook({
   const { state: agentState } = useAgentState();
   const { mode: agentMode } = useAgentMode();
   const { holding, listening, beginTalking, endTalking } = usePushToTalk(onMicLive);
+  usePenInput(editor);
   const { setOutputMuted } = useAgentPlayer();
   const [voiceOn, setVoiceOn] = useState(true);
   const voiceOnRef = useRef(voiceOn);

@@ -81,10 +81,10 @@ export function Worksheet({ providers }: { providers: ProviderInfo[] }) {
     setPast((stack) => [...stack.slice(-39), entry]);
   }
 
-  function onStroke(points: number[]) {
+  function onStroke(points: number[], erased: boolean) {
     strokeCount.current += 1;
     remember();
-    if (!erasing) {
+    if (!erased) {
       const stroke = learnerStroke(points, penColor, strokeCount.current);
       setInk((all) => ({ ...all, [index]: [...(all[index] ?? []), stroke] }));
       return;
