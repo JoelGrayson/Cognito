@@ -85,7 +85,7 @@ describe("hydrate", () => {
     expect(store().concepts.items).toHaveLength(8);
   });
 
-  it("flags a finished questionnaire so the page can redirect", async () => {
+  it("lands a finished questionnaire on step 1, where the roadmap history lives", async () => {
     serve();
     await store().hydrate();
     await answerStep1();
@@ -98,6 +98,7 @@ describe("hydrate", () => {
     resetOnboardingStore();
     await store().hydrate();
     expect(store().serverStep).toBe("workshop");
+    expect(store().step).toBe(1);
   });
 });
 

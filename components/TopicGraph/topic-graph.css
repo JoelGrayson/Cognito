@@ -49,10 +49,10 @@
   border-width: 1.5px;
 }
 .tg-card[data-scope="known"] {
-  --bg: #e3f3ea;
-  --line: #8cc4a9;
-  --title: #1d4d39;
-  --meta: #2b6a4f;
+  --bg: #f0f0ed;
+  --line: #d3d3ce;
+  --title: #6b6b67;
+  --meta: #74746f;
 }
 .tg-card[data-scope="excluded"] {
   --bg: #f0f0ed;
@@ -166,8 +166,8 @@
   background: rgba(247, 247, 244, 0.8);
 }
 .tg-group[data-scope="known"] {
-  border-color: #8cc4a9;
-  background: rgba(227, 243, 234, 0.55);
+  border-color: #d3d3ce;
+  background: rgba(240, 240, 237, 0.55);
 }
 .tg-group[data-scope="excluded"] {
   border-color: #d3d3ce;
@@ -200,9 +200,9 @@
   --meta: #5c5c58;
 }
 .tg-group[data-scope="known"] .tg-group-head {
-  --bg: #2b6a4f;
-  --title: #ffffff;
-  --meta: #d5eee1;
+  --bg: #e2e2de;
+  --title: #6b6b67;
+  --meta: #74746f;
 }
 .tg-group[data-scope="excluded"] .tg-group-head {
   --bg: #e2e2de;

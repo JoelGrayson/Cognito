@@ -23,7 +23,10 @@ export const ConceptList = z
   .refine((list) => list.every((c) => wordCount(c) <= 4), "Each concept must be 1 to 4 words")
   .refine((list) => new Set(list.map((c) => c.toLowerCase())).size === list.length, "Concepts must be unique");
 
-export const ConceptsRequest = z.object({ goal: GoalText });
+export const ConceptsRequest = z.object({
+  goal: GoalText,
+  provider: OnboardingProfile.shape.provider,
+});
 export const ConceptsResponse = z.object({ concepts: ConceptList });
 
 // The client checks the date strictly; the server allows a day of slack for timezone skew.
@@ -38,6 +41,8 @@ export const ProfilePatch = OnboardingProfile.extend({
   deadline: z.iso.date().refine(isNotPast, "Deadline must be in the future").nullable().optional(),
   hoursPerWeek: z.number().min(HOURS_MIN).max(HOURS_MAX).optional(),
   priorKnowledge: LearnerProfile.shape.priorKnowledge.max(30).optional(),
+  /** `concepts: null` clears the stored list (e.g. after the goal changed). */
+  concepts: z.array(z.string().min(1).max(40)).max(12).nullable().optional(),
   constraints: z.string().max(CONSTRAINTS_MAX).optional(),
 });
 export type ProfilePatch = z.infer<typeof ProfilePatch>;

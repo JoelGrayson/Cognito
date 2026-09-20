@@ -6,7 +6,7 @@ const MAX_TITLE = 80;
 const LEAF_MINUTES = 60;
 
 /** snake_case ascii slug within the id pattern; "" when nothing usable is left. */
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
