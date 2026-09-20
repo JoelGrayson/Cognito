@@ -2,63 +2,98 @@
 type Tone = "core" | "advanced" | "known" | "skipped";
 
 const TONES: Record<Tone, { fill: string; stroke: string; text: string; sub: string; dash?: string }> = {
-  core: { fill: "#ecebfb", stroke: "#b7b3ee", text: "#3b3499", sub: "#4f48b8" },
-  advanced: { fill: "#e5f2ec", stroke: "#a8d0be", text: "#22553f", sub: "#2e6a51" },
-  known: { fill: "#f4f4f1", stroke: "#bdbbb3", text: "#3d3d3d", sub: "#5c5c5c" },
-  skipped: { fill: "#ffffff", stroke: "#bdbbb3", text: "#5c5c5c", sub: "#5c5c5c", dash: "5 4" },
+  core: { fill: "#f8efc8", stroke: "#e0cd84", text: "#5c4c14", sub: "#6d5b1c" },
+  advanced: { fill: "#e4f1e3", stroke: "#b3d2b2", text: "#24552f", sub: "#2f6b3c" },
+  known: { fill: "#f3ebe3", stroke: "#d6c8ba", text: "#5b4d42", sub: "#7d6e63" },
+  skipped: { fill: "#fffdfa", stroke: "#d6c8ba", text: "#7d6e63", sub: "#7d6e63", dash: "5 4" },
 };
 
 const W = 150;
 const H = 46;
 
-const NODES: { id: string; x: number; y: number; title: string; sub: string; tone: Tone }[] = [
-  { id: "python", x: 20, y: 16, title: "Python basics", sub: "Already know", tone: "known" },
-  { id: "linalg", x: 190, y: 16, title: "Linear algebra", sub: "3 h", tone: "core" },
-  { id: "prob", x: 20, y: 96, title: "Probability", sub: "4 h", tone: "core" },
-  { id: "calc", x: 190, y: 96, title: "Calculus", sub: "Skipped", tone: "skipped" },
-  { id: "regress", x: 105, y: 176, title: "Regression", sub: "5 h", tone: "advanced" },
-  { id: "nn", x: 105, y: 256, title: "Neural networks", sub: "8 h", tone: "advanced" },
+const NODES: { id: string; title: string; sub: string; tone: Tone }[] = [
+  { id: "python", title: "Python basics", sub: "Already know", tone: "known" },
+  { id: "linalg", title: "Linear algebra", sub: "3 h", tone: "core" },
+  { id: "prob", title: "Probability", sub: "4 h", tone: "core" },
+  { id: "calc", title: "Calculus", sub: "Skipped", tone: "skipped" },
+  { id: "regress", title: "Regression", sub: "5 h", tone: "advanced" },
+  { id: "nn", title: "Neural networks", sub: "8 h", tone: "advanced" },
 ];
 
-const EDGES: { d: string; dashed?: boolean }[] = [
-  { d: "M95 62 V94" },
-  { d: "M265 62 C265 84 140 74 140 94" },
-  { d: "M95 142 C95 162 140 156 140 174" },
-  { d: "M265 142 C265 162 220 156 220 174", dashed: true },
-  { d: "M180 222 V254" },
-];
+interface Layout {
+  viewBox: string;
+  at: Record<string, [x: number, y: number]>;
+  edges: { d: string; dashed?: boolean }[];
+}
 
-export default function RoadmapPreview({ className }: { className?: string }) {
+/** Top to bottom on a phone, where a wide drawing would shrink the labels to nothing;
+ *  left to right everywhere else, so the card reads as a banner. */
+const LAYOUTS: Record<"portrait" | "landscape", Layout> = {
+  portrait: {
+    viewBox: "0 0 360 318",
+    at: { python: [20, 16], linalg: [190, 16], prob: [20, 96], calc: [190, 96], regress: [105, 176], nn: [105, 256] },
+    edges: [
+      { d: "M95 62 V94" },
+      { d: "M265 62 C265 84 140 74 140 94" },
+      { d: "M95 142 C95 162 140 156 140 174" },
+      { d: "M265 142 C265 162 220 156 220 174", dashed: true },
+      { d: "M180 222 V254" },
+    ],
+  },
+  landscape: {
+    viewBox: "0 0 730 168",
+    at: { python: [20, 16], linalg: [20, 106], prob: [200, 16], calc: [200, 106], regress: [380, 61], nn: [560, 61] },
+    edges: [
+      { d: "M170 33 H198" },
+      { d: "M170 129 C188 129 182 47 198 47" },
+      { d: "M350 39 C368 39 362 77 378 77" },
+      { d: "M350 129 C368 129 362 92 378 92", dashed: true },
+      { d: "M530 84 H558" },
+    ],
+  },
+};
+
+export default function RoadmapPreview({
+  className,
+  orientation = "portrait",
+}: {
+  className?: string;
+  orientation?: keyof typeof LAYOUTS;
+}) {
+  const layout = LAYOUTS[orientation];
+  // Two previews can share a page; marker ids must not collide.
+  const arrow = `lp-arrow-${orientation}`;
   return (
     <svg
-      viewBox="0 0 360 318"
+      viewBox={layout.viewBox}
       role="img"
       aria-label="Example roadmap: Python basics marked as known, linear algebra and probability first, calculus skipped, then regression and neural networks."
       className={className}
     >
       <defs>
-        <marker id="lp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M1 1 L9 5 L1 9" fill="none" stroke="#8a8a85" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <marker id={arrow} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M1 1 L9 5 L1 9" fill="none" stroke="#a3948a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </marker>
       </defs>
-      {EDGES.map((edge) => (
+      {layout.edges.map((edge) => (
         <path
           key={edge.d}
           d={edge.d}
           fill="none"
-          stroke="#8a8a85"
+          stroke="#a3948a"
           strokeWidth="1.6"
           strokeDasharray={edge.dashed ? "4 4" : undefined}
-          markerEnd="url(#lp-arrow)"
+          markerEnd={`url(#${arrow})`}
         />
       ))}
       {NODES.map((node) => {
         const tone = TONES[node.tone];
+        const [x, y] = layout.at[node.id];
         return (
           <g key={node.id}>
             <rect
-              x={node.x}
-              y={node.y}
+              x={x}
+              y={y}
               width={W}
               height={H}
               rx="10"
@@ -68,17 +103,17 @@ export default function RoadmapPreview({ className }: { className?: string }) {
               strokeDasharray={tone.dash}
             />
             <text
-              x={node.x + W / 2}
-              y={node.y + 20}
+              x={x + W / 2}
+              y={y + 20}
               textAnchor="middle"
               fontSize="13.5"
-              fontWeight="600"
+              fontWeight="500"
               fill={tone.text}
               textDecoration={node.tone === "skipped" ? "line-through" : undefined}
             >
               {node.title}
             </text>
-            <text x={node.x + W / 2} y={node.y + 36} textAnchor="middle" fontSize="11.5" fill={tone.sub}>
+            <text x={x + W / 2} y={y + 36} textAnchor="middle" fontSize="11.5" fill={tone.sub}>
               {node.sub}
             </text>
           </g>
