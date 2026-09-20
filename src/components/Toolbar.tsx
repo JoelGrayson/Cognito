@@ -68,7 +68,7 @@ export function Toolbar({ tool, color, width, canUndo, canRedo, penOnly, onPenOn
         <button
           className={`tool ${penOnly ? "active" : ""}`}
           aria-pressed={penOnly}
-          title="Pencil only: stylus draws, finger pans"
+          title="Pencil only: stylus draws, finger pans. Two-finger double-tap = undo, triple-tap = redo"
           onClick={() => onPenOnly(!penOnly)}
         >
           <span aria-hidden>✍</span> Pencil only

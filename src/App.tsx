@@ -32,7 +32,11 @@ export default function App() {
 
   const fileInput = useRef<HTMLInputElement>(null);
   const canvasWrap = useRef<HTMLDivElement>(null);
-  const zoom = useZoomPan(canvasWrap, penOnly);
+  const { undo, redo } = ink;
+  const zoom = useZoomPan(canvasWrap, penOnly, (taps) => {
+    if (taps === 2) undo();
+    else if (taps >= 3) redo();
+  });
   const checkSeq = useRef(0);
   const docSeq = useRef(0);
 
@@ -58,7 +62,6 @@ export default function App() {
     if (!doc) openSample(0);
   }, [doc, openSample]);
 
-  const { undo, redo } = ink;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;

@@ -9,6 +9,9 @@ export interface View {
 const MIN = 0.5;
 const MAX = 6;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const TAP_MS = 300;
+const TAP_GAP_MS = 350;
+const TAP_SLOP = 12;
 
 interface Pt {
   x: number;
@@ -19,13 +22,20 @@ interface Pt {
  * Two-finger pinch / pan on touch, ctrl+wheel or trackpad pinch on desktop.
  * With `fingerPans`, a single finger also pans. Uses pointer events so a
  * stylus (`pointerType === "pen"`) is never treated as a finger.
+ * Quick two-finger taps (no pinch) are reported via `onTwoFingerTap(count)`.
  */
-export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boolean) {
+export function useZoomPan(
+  ref: RefObject<HTMLElement | null>,
+  fingerPans: boolean,
+  onTwoFingerTap?: (count: number) => void,
+) {
   const [view, setView] = useState<View>({ scale: 1, x: 0, y: 0 });
   const viewRef = useRef(view);
   viewRef.current = view;
   const fingerPansRef = useRef(fingerPans);
   fingerPansRef.current = fingerPans;
+  const tapRef = useRef(onTwoFingerTap);
+  tapRef.current = onTwoFingerTap;
 
   useEffect(() => {
     const el = ref.current;
@@ -34,6 +44,10 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
     const fingers = new Map<number, Pt>();
     let last: { d: number; cx: number; cy: number } | null = null;
     let drag: Pt | null = null;
+    // Two-finger tap detection: a candidate until fingers move or linger too long.
+    let tap: { at: number; cx: number; cy: number } | null = null;
+    let taps = 0;
+    let tapTimer: ReturnType<typeof setTimeout> | undefined;
 
     const zoomAt = (factor: number, cx: number, cy: number, dx = 0, dy = 0) => {
       const v = viewRef.current;
@@ -57,6 +71,9 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
       if (fingers.size === 2) {
         drag = null;
         last = pinch();
+        tap = { at: e.timeStamp, cx: last.cx, cy: last.cy };
+      } else if (fingers.size > 2) {
+        tap = null;
       } else if (fingers.size === 1 && fingerPansRef.current) {
         drag = { x: e.clientX, y: e.clientY };
       }
@@ -66,6 +83,10 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
       fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (fingers.size === 2 && last) {
         const cur = pinch();
+        if (tap) {
+          if (Math.hypot(cur.cx - tap.cx, cur.cy - tap.cy) < TAP_SLOP && Math.abs(cur.d - last.d) < TAP_SLOP) return;
+          tap = null;
+        }
         zoomAt(cur.d / last.d, cur.cx, cur.cy, cur.cx - last.cx, cur.cy - last.cy);
         last = cur;
       } else if (fingers.size === 1 && drag) {
@@ -76,6 +97,17 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
     };
     const onUp = (e: PointerEvent) => {
       if (!fingers.delete(e.pointerId)) return;
+      if (tap && fingers.size === 1) {
+        if (e.timeStamp - tap.at <= TAP_MS) {
+          taps++;
+          clearTimeout(tapTimer);
+          tapTimer = setTimeout(() => {
+            tapRef.current?.(taps);
+            taps = 0;
+          }, TAP_GAP_MS);
+        }
+        tap = null;
+      }
       last = fingers.size === 2 ? pinch() : null;
       drag = fingers.size === 1 && fingerPansRef.current ? [...fingers.values()][0] : null;
     };
@@ -96,6 +128,7 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => {
+      clearTimeout(tapTimer);
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
