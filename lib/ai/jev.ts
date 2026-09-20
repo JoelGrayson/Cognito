@@ -207,8 +207,11 @@ export async function ask<Q extends Record<string, JevQuestion>>(
       last = new JevError(`Jev request failed with ${res.status}.`, res.status);
       if (!RETRY_STATUSES.has(res.status)) break;
     }
+    // A retry that cannot wait out its backoff is one an overloaded service
+    // should not receive: the budget is spent, so stop rather than hurry.
     const backoff = BACKOFF_MS * 2 ** (attempt - 1);
-    if (attempt < MAX_ATTEMPTS && Date.now() + backoff < deadline) await sleep(backoff);
+    if (Date.now() + backoff >= deadline) break;
+    if (attempt < MAX_ATTEMPTS) await sleep(backoff);
   }
   throw last ?? new JevError("Jev request failed.");
 }
