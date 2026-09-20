@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Mascot } from "@/components/Mascot";
 import { TopicGraph } from "@/components/TopicGraph";
 import { Info, Pencil, RefreshCw } from "lucide-react";
 import {
@@ -141,7 +142,8 @@ export function Workshop({ draftGraph, roadmapId }: Props) {
       <div className="h-[75vh] min-h-[540px] overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
         {status.kind === "loading" && (
           <div aria-busy="true" aria-label="Generating roadmap" className="flex h-full flex-col items-center justify-center gap-4">
-            <p className="text-[15px] font-medium text-muted-foreground">Mapping your roadmap...</p>
+            <Mascot size={72} />
+            <p className="wb-serif text-xl">Mapping your roadmap...</p>
             <div className="grid w-full max-w-md grid-cols-3 gap-3 px-6">
               {Array.from({ length: 6 }, (_, i) => (
                 <Skeleton key={i} className="h-16 w-full rounded-xl" />

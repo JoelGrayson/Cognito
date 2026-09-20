@@ -24,7 +24,10 @@ export function marksFor(
    *  with another problem's working in between. */
   premiseLineId: number = Math.max(0, lineId - 1),
 ): Mark[] {
-  if (verdict.kind === "equivalent" || verdict.kind === "undetermined") return [];
+  if (verdict.kind === "undetermined") return [];
+  // A step that follows is ticked at every rung but silent: the tick gives nothing
+  // away, and without it a correct page looks the same as an unread one.
+  if (verdict.kind === "equivalent") return rung === 0 ? [] : [{ kind: "tick", lineId }];
 
   switch (rung) {
     case 0:
