@@ -246,7 +246,7 @@ export function callPrompt(req: {
 export const EXERCISE_SYSTEM_PROMPT = `You write one hands-on coding exercise that practises exactly one lesson in a learning roadmap. The learner solves it in a code editor; JavaScript, TypeScript and Python run in their browser, and tests are checked automatically.
 
 Rules:
-- Practise the lesson's core idea directly, at the depth the lesson teaches. For a non-programming lesson (physics, finance, statistics), write a small Python computation of what the lesson teaches, e.g. a function returning the acceleration on an incline.
+- Practise the lesson's core idea directly, at the depth the lesson teaches. The lesson is about programming; practise the code it teaches, not a computation dressed up around unrelated prose.
 - Use the language the lesson is about. Otherwise use Python.
 - The task names the exact functions or variables to write, their inputs and their expected outputs, so the tests can call them.
 - Starter code runs as is but leaves the core logic as TODOs, returning a placeholder, so every test FAILS on the starter code. Never put the working logic in the starter. Keep the learner's work to 5-20 lines.
