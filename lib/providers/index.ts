@@ -58,6 +58,17 @@ export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && value in PROVIDERS;
 }
 
+/**
+ * The provider to use when the profile names none: Anthropic if it has a key,
+ * otherwise the first configured key-based provider in dropdown order.
+ */
+export function defaultProviderId(): ProviderId {
+  if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) return "anthropic";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.XAI_API_KEY) return "xai";
+  return "anthropic";
+}
+
 export async function listProviders(ctx?: ProviderContext): Promise<ProviderInfo[]> {
   return Promise.all(PROVIDER_ORDER.map((id) => PROVIDERS[id].info(ctx)));
 }

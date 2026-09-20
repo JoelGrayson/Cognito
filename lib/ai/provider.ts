@@ -5,16 +5,21 @@
  */
 import { validateGraph } from "@/lib/graph/validate";
 import { ConceptsResponse } from "@/lib/onboarding/schemas";
-import { PROVIDERS, isProviderId, type ProviderContext, type ProviderId } from "@/lib/providers";
+import { PROVIDERS, defaultProviderId, isProviderId, type ProviderContext, type ProviderId } from "@/lib/providers";
 import { DraftGraph, type LearnerProfile } from "@/types/learning";
 import { GENERATE_CONCEPTS_SYSTEM } from "./functions/generateConcepts";
 import { GENERATE_GRAPH_SYSTEM, buildGenerateGraphPrompt } from "./functions/generateGraph";
 import { isMockAi } from "./client";
 import { AiValidationError } from "./withRetry";
 
-/** The provider the call should go through, or null for the default Anthropic path. */
+/**
+ * The provider the call should go through, or null for the default Anthropic path.
+ * A profile without a provider uses the first configured one.
+ */
 export function pickProvider(id: unknown): ProviderId | null {
-  return !isMockAi() && isProviderId(id) && id !== "anthropic" ? id : null;
+  if (isMockAi()) return null;
+  const chosen = isProviderId(id) ? id : defaultProviderId();
+  return chosen !== "anthropic" ? chosen : null;
 }
 
 /** Generates the draft graph via the chosen provider; one retry with errors, like callForcedTool. */

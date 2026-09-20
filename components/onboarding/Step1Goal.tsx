@@ -55,7 +55,13 @@ export function Step1Goal() {
       .then(setProviders)
       .catch(() => {});
   }, []);
-  const provider = profile.provider ?? providers.find((p) => p.configured)?.id ?? "anthropic";
+  const configured = providers.find((p) => p.configured)?.id;
+  const provider = profile.provider ?? configured ?? "anthropic";
+  // The picker shows the first configured provider by default; persist it so
+  // every server call goes through the provider the learner sees.
+  useEffect(() => {
+    if (!profile.provider && configured) setProfile({ provider: configured });
+  }, [profile.provider, configured, setProfile]);
 
   return (
     <StepShell
