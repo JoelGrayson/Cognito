@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 import {
   ProviderError,
   type Provider,
@@ -83,19 +84,17 @@ async function structured<T>(
       output = response.parsed_output ?? undefined;
     }
   } catch (error) {
-    if (error instanceof Anthropic.AuthenticationError) {
-      throw new ProviderError("Claude rejected the API key. Check ANTHROPIC_API_KEY.", 401);
+    // output_config compiles the schema to a grammar; wide unions (e.g. the
+    // board-action marks) overflow it. Retry once asking for plain JSON.
+    if (error instanceof Anthropic.APIError && error.status === 400 && error.message.includes("grammar is too large")) {
+      try {
+        ({ stopReason, explanation, output } = await callPlainJson(client, chosen, req));
+      } catch (retryError) {
+        throw mapped(retryError);
+      }
+    } else {
+      throw mapped(error);
     }
-    if (error instanceof Anthropic.RateLimitError) {
-      throw new ProviderError("Claude is rate limited. Try again in a moment.", 429);
-    }
-    if (error instanceof Anthropic.APIError) {
-      throw new ProviderError(`Claude error ${error.status}: ${error.message}`, 502);
-    }
-    if (error instanceof SyntaxError) {
-      throw new ProviderError("Claude returned invalid JSON.", 502);
-    }
-    throw error;
   }
 
   if (stopReason === "refusal") {
@@ -117,6 +116,64 @@ export const anthropicProvider: Provider = {
   info,
   structured,
 };
+
+function mapped(error: unknown): ProviderError {
+  if (error instanceof Anthropic.AuthenticationError) {
+    return new ProviderError("Claude rejected the API key. Check ANTHROPIC_API_KEY.", 401);
+  }
+  if (error instanceof Anthropic.RateLimitError) {
+    return new ProviderError("Claude is rate limited. Try again in a moment.", 429);
+  }
+  if (error instanceof Anthropic.APIError) {
+    return new ProviderError(`Claude error ${error.status}: ${error.message}`, 502);
+  }
+  if (error instanceof SyntaxError) {
+    return new ProviderError("Claude returned invalid JSON.", 502);
+  }
+  return error instanceof ProviderError ? error : new ProviderError(String(error), 502);
+}
+
+/**
+ * The same call without output_config: the schema goes in the prompt and the
+ * text is parsed and checked here. Slower to fail, but has no grammar limit.
+ */
+async function callPlainJson<T>(
+  client: Anthropic,
+  model: string,
+  req: StructuredRequest<T>,
+): Promise<{ stopReason: string | null; explanation: string | null | undefined; output: unknown }> {
+  const schemaJson = JSON.stringify(z.toJSONSchema(req.schema));
+  const response = await client.messages.create({
+    model,
+    max_tokens: req.maxTokens ?? 16000,
+    system: `${req.system}\n\nReply with a single JSON object matching this JSON Schema, and nothing else:\n${schemaJson}`,
+    messages: [
+      {
+        role: "user",
+        content: req.image ? [{ type: "text" as const, text: req.user }, imageBlock(req.image)] : req.user,
+      },
+    ],
+  });
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+  req.onText?.(text);
+  if (response.stop_reason !== "end_turn") {
+    return { stopReason: response.stop_reason, explanation: response.stop_details?.explanation, output: undefined };
+  }
+  const parsed = req.schema.safeParse(JSON.parse(stripJsonFences(text)));
+  return {
+    stopReason: response.stop_reason,
+    explanation: response.stop_details?.explanation,
+    output: parsed.success ? parsed.data : undefined,
+  };
+}
+
+function stripJsonFences(text: string): string {
+  const match = /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(text.trim());
+  return match ? match[1] : text.trim();
+}
 
 /** A data URL as an image block Claude accepts. */
 function imageBlock(dataUrl: string) {
