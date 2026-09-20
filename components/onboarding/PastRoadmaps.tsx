@@ -14,7 +14,7 @@ function formatDate(iso: string): string {
 }
 
 /** Past generated roadmaps, like chat history — clicking one reopens it in the workshop. */
-export function PastRoadmaps() {
+export function PastRoadmaps({ heading = "Pick up where you left off", emptyText }: { heading?: string; emptyText?: string }) {
   const [roadmaps, setRoadmaps] = useState<RoadmapSummary[] | null>(null);
 
   useEffect(() => {
@@ -32,11 +32,14 @@ export function PastRoadmaps() {
     };
   }, []);
 
-  if (!roadmaps?.length) return null;
+  if (!roadmaps?.length && !emptyText) return null;
 
   return (
     <div className="mt-8">
-      <p className="mb-2 text-sm font-medium text-[#444]">Pick up where you left off</p>
+      <p className="mb-2 text-sm font-medium text-[#444]">{heading}</p>
+      {!roadmaps?.length ? (
+        <p className="text-sm text-neutral-500">{emptyText}</p>
+      ) : (
       <ul className="space-y-2">
         {roadmaps.map((roadmap) => (
           <li key={roadmap.id}>
@@ -53,6 +56,7 @@ export function PastRoadmaps() {
           </li>
         ))}
       </ul>
+      )}
     </div>
   );
 }
