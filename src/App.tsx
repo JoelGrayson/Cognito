@@ -15,6 +15,7 @@ export default function App() {
   const [doc, setDoc] = useState<Doc | null>(null);
   const ink = useHistory<Stroke[]>([]);
   const [marks, setMarks] = useState<Mark[]>([]);
+  const [layersOpen, setLayersOpen] = useState(false);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,19 +152,30 @@ export default function App() {
           onUndo={ink.undo}
           onRedo={ink.redo}
         />
+        <div className="group">
+          <button
+            className={`tool ${layersOpen ? "active" : ""}`}
+            title="Layers"
+            aria-pressed={layersOpen}
+            onClick={() => setLayersOpen((o) => !o)}
+          >
+            <span aria-hidden>▤</span> Layers
+          </button>
+        </div>
       </header>
 
       <main className="workspace">
-        <div className="sidebar">
+        <div className="canvas-wrap" ref={canvasWrap}>
           <LayersPanel
+            open={layersOpen}
             layers={layers}
-            counts={{ ink: ink.value.length, marks: marks.length }}
+            docSrc={doc?.src ?? null}
+            strokes={ink.value}
+            marks={marks}
             onToggle={(id) => setLayers((l) => ({ ...l, [id]: { visible: !l[id].visible } }))}
             onClear={clearLayer}
+            onClose={() => setLayersOpen(false)}
           />
-        </div>
-
-        <div className="canvas-wrap" ref={canvasWrap}>
           <div
             className="page"
             style={{
