@@ -436,15 +436,22 @@ function deepgramVoice(): Voice {
 let voicePromise: Promise<Voice> | null = null;
 
 export function loadVoice(): Promise<Voice> {
-  if (!voicePromise) {
-    voicePromise = fetch("/api/voice/token", { cache: "no-store" })
-      .then((response) => {
-        const browser = browserVoice();
-        if (response.ok) return deepgramVoice();
-        if (response.status === 401 || response.status === 503) return browser;
-        return { ...browser, speak: deepgramSpeak };
-      })
-      .catch(() => browserVoice());
-  }
-  return voicePromise;
+  if (voicePromise) return voicePromise;
+  const probe = fetch("/api/voice/token", { cache: "no-store" })
+    .then((response) => {
+      const browser = browserVoice();
+      if (response.ok) return deepgramVoice();
+      if (response.status === 503) return browser;
+      if (response.status === 401) {
+        voicePromise = null;
+        return browser;
+      }
+      return { ...browser, speak: deepgramSpeak };
+    })
+    .catch(() => {
+      voicePromise = null;
+      return browserVoice();
+    });
+  voicePromise = probe;
+  return probe;
 }
