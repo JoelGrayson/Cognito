@@ -185,6 +185,9 @@ export const TutorReplySchema = z.object({
   ),
 });
 
+/** The same reply without the rewrite half, for turns that only ask a question. */
+export const TutorAnswerSchema = TutorReplySchema.omit({ updatedLesson: true });
+
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type TutorReply = z.infer<typeof TutorReplySchema>;
 
