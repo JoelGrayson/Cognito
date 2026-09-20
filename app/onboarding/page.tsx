@@ -1,6 +1,6 @@
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 
-export const metadata = { title: "Get started | Cognition" };
+export const metadata = { title: "Get started | Cognito" };
 
 export default async function OnboardingPage({ searchParams }: PageProps<"/onboarding">) {
   const { edit, new: fresh } = await searchParams;

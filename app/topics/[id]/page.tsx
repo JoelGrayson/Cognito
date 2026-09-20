@@ -5,7 +5,7 @@ import { topic } from "./data";
 export async function generateMetadata({ params }: PageProps<"/topics/[id]">) {
   const { id } = await params;
   const found = await topic(id);
-  return { title: found ? `${found.roadmap.title} | Cognition` : "Topic | Cognition" };
+  return { title: found ? `${found.roadmap.title} | Cognito` : "Topic | Cognito" };
 }
 
 export default async function TopicPage({ params }: PageProps<"/topics/[id]">) {
