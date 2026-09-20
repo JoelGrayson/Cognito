@@ -441,6 +441,14 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       // mistake is real; below the policy's floor the board stays quiet. Jev
       // unavailable returns null, and nothing about this path changes.
       const errorConfidence = wrong && trusted && premise ? await confirmError(premise.text, parsed, verdict) : null;
+
+      // Waiting means the line can settle underneath us. Finalization arriving mid-ask
+      // finds no speech held and leaves its marker; pick it up rather than holding
+      // words for an event that already passed. And a newer read of this line owns it:
+      // a late confirmation must not resurrect the reading it replaced.
+      const finalized = wasFinalized || finalizedRef.current.delete(lineId);
+      if (gen !== genRef.current) return;
+
       const doubted = errorConfidence !== null && errorConfidence < DEFAULT_CONFIG.errorConfidenceFloor;
 
       if (wrong && trusted && premise && !doubted) {
@@ -482,7 +490,7 @@ export function Whiteboard({ subject }: { subject: Subject }) {
             if (voiceOnRef.current) {
               speakOrReport(speakerRef.current, setError, utterance, voiceIdRef.current);
             }
-          } else if (wasFinalized) {
+          } else if (finalized) {
             // Finalization won the race and arrived before this reading existed.
             // Consume it now rather than waiting for an event that already passed.
             if (voiceOnRef.current) {
@@ -502,7 +510,7 @@ export function Whiteboard({ subject }: { subject: Subject }) {
         problemId: problem?.id ?? null,
         hidden: held,
         bounds: lineBounds,
-        provisional: reason === "idle" && !wasFinalized,
+        provisional: reason === "idle" && !finalized,
         raw,
         parsed,
         ms: data.ms,
