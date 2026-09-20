@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { TRPCError } from "@trpc/server";
+import { BookOpen, Plus } from "lucide-react";
 import { DeleteTopic } from "@/components/topics/DeleteTopic";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { topicPath } from "@/lib/modules";
 import type { RoadmapSummary } from "@/lib/repo";
 import { serverTrpc } from "@/server/caller";
@@ -20,37 +24,60 @@ export default async function TopicsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-medium tracking-tight">Topics</h1>
-        <Link href="/onboarding?new=1" className="lesson-link text-sm">
-          Learn something new
-        </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Topics</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Every roadmap you have started, newest first.</p>
+        </div>
+        <Button asChild>
+          <Link href="/onboarding?new=1">
+            <Plus aria-hidden="true" />
+            Learn something new
+          </Link>
+        </Button>
       </div>
 
       {signedOut || topics.length === 0 ? (
-        <p className="mt-8 text-neutral-600">
-          {signedOut ? "Sign in to see the topics you have started." : "No topics yet."}{" "}
-          <Link href="/onboarding?new=1" className="lesson-link">
-            Start one
-          </Link>
-          .
-        </p>
+        <Card className="mt-8">
+          <CardContent className="flex flex-col items-center py-10 text-center">
+            <span className="flex size-12 items-center justify-center rounded-full bg-brand-soft text-primary">
+              <BookOpen className="size-6" aria-hidden="true" />
+            </span>
+            <p className="mt-4 font-medium">{signedOut ? "Sign in to see your topics" : "No topics yet"}</p>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              {signedOut
+                ? "The topics you have started are tied to your account."
+                : "Tell us what you want to learn and we'll build a roadmap with lessons for each step."}
+            </p>
+            <Button asChild variant="outline" className="mt-5">
+              <Link href="/onboarding?new=1">Start one</Link>
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <ul className="mt-6 divide-y divide-neutral-100">
-          {topics.map((topic) => (
-            <li key={topic.id} className="history-item">
-              <Link href={topicPath(topic.id)} className="history-link">
-                <span className="block truncate text-[15px] text-neutral-900">{topic.title}</span>
-                <span className="block truncate text-sm text-neutral-500">&ldquo;{topic.goal}&rdquo;</span>
-              </Link>
-              <span className="shrink-0 text-right text-xs text-neutral-400">
-                {topic.modules === 0 ? "no modules" : `${topic.lessonsWritten} of ${topic.modules} lessons`}
-                <br />
-                {timeAgo(topic.createdAt)}
-              </span>
-              <DeleteTopic id={topic.id} title={topic.title} />
-            </li>
-          ))}
+        <ul className="mt-6 space-y-3">
+          {topics.map((topic) => {
+            const percent = topic.modules === 0 ? 0 : Math.round((topic.lessonsWritten / topic.modules) * 100);
+            return (
+              <li key={topic.id}>
+                <Card size="sm" className="transition-shadow hover:shadow-md">
+                  <CardContent className="flex items-start gap-4">
+                    <Link href={topicPath(topic.id)} className="min-w-0 flex-1 outline-none focus-visible:underline">
+                      <span className="block truncate text-[15px] font-medium text-foreground">{topic.title}</span>
+                      <span className="block truncate text-sm text-muted-foreground">&ldquo;{topic.goal}&rdquo;</span>
+                      <span className="mt-3 flex items-center gap-3">
+                        <Progress value={percent} className="h-1.5 max-w-48" aria-label="Lessons written" />
+                        <span className="text-xs text-muted-foreground">
+                          {topic.modules === 0 ? "No modules" : `${topic.lessonsWritten} of ${topic.modules} lessons`} · {timeAgo(topic.createdAt)}
+                        </span>
+                      </span>
+                    </Link>
+                    <DeleteTopic id={topic.id} title={topic.title} />
+                  </CardContent>
+                </Card>
+              </li>
+            );
+          })}
         </ul>
       )}
     </main>

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { LessonChat } from "@/components/LessonChat";
 import { modulePath } from "@/lib/modules";
 import type { ProviderId } from "@/lib/providers/types";
@@ -31,11 +33,14 @@ export function ModuleChatPane({ roadmap, node, lesson, providerId }: Props) {
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <Link href={modulePath(roadmap.id, node.id)} className="text-sm text-neutral-500 hover:text-neutral-900">
-        ← {current.title}
-      </Link>
-      <h1 className="mt-2 text-2xl font-medium tracking-tight">Tutor</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+      <Button asChild variant="ghost" size="sm" className="-ml-2 max-w-full text-muted-foreground">
+        <Link href={modulePath(roadmap.id, node.id)}>
+          <ArrowLeft aria-hidden="true" />
+          <span className="truncate">{current.title}</span>
+        </Link>
+      </Button>
+      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Tutor</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
         Ask about this lesson, or ask for it to be rewritten. Rewrites are saved to the lesson.
       </p>
       <div className="mt-4">
