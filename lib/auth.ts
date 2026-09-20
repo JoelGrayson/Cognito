@@ -26,6 +26,18 @@ function createAuth() {
       schema: { user, session, account, verification },
       transaction: true,
     }),
+    // Social sign-in. Signing in while anonymous links the account — onLinkAccount
+    // moves the anonymous user's data, so nothing is lost.
+    socialProviders: {
+      ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+        ? {
+            google: {
+              clientId: process.env.GOOGLE_CLIENT_ID,
+              clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            },
+          }
+        : {}),
+    },
     plugins: [
       chatgptPlugin(),
       anonymous({
