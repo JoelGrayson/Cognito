@@ -79,9 +79,12 @@ export async function readStructures(
       const second = depict(rdkit, data.mathpixSmiles ?? null).canonical;
       const readingTrusted =
         data.reader === "mathpix"
-          ? (data.confidence ?? 1) >= TRUSTED_CONFIDENCE
+          ? (data.confidence ?? 0) >= TRUSTED_CONFIDENCE
           : drawn.canonical !== null && drawn.canonical === second;
-      const judged = drawn.canonical ? judgeStructure(drawn.canonical, key, asked) : null;
+      // Two molecules in one cutout means the cut was wrong. Only the first was read,
+      // and its verdict would be drawn beside both, ticking a wrong one by association.
+      const oneStructure = (data.structuresSeen ?? 1) <= 1;
+      const judged = drawn.canonical && oneStructure ? judgeStructure(drawn.canonical, key, asked) : null;
       const verdict = trustedVerdict(judged, readingTrusted);
       return {
         suspected: judged?.kind === "no-match" && verdict === null,
