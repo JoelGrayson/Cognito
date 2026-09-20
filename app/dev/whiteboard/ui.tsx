@@ -126,6 +126,7 @@ export function Dock({
   voiceOn,
   onVoiceOn,
   listening,
+  holding,
   onTalkStart,
   onTalkEnd,
   onReset,
@@ -138,6 +139,7 @@ export function Dock({
   voiceOn: boolean;
   onVoiceOn: (on: boolean) => void;
   listening: boolean;
+  holding: boolean;
   onTalkStart: () => void;
   onTalkEnd: () => void;
   onReset: () => void;
@@ -206,20 +208,19 @@ export function Dock({
       <Divider />
       <button
         type="button"
-        aria-label={listening ? "Listening" : "Hold to talk, or hold space"}
+        aria-label={listening ? "Listening" : holding ? "Connecting microphone" : "Hold to talk, or hold space"}
+        aria-pressed={holding}
         title="Hold to talk, or hold space"
-        onMouseDown={onTalkStart}
-        onMouseUp={onTalkEnd}
-        onMouseLeave={onTalkEnd}
-        onTouchStart={(e) => {
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
           e.preventDefault();
+          e.currentTarget.setPointerCapture(e.pointerId);
           onTalkStart();
         }}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          onTalkEnd();
-        }}
-        className={`grid h-9 w-9 shrink-0 select-none place-items-center rounded-full transition-colors ${
+        onPointerUp={onTalkEnd}
+        onPointerCancel={onTalkEnd}
+        onLostPointerCapture={onTalkEnd}
+        className={`grid h-9 w-9 shrink-0 touch-none select-none place-items-center rounded-full transition-colors ${
           listening ? "wb-listening bg-[#d9534f] text-white" : "bg-(--wb-blush) text-(--wb-bad-ink)"
         }`}
       >

@@ -57,6 +57,8 @@ Calls require only `DEEPGRAM_API_KEY` with permission to mint temporary tokens. 
 
 After the greeting, the call requests one opening worked example automatically; a learner interruption takes priority. The tutor shows examples without asking permission and pauses for specific understanding checks. Its prompt requires spoken math and Unicode board labels, with no LaTeX. `lib/voice-text.ts` also converts stray math markup in tutor captions, chat, and board labels into readable text; it does not alter learner messages or executable plot expressions.
 
+The `/dev/whiteboard` tutor uses the same Deepgram stack with push-to-talk (hold Space or the mic). Its microphone stays acquired after the first hold and is muted immediately on release. Because the SDK's mute drops audio frames, `usePushToTalk` then sends up to six seconds of synthetic PCM silence so Flux can finalize the turn, covering its default five-second timeout. A new hold, disconnect, or unmount cancels this silence. No room audio is sent after release. Five-second keepalives maintain the connection while the learner writes. The UI distinguishes microphone startup from listening and displays the last recognized learner utterance.
+
 ## Persistence model
 
 Summary (full detail in `data-contract.md`):
