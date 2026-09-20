@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { LessonView, type LessonState } from "@/components/Lesson";
 import { emptyDraft, type LessonDraft, type OutlineDraft } from "@/lib/drafts";
 import { lessonRequest, moduleChatPath, topicPath } from "@/lib/modules";
+import { practiceHref } from "@/lib/subjects";
 import { ensureOk, readNdjson } from "@/lib/ndjson";
 import type { ProviderId } from "@/lib/providers/types";
 import type { RoadmapRecord } from "@/lib/repo";
@@ -135,6 +136,7 @@ export function ModulePane({ roadmap, node, lesson, written, providerId }: Props
       onRetry={write}
       onLessonChange={(next) => void onLessonChange(next)}
       chatHref={moduleChatPath(roadmap.id, node.id)}
+      practiceHref={practiceHref(roadmap.goal, roadmap.title) ?? undefined}
     />
   );
 }

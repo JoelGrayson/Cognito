@@ -155,7 +155,7 @@ interface Reading {
  * moment the page opens reads as hostile - and once acquired it stays open but
  * muted, because re-acquiring it on every press swallows the first word.
  */
-export function Whiteboard({ subject }: { subject: Subject }) {
+export function Whiteboard({ subject, autoSheet = false }: { subject: Subject; autoSheet?: boolean }) {
   const [micLive, setMicLive] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
@@ -208,6 +208,7 @@ export function Whiteboard({ subject }: { subject: Subject }) {
     >
       <Notebook
         subject={subject}
+        autoSheet={autoSheet}
         onMicLive={() => setMicLive(true)}
         voiceError={voiceError}
         clearVoiceError={() => setVoiceError(null)}
@@ -218,11 +219,14 @@ export function Whiteboard({ subject }: { subject: Subject }) {
 
 function Notebook({
   subject,
+  autoSheet,
   onMicLive,
   voiceError,
   clearVoiceError,
 }: {
   subject: Subject;
+  /** Load the built-in algebra sheet on mount (`?sheet=sample`) — the lesson → practice link. */
+  autoSheet: boolean;
   onMicLive: () => void;
   voiceError: string | null;
   clearVoiceError: () => void;
@@ -960,6 +964,13 @@ function Notebook({
     [reset, removeWorksheet, refreshSheets],
   );
 
+  /** The bundled algebra sheet, fetched as a File so it goes through the same load path as an upload. */
+  const loadSampleSheet = useCallback(async () => {
+    const res = await fetch(SAMPLE_SHEET);
+    if (!res.ok) return setError("Couldn't load the sample worksheet.");
+    await loadWorksheet(new File([await res.blob()], "algebra-practice.pdf", { type: "application/pdf" }));
+  }, [loadWorksheet]);
+
   /** Below xl the library covers the canvas, so choosing something has to dismiss it;
    *  docked beside the canvas it stays put, like a sidebar. */
   const closeLibraryIfCovering = () => {
@@ -1111,11 +1122,9 @@ function Notebook({
               removeWorksheet();
               closeLibraryIfCovering();
             }}
-            onSample={async () => {
-              const res = await fetch(SAMPLE_SHEET);
+            onSample={() => {
               closeLibraryIfCovering();
-              if (!res.ok) return setError("Couldn't load the sample worksheet.");
-              await loadWorksheet(new File([await res.blob()], "algebra-practice.pdf", { type: "application/pdf" }));
+              void loadSampleSheet();
             }}
             onOpen={async (id) => {
               const file = await fileOf(id).catch(() => null);
@@ -1170,6 +1179,8 @@ function Notebook({
                 editor.registerExternalContentHandler("text", () => {});
 
                 annotatorRef.current = createAnnotator(editor);
+                // ?sheet=sample lands straight on the algebra worksheet, e.g. from a lesson page.
+                if (autoSheet) void loadSampleSheet();
                 // React dev-mode mounts twice. Without this, two store listeners end up
                 // registered and every line is submitted twice.
                 recorderRef.current?.stop();
