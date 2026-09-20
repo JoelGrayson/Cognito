@@ -29,7 +29,7 @@ export function Library() {
   const open = PAPERS.find((p) => p.example.id === openId);
 
   return (
-    <section aria-labelledby="library" className="mt-16">
+    <section aria-labelledby="library" className="pt-20">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 id="library" className="wb-serif text-2xl font-medium tracking-tight sm:text-3xl">
