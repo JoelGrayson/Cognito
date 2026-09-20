@@ -3,7 +3,7 @@ import { generateGraph, generateGraphWithProvider, pickProvider } from "@/lib/ai
 import { buildFallbackGraph, isFallbackGraph } from "@/lib/graph/fallback";
 import { applyKnownScope } from "@/lib/graph/known";
 import { jsonError, parseBody, serverError } from "@/lib/http";
-import { toLearnerProfile } from "@/lib/onboarding/profile";
+import { levelToPriorKnowledge, toLearnerProfile } from "@/lib/onboarding/profile";
 import { onboardingRepo, roadmapRepo } from "@/lib/repo";
 import { requireUserId } from "@/lib/session";
 import type { DraftGraph, OnboardingProfile, OnboardingState } from "@/types/learning";
@@ -71,7 +71,15 @@ export async function POST(request: Request) {
       if (fresh.draftGraph) return respondWithStored(userId, fresh);
     }
 
-    const learner = toLearnerProfile(withConceptsAsKnowledge(state.profile));
+    const seeded = withConceptsAsKnowledge(state.profile);
+    // A prefetch fires on the first format pick, before anything is rated — an empty
+    // priorKnowledge shouldn't block it. Seed one level-0 entry (same shape the
+    // questionnaire's fallback writes) so goal + formats is enough for a graph.
+    const learner =
+      toLearnerProfile(seeded) ??
+      (seeded.goal
+        ? toLearnerProfile({ ...seeded, priorKnowledge: levelToPriorKnowledge(seeded.goal, 0) })
+        : null);
     if (!learner) return jsonError(["Finish the questionnaire first."], 400);
 
     const work = (async () => {

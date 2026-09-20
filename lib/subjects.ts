@@ -57,3 +57,19 @@ export const DEFAULT_SUBJECT = SUBJECTS[0];
 export function subjectFrom(value: string | null | undefined): Subject {
   return SUBJECTS.find((s) => s.id === value) ?? DEFAULT_SUBJECT;
 }
+
+/** Words that mean a roadmap can hand its learner a worked-on-paper practice session. */
+const MATH_TERMS =
+  /\b(algebra|math(ematics)?|equations?|inequalities|linear|quadratic|polynomial|calculus|precalculus|geometry|trigonometry|arithmetic|factori[sz]e|graphing)\b/i;
+const CHEM_TERMS = /\b(chem(istry|ical)?|organic|molecule|reaction|stoichiometry|ochem|mechanism)\b/i;
+
+/**
+ * A whiteboard practice link for a roadmap, or null when practice-by-hand doesn't
+ * apply. `sheet=sample` lands the learner straight on the subject's built-in sheet.
+ */
+export function practiceHref(goal: string, title: string): string | null {
+  const text = `${goal} ${title}`;
+  if (MATH_TERMS.test(text)) return "/dev/whiteboard?subject=math&sheet=sample";
+  if (CHEM_TERMS.test(text)) return "/dev/whiteboard?subject=chemistry&sheet=sample";
+  return null;
+}

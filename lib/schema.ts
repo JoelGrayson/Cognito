@@ -380,3 +380,25 @@ export const WorkCheckSchema = z.object({
 });
 
 export type WorkCheck = z.infer<typeof WorkCheckSchema>;
+
+/* ---------- Grading a student's page for a teacher ---------- */
+
+export const PROBLEM_STATUSES = ["correct", "partial", "wrong", "blank"] as const;
+
+export const GradedPageSchema = z.object({
+  studentName: z.string().describe("The name the student wrote on the page, exactly as written; empty when there is none"),
+  problems: z
+    .array(
+      z.object({
+        label: z.string().describe("The problem's printed number or letter, e.g. '1', '2b'. Count from 1 when the page prints none"),
+        status: z.enum(PROBLEM_STATUSES).describe("partial = right method with a slip, or an unfinished answer; blank = not attempted"),
+        note: z.string().describe("For anything not correct: what went wrong and where, in under 15 words. Empty when correct"),
+      }),
+    )
+    .describe("Every problem printed on the page, top to bottom, attempted or not"),
+  feedback: z.string().describe("One or two sentences to the student: what they did well and the one thing to fix first"),
+  marks: WorkCheckSchema.shape.marks,
+});
+
+export type GradedPage = z.infer<typeof GradedPageSchema>;
+export type ProblemStatus = (typeof PROBLEM_STATUSES)[number];
