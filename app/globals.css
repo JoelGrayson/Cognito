@@ -1,9 +1,20 @@
 @import "tailwindcss";
+@import "streamdown/styles.css";
+@source "../node_modules/streamdown/dist/*.js";
 
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --color-accent: var(--accent);
   --color-accent-strong: var(--accent-strong);
+  /* Tokens Streamdown's components expect (shadcn names). */
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-muted: #eeeeea;
+  --color-muted-foreground: var(--muted);
+  --color-border: #e2e1dc;
+  --color-sidebar: var(--panel);
+  --color-primary: var(--accent-strong);
+  --color-primary-foreground: var(--bg);
 }
 
 :root {
@@ -361,57 +372,9 @@ a.card:focus-visible {
   border: 0;
 }
 
-/* Simple markdown-ish text. */
-.prose-lite p {
-  margin: 0 0 0.9em;
-}
-.prose-lite p:last-child,
-.prose-lite ul:last-child,
-.prose-lite ol:last-child {
-  margin-bottom: 0;
-}
-.prose-lite ul,
-.prose-lite ol {
-  margin: 0 0 0.9em;
-  padding-left: 1.4em;
-}
-.prose-lite ul {
-  list-style: disc;
-}
-.prose-lite ol {
-  list-style: decimal;
-}
-.prose-lite li {
-  margin: 0.2em 0;
-}
-.prose-lite code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+/* Markdown rendered by Streamdown. */
+.prose-lite [data-streamdown="inline-code"] {
   font-size: 0.9em;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: #eeeeea;
-}
-.prose-lite strong {
-  font-weight: 600;
-}
-.prose-lite pre {
-  margin: 0 0 0.9em;
-  overflow-x: auto;
-  border-radius: 8px;
-  padding: 12px 14px;
-  background: #f1f0ec;
-  font-size: 14px;
-  line-height: 1.55;
-}
-.prose-lite pre:last-child {
-  margin-bottom: 0;
-}
-.prose-lite pre code {
-  padding: 0;
-  border-radius: 0;
-  background: none;
-  font-size: inherit;
-  white-space: pre;
 }
 
 /* ---------- Quiz ---------- */
