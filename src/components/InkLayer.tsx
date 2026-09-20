@@ -25,11 +25,13 @@ export function InkLayer({ strokes, tool, color, width, interactive, penOnly, vi
   const multiTouch = useRef(false);
 
   const toPage = (e: PointerEvent<SVGSVGElement>): [number, number] | null => {
-    const svg = svgRef.current;
-    const m = svg?.getScreenCTM();
-    if (!svg || !m) return null;
-    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
-    return [Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10];
+    // Map via the rendered box rather than getScreenCTM(): Safari's CTM ignores
+    // CSS transforms on HTML ancestors (the zoomed page), which offsets strokes.
+    const r = svgRef.current?.getBoundingClientRect();
+    if (!r || !r.width || !r.height) return null;
+    const x = ((e.clientX - r.left) / r.width) * PAGE_W;
+    const y = ((e.clientY - r.top) / r.height) * PAGE_H;
+    return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
   };
 
   const eraseAt = (x: number, y: number) => {

@@ -10,9 +10,15 @@ const MIN = 0.5;
 const MAX = 6;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+interface Pt {
+  x: number;
+  y: number;
+}
+
 /**
  * Two-finger pinch / pan on touch, ctrl+wheel or trackpad pinch on desktop.
- * With `fingerPans`, a single finger (not a stylus) also pans.
+ * With `fingerPans`, a single finger also pans. Uses pointer events so a
+ * stylus (`pointerType === "pen"`) is never treated as a finger.
  */
 export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boolean) {
   const [view, setView] = useState<View>({ scale: 1, x: 0, y: 0 });
@@ -25,10 +31,9 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
     const el = ref.current;
     if (!el) return;
 
+    const fingers = new Map<number, Pt>();
     let last: { d: number; cx: number; cy: number } | null = null;
-    let drag: { x: number; y: number } | null = null;
-
-    const isFinger = (t: Touch) => !("touchType" in t && (t as Touch & { touchType: string }).touchType === "stylus");
+    let drag: Pt | null = null;
 
     const zoomAt = (factor: number, cx: number, cy: number, dx = 0, dy = 0) => {
       const v = viewRef.current;
@@ -41,38 +46,42 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
       setView({ scale, x: px - (px - v.x) * k + dx, y: py - (py - v.y) * k + dy });
     };
 
-    const pinch = (t: TouchList) => {
-      const [a, b] = [t[0], t[1]];
-      return { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2 };
+    const pinch = () => {
+      const [a, b] = [...fingers.values()];
+      return { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
     };
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size === 2) {
         drag = null;
-        last = pinch(e.touches);
-      } else if (e.touches.length === 1 && fingerPansRef.current && isFinger(e.touches[0])) {
-        e.preventDefault();
-        drag = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        last = pinch();
+      } else if (fingers.size === 1 && fingerPansRef.current) {
+        drag = { x: e.clientX, y: e.clientY };
       }
     };
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 2 && last) {
-        e.preventDefault();
-        const cur = pinch(e.touches);
+    const onMove = (e: PointerEvent) => {
+      if (!fingers.has(e.pointerId)) return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size === 2 && last) {
+        const cur = pinch();
         zoomAt(cur.d / last.d, cur.cx, cur.cy, cur.cx - last.cx, cur.cy - last.cy);
         last = cur;
-      } else if (e.touches.length === 1 && drag) {
-        e.preventDefault();
-        const t = e.touches[0];
-        const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
-        drag = { x: t.clientX, y: t.clientY };
+      } else if (fingers.size === 1 && drag) {
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        drag = { x: e.clientX, y: e.clientY };
         setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
       }
     };
-    const onTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length < 2) last = null;
-      if (e.touches.length === 0) drag = null;
+    const onUp = (e: PointerEvent) => {
+      if (!fingers.delete(e.pointerId)) return;
+      last = null;
+      drag = null;
+    };
+    // Belt-and-braces: some mobile browsers ignore touch-action for pinch/scroll.
+    const onTouchMove = (e: TouchEvent) => {
+      if (fingers.size > 0) e.preventDefault();
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -80,16 +89,18 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
       else setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
     };
 
-    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
     el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd);
-    el.addEventListener("touchcancel", onTouchEnd);
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => {
-      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
       el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("touchcancel", onTouchEnd);
       el.removeEventListener("wheel", onWheel);
     };
   }, [ref]);
