@@ -1,4 +1,4 @@
-<img width="3840" height="2160" alt="cognito-mockup-ipad" src="https://github.com/user-attachments/assets/cdf9d0bf-d133-442a-b0cb-de09ea455d09" />
+<img alt="Cognito — Learn, Write, Master." src="docs/hero.png" />
 
 # Cognito
 
