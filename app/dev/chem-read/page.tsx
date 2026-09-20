@@ -2,7 +2,9 @@
  * A TEST RIG, not a feature. Answers one question before anything is built on it:
  * can Mathpix read YOUR hand-drawn molecules well enough to check them?
  *
- * Draw a few structures, type what you meant, press Read. Each drawing is cut out on
+ * Draw a few structures and press Read. Nothing to type: each drawing is compared with
+ * every answer on the practice sheet, and with the usual wrong answers, so the verdict
+ * says which question it answers or which mistake it is. Each drawing is cut out on
  * its own, read into SMILES, and drawn BACK by RDKit so you can judge the reading by
  * eye instead of by decoding SMILES.
  *
@@ -12,7 +14,7 @@
  *      your mistake, or quietly hand back a valid molecule? If it repairs the mistake,
  *      a checker built on it can never catch that mistake.
  *   3. Draw two close together. Were they cut apart correctly?
- * Every drawing is saved under fixtures/structures/ with what you said you meant.
+ * Every drawing is saved under fixtures/structures/ with the question it was for.
  *
  * FOUND SO FAR, with simulated pen strokes (a real stylus is still untested):
  *   - 2-butanol and chlorobenzene read correctly, ~450ms each, confidence 0.98-0.99.
@@ -37,6 +39,8 @@ import { Tldraw, createShapeId, toRichText, type Editor, type TLShapeId } from "
 import "tldraw/tldraw.css";
 import { clusterByGap } from "@/lib/whiteboard/cluster";
 import type { Bounds } from "@/lib/whiteboard/strokes";
+import { judgeStructure, type KeyEntry, type StructureVerdict } from "@/lib/whiteboard/structure-key";
+import sheetKey from "@/fixtures/structures/ochem-practice.key.json";
 
 /** RDKit is 7 MB of WebAssembly. It comes from the CDN at the installed version
  *  rather than through the bundler, the same way the worksheet takes its pdf.js worker. */
@@ -66,10 +70,27 @@ interface Reading {
   /** RDKit's verdict on the SMILES: its own spelling and a drawing, or why not. */
   canonical: string | null;
   svg: string | null;
-  /** Whether it is the molecule the person typed; null when they typed nothing usable. */
-  matchesIntended: boolean | null;
+  /** Against the sheet's answer key; null when nothing valid was read. */
+  verdict: StructureVerdict | null;
   error?: string;
 }
+
+/** What to say for a verdict, and whether it is good news. */
+function describe(v: StructureVerdict): { text: string; tone: "good" | "bad" | "unsure" } {
+  switch (v.kind) {
+    case "correct":
+      return { text: `Correct: ${v.name}, the answer to question ${v.problem}.`, tone: "good" };
+    case "other-question":
+      return { text: `That is ${v.name}, the answer to question ${v.problem}, not question ${v.asked}.`, tone: "bad" };
+    case "known-mistake":
+      return { text: `That is ${v.name}: the usual mistake on question ${v.problem}.`, tone: "bad" };
+    case "no-match":
+      return v.asked === null
+        ? { text: "Not an answer to any question on the sheet.", tone: "unsure" }
+        : { text: `Not the answer to question ${v.asked}.`, tone: "bad" };
+  }
+}
+const TONE = { good: "bg-green-950/60 text-green-300", bad: "bg-red-950/60 text-red-300", unsure: "bg-neutral-800 text-neutral-300" } as const;
 
 const LABEL_META = { chemReadLabel: true } as const;
 
@@ -86,7 +107,11 @@ export default function ChemReadPage() {
   const editorRef = useRef<Editor | null>(null);
   const rdkitRef = useRef<RDKit | null>(null);
   const [rdkitReady, setRdkitReady] = useState(false);
-  const [intended, setIntended] = useState("");
+  /** Optional. Left on auto, a drawing is matched against every question. */
+  const [asked, setAsked] = useState<number | null>(null);
+  /** The key in RDKit's spelling, built once RDKit is up. Comparing the file's SMILES
+   *  as text would call "OC(C)CC" a wrong answer to a question whose key says "CCC(C)O". */
+  const keyRef = useRef<KeyEntry[]>([]);
   const [busy, setBusy] = useState(false);
   const [readings, setReadings] = useState<Reading[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -119,9 +144,7 @@ export default function ChemReadPage() {
     setBusy(true);
     try {
       const clusters = clusterByGap(boxes.map((b) => b.bounds));
-      // One molecule typed means one molecule meant; with several drawn there is no
-      // telling which it refers to.
-      const meant = clusters.length === 1 ? canonicalOf(intended.trim()).canonical : null;
+      const forQuestion = asked === null ? "" : `question ${asked}`;
 
       const results = await Promise.all(
         clusters.map(async (cluster, i): Promise<Reading> => {
@@ -131,10 +154,10 @@ export default function ChemReadPage() {
           const res = await fetch("/api/whiteboard/structure", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: picture, intended: intended.trim() }),
+            body: JSON.stringify({ image: picture, intended: forQuestion }),
           });
           const data = await res.json().catch(() => null);
-          const base = { n: i + 1, picture, smiles: null, structuresSeen: 0, confidence: null, ms: 0, canonical: null, svg: null, matchesIntended: null };
+          const base = { n: i + 1, picture, smiles: null, structuresSeen: 0, confidence: null, ms: 0, canonical: null, svg: null, verdict: null };
           if (!res.ok || !data) return { ...base, error: data?.error ?? "Request failed." };
 
           const drawn = canonicalOf(data.smiles);
@@ -153,7 +176,7 @@ export default function ChemReadPage() {
             confidence: data.confidence,
             ms: data.ms,
             ...drawn,
-            matchesIntended: meant && drawn.canonical ? meant === drawn.canonical : null,
+            verdict: drawn.canonical ? judgeStructure(drawn.canonical, keyRef.current, asked) : null,
           };
         }),
       );
@@ -179,18 +202,37 @@ export default function ChemReadPage() {
         onReady={() => {
           void window.initRDKitModule?.({ locateFile: (file) => RDKIT_BASE + file }).then((rdkit) => {
             rdkitRef.current = rdkit;
+            keyRef.current = sheetKey.answers.flatMap((a) => {
+              const smiles = canonicalOf(a.smiles).canonical;
+              if (!smiles) return [];
+              const commonWrong = (a.commonWrong ?? []).flatMap((w) => {
+                const wrong = canonicalOf(w.smiles).canonical;
+                return wrong ? [{ name: w.name, smiles: wrong }] : [];
+              });
+              return [{ problem: a.problem, name: a.name, smiles, commonWrong }];
+            });
             setRdkitReady(true);
           });
         }}
       />
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-800 px-3 py-2">
         <h1 className="text-sm font-semibold">Structure reading test</h1>
-        <input
-          value={intended}
-          onChange={(e) => setIntended(e.target.value)}
-          placeholder="what you meant: a name, or SMILES like CCO to auto-compare"
-          className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm placeholder:text-neutral-600"
-        />
+        <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+          question
+          <select
+            value={asked ?? ""}
+            onChange={(e) => setAsked(e.target.value ? Number(e.target.value) : null)}
+            className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+          >
+            <option value="">auto-detect</option>
+            {sheetKey.answers.map((a) => (
+              <option key={a.problem} value={a.problem}>
+                {a.problem}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="flex-1" />
         <span className="text-[11px] text-neutral-500">{rdkitReady ? "RDKit ready" : "loading RDKit…"}</span>
         <button onClick={() => void read()} disabled={busy} className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-neutral-950 disabled:opacity-50">
           {busy ? "reading…" : "Read structures"}
@@ -251,10 +293,8 @@ export default function ChemReadPage() {
                 <div className="mt-2 break-all font-mono text-sm text-neutral-100">{r.smiles ?? r.error ?? "(no structure read)"}</div>
                 {r.canonical && r.canonical !== r.smiles && <div className="mt-1 break-all font-mono text-[11px] text-neutral-400">→ {r.canonical}</div>}
                 {r.structuresSeen > 1 && <div className="mt-1 text-amber-400">{r.structuresSeen} structures in one picture: the cut was wrong</div>}
-                {r.matchesIntended !== null && (
-                  <div className={`mt-2 rounded px-2 py-1 ${r.matchesIntended ? "bg-green-950/60 text-green-300" : "bg-red-950/60 text-red-300"}`}>
-                    {r.matchesIntended ? "same molecule as the SMILES you typed" : "NOT the molecule you typed"}
-                  </div>
+                {r.verdict && (
+                  <div className={`mt-2 rounded px-2 py-1.5 text-sm ${TONE[describe(r.verdict).tone]}`}>{describe(r.verdict).text}</div>
                 )}
               </li>
             ))}
