@@ -55,15 +55,3 @@ export function assessExplanation(transcript: string, verdict: Equivalence): Out
   if (GIVING_UP.test(said)) return { kind: "stuck" };
   return { kind: "not-yet" };
 }
-
-/** What the tutor says back. Confirmation is short on purpose -- praise that runs on
- *  makes the next mistake feel heavier than it is. */
-export function replyTo(outcome: Outcome, verdict: Equivalence): string {
-  if (outcome.kind === "found-it") {
-    return verdict.kind === "direction"
-      ? "That's it — dividing by a negative flips it. Fix it and carry on."
-      : "That's the one. Go ahead and fix it.";
-  }
-  if (outcome.kind === "stuck") return "Okay, here's a nudge.";
-  return "Not quite what I'm looking at. Here's a bit more.";
-}
