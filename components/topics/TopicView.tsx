@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowLeft, Wand2 } from "lucide-react";
 import { TopicGraph } from "@/components/TopicGraph";
-import { findNode, modulePath } from "@/lib/modules";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { countModules, findNode, modulePath } from "@/lib/modules";
 import type { RoadmapRecord } from "@/lib/repo";
 import { ModuleList } from "./ModuleList";
 
@@ -15,28 +19,37 @@ interface Props {
 /** A roadmap: the graph, whose nodes open their lessons, and the same modules as a list. */
 export function TopicView({ roadmap, written }: Props) {
   const router = useRouter();
+  const total = countModules(roadmap.graph);
 
   return (
     <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-4 py-6 sm:px-8">
-      <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit text-muted-foreground">
+        <Link href="/topics">
+          <ArrowLeft aria-hidden="true" />
+          Topics
+        </Link>
+      </Button>
+      <header className="mt-3 mb-5 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <Link href="/topics" className="text-sm text-neutral-500 hover:text-neutral-900">
-            ← Topics
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{roadmap.title}</h1>
-          <p className="mt-1 text-[15px] text-[#6b6b6b]">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{roadmap.title}</h1>
+            <Badge variant="secondary">
+              {total === 0 ? "No modules" : `${written.length} of ${total} lessons`}
+            </Badge>
+          </div>
+          <p className="mt-1.5 text-[15px] text-muted-foreground">
             &ldquo;{roadmap.goal}&rdquo; · click a topic to open its lesson.
           </p>
         </div>
-        <Link
-          href={`/onboarding/workshop?from=${roadmap.id}`}
-          className="inline-flex min-h-10 items-center rounded-full border border-[#d5d5d1] bg-white px-4 text-sm font-medium text-[#333] hover:border-[#b9b9b4]"
-        >
-          Refine in the workshop
-        </Link>
+        <Button asChild variant="outline">
+          <Link href={`/onboarding/workshop?from=${roadmap.id}`}>
+            <Wand2 aria-hidden="true" />
+            Refine in the workshop
+          </Link>
+        </Button>
       </header>
 
-      <div className="h-[65vh] min-h-[480px] overflow-hidden rounded-2xl border border-[#e4e3de]">
+      <div className="h-[65vh] min-h-[480px] overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
         <TopicGraph
           graph={roadmap.graph}
           mode="view"
@@ -46,12 +59,15 @@ export function TopicView({ roadmap, written }: Props) {
         />
       </div>
 
-      <section className="mt-8">
-        <h2 className="lesson-h2">Modules</h2>
-        <div className="panel mt-3">
+      <Card className="mt-8">
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg">Modules</CardTitle>
+          <CardDescription>In learning order. Open one to write or read its lesson.</CardDescription>
+        </CardHeader>
+        <CardContent className="px-0 [&:last-child]:-mb-(--card-spacing)">
           <ModuleList roadmapId={roadmap.id} graph={roadmap.graph} written={written} />
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </main>
   );
 }

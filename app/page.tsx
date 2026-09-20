@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mascot } from "@/components/Mascot";
 import RoadmapPreview from "@/components/landing/RoadmapPreview";
 import { ctaTarget, type LandingState } from "@/components/landing/cta-target";
@@ -34,67 +37,70 @@ export default async function Home() {
   const cta = ctaTarget(await loadState());
 
   return (
-    <div className="wb flex min-h-screen flex-col">
+    <div className="flex flex-1 flex-col bg-background text-foreground">
       <main className="flex-1">
         <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-5 pb-14 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:pb-24 lg:pt-14">
           <div>
-            <h1 className="wb-serif text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
               Know what to learn, in what order, and for how long.
             </h1>
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-(--wb-muted)">
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
               Most self-learners stall because nobody hands them a plan. Tell us your goal and get a personalized,
               editable roadmap in under 3 minutes.
             </p>
             <div className="mt-8 flex flex-col items-start gap-3">
-              <Link
-                href={cta.href}
-                className="inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-(--wb-primary) px-7 text-lg text-(--wb-card) shadow-[0_6px_24px_rgb(59_42_31/0.18)] transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-(--wb-primary) sm:w-auto"
-              >
-                {cta.label}
-                <svg aria-hidden="true" viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 10h11M11 5l5 5-5 5" />
-                </svg>
-              </Link>
-              <p className="text-sm text-(--wb-muted)">No sign-up needed.</p>
+              <Button asChild size="xl" className="h-12 w-full px-8 text-base sm:w-auto">
+                <Link href={cta.href}>
+                  {cta.label}
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              </Button>
+              <p className="text-sm text-muted-foreground">No sign-up needed.</p>
             </div>
           </div>
 
-          <div className="relative rounded-3xl border border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-6">
+          <Card className="relative bg-panel">
             <div className="absolute -left-4 -top-12 hidden items-end gap-1 sm:flex">
               <Mascot size={72} />
-              <span className="relative mb-6 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
+              <span className="relative mb-6 rounded-2xl bg-primary px-4 py-2.5 text-[15px] text-primary-foreground shadow-lg">
                 What should we dig into today?
-                <span className="absolute -left-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
+                <span className="absolute -left-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-primary" />
               </span>
             </div>
-            <RoadmapPreview className="mx-auto h-auto w-full max-w-105" />
-            <p className="mt-2 text-center text-xs text-(--wb-muted)">
-              Example roadmap for &ldquo;Learn machine learning&rdquo;
-            </p>
-          </div>
+            <CardContent className="pt-2">
+              <RoadmapPreview className="mx-auto h-auto w-full max-w-105" />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Example roadmap for &ldquo;Learn machine learning&rdquo;
+              </p>
+            </CardContent>
+          </Card>
         </section>
 
-        <section aria-labelledby="problems" className="border-y border-(--wb-line) bg-(--wb-butter)/40">
+        <section aria-labelledby="problems" className="border-t bg-panel">
           <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 lg:py-20">
-            <h2 id="problems" className="wb-serif text-2xl font-medium tracking-tight sm:text-3xl">
+            <h2 id="problems" className="text-2xl font-semibold tracking-tight sm:text-3xl">
               The three questions that stop self-learners
             </h2>
             <ul className="mt-8 grid gap-4 md:grid-cols-3">
               {PROBLEMS.map((item) => (
-                <li key={item.q} className="rounded-3xl border border-(--wb-line) bg-(--wb-card) p-6">
-                  <h3 className="wb-serif text-xl">{item.q}</h3>
-                  <p className="mt-2 leading-relaxed text-(--wb-muted)">{item.a}</p>
+                <li key={item.q}>
+                  <Card className="h-full">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{item.q}</CardTitle>
+                      <CardDescription className="text-base leading-relaxed">{item.a}</CardDescription>
+                    </CardHeader>
+                  </Card>
                 </li>
               ))}
             </ul>
-            <p className="mt-6 max-w-2xl text-(--wb-muted)">
+            <p className="mt-6 max-w-2xl text-muted-foreground">
               Coming next: explaining topics back to an AI tutor and spaced review, to check that it actually stuck.
             </p>
           </div>
         </section>
 
         <section aria-labelledby="how" className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 lg:py-20">
-          <h2 id="how" className="wb-serif text-2xl font-medium tracking-tight sm:text-3xl">
+          <h2 id="how" className="text-2xl font-semibold tracking-tight sm:text-3xl">
             How it works
           </h2>
           <ol className="mt-8 grid gap-6 md:grid-cols-3">
@@ -102,13 +108,13 @@ export default async function Home() {
               <li key={step.title} className="flex gap-4">
                 <span
                   aria-hidden="true"
-                  className="flex size-10 flex-none items-center justify-center rounded-full bg-(--wb-butter) font-medium text-(--wb-butter-ink)"
+                  className="flex size-9 flex-none items-center justify-center rounded-full bg-brand-soft font-semibold text-primary"
                 >
                   {i + 1}
                 </span>
                 <div>
-                  <h3 className="text-lg font-medium">{step.title}</h3>
-                  <p className="mt-1 leading-relaxed text-(--wb-muted)">{step.body}</p>
+                  <h3 className="text-lg font-semibold">{step.title}</h3>
+                  <p className="mt-1 leading-relaxed text-muted-foreground">{step.body}</p>
                 </div>
               </li>
             ))}
@@ -116,7 +122,7 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-(--wb-line) px-5 py-6 text-center text-sm text-(--wb-muted) sm:px-8">
+      <footer className="border-t px-5 py-6 text-center text-sm text-muted-foreground sm:px-8">
         Built at HackMIT 2026
       </footer>
     </div>

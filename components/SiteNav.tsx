@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { ProfileMenu } from "./ProfileMenu";
 
 const LINKS = [
@@ -10,33 +13,40 @@ const LINKS = [
   { href: "/topics", label: "Topics", match: (path: string) => path.startsWith("/topics") },
 ];
 
-const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--wb-primary)";
-
 function Nav({ pathname }: { pathname: string | null }) {
   return (
-    <header className="wb sticky top-0 z-50 border-b border-(--wb-line) bg-(--wb-bg)/90 backdrop-blur">
-      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-3 sm:px-8">
-        <Link href="/" className={`wb-serif text-2xl font-medium tracking-tight ${focus}`}>
+    <header className="sticky top-0 z-50 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+      <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-2.5 sm:px-8">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 rounded-md text-base font-semibold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="inline-flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Sparkles className="size-4" aria-hidden="true" />
+          </span>
           Cognito
         </Link>
-        <ul className="flex items-center gap-1 sm:gap-2">
+        <ul className="flex items-center gap-1">
           {LINKS.map((link) => {
             const active = pathname !== null && link.match(pathname);
             return (
               <li key={link.href}>
-                <Link
-                  href={link.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`inline-flex min-h-10 items-center rounded-xl px-3 text-sm sm:px-4 ${focus} ${
-                    active ? "bg-(--wb-primary) text-(--wb-card)" : "text-(--wb-muted) hover:bg-(--wb-hover) hover:text-(--wb-ink)"
-                  }`}
+                <Button
+                  asChild
+                  variant="ghost"
+                  className={cn(
+                    "text-muted-foreground",
+                    active && "bg-brand-soft text-primary hover:bg-brand-soft hover:text-primary",
+                  )}
                 >
-                  {link.label}
-                </Link>
+                  <Link href={link.href} aria-current={active ? "page" : undefined}>
+                    {link.label}
+                  </Link>
+                </Button>
               </li>
             );
           })}
-          <li>
+          <li className="ml-1">
             <ProfileMenu active={pathname?.startsWith("/settings") ?? false} />
           </li>
         </ul>

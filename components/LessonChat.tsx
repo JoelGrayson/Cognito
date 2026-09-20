@@ -4,6 +4,10 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ensureOk, readNdjson } from "@/lib/ndjson";
 import type { ProviderId } from "@/lib/providers/types";
 import type { ChatMessage, Lesson } from "@/lib/schema";
+import { ArrowUp, Loader2, MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { RichText } from "./RichText";
 
 interface Props {
@@ -93,23 +97,29 @@ export function LessonChat({ topic, lesson, providerId, onLessonChange }: Props)
   }
 
   return (
-    <div className="chat-panel">
-      <div ref={listRef} className="chat-messages">
+    <Card size="sm" className="flex h-[min(720px,calc(100vh-140px))] min-h-[380px] flex-col gap-0 py-0">
+      <CardHeader className="border-b py-3">
+        <CardTitle className="flex items-center gap-2">
+          <MessageCircle className="size-4 text-primary" aria-hidden="true" />
+          Tutor
+        </CardTitle>
+      </CardHeader>
+      <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-4">
         {messages.length === 0 && (
-          <div className="chat-empty">
+          <div className="my-auto text-sm text-muted-foreground">
             <p>Ask anything about this lesson, or tell me to change it.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" className="chat-chip" onClick={() => setInput(s)}>
+                <Button key={s} type="button" variant="outline" size="sm" className="rounded-full font-normal" onClick={() => setInput(s)}>
                   {s}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
         )}
         {messages.map((m, i) =>
           m.note ? (
-            <p key={i} className="chat-note">
+            <p key={i} className="self-center text-xs text-muted-foreground">
               {m.content}
             </p>
           ) : m.streaming && !m.content ? (
@@ -125,11 +135,11 @@ export function LessonChat({ topic, lesson, providerId, onLessonChange }: Props)
             </div>
           ),
         )}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
-      <form onSubmit={send} className="chat-form">
-        <input
-          className="pill chat-input"
+      <form onSubmit={send} className="flex items-center gap-2 border-t p-3">
+        <Input
+          className="h-10 flex-1 rounded-full px-4"
           placeholder="Questions?"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -137,17 +147,10 @@ export function LessonChat({ topic, lesson, providerId, onLessonChange }: Props)
           autoComplete="off"
           aria-label="Ask the tutor"
         />
-        <button type="submit" className="chat-send" disabled={sending || !input.trim()} aria-label="Send">
-          {sending ? (
-            <span className="spinner" />
-          ) : (
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 19V5" />
-              <path d="M5 12l7-7 7 7" />
-            </svg>
-          )}
-        </button>
+        <Button type="submit" size="icon-lg" className="rounded-full" disabled={sending || !input.trim()} aria-label="Send">
+          {sending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
+        </Button>
       </form>
-    </div>
+    </Card>
   );
 }

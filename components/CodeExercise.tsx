@@ -6,6 +6,13 @@ import { ensureOk } from "@/lib/ndjson";
 import type { ProviderId } from "@/lib/providers/types";
 import { preloadPython, RUNNABLE, runJavaScript, runPython, type RunResult, type TestCase } from "@/lib/runner";
 import type { CodeReview, Exercise, Lesson } from "@/lib/schema";
+import { cn } from "@/lib/utils";
+import { AlertCircle, Check, Code2, Eye, EyeOff, Loader2, Play, RotateCcw, X } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RichText } from "./RichText";
 
 // Load Monaco from the CDN at the same version as the installed types.
@@ -212,16 +219,25 @@ export function CodeExercise({ topic, lesson, providerId }: Props) {
 
   if (state === "idle" || state === "error") {
     return (
-      <section className="code-card mt-10">
-        <div>
-          <h2 className="lesson-h2">Practice in code</h2>
-          <p className="mt-1 text-sm text-neutral-500">A short exercise on this lesson, with tests you can run in the browser.</p>
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        </div>
-        <button type="button" className="code-btn code-btn-primary" onClick={() => void start()}>
-          {state === "error" ? "Try again" : "Start coding exercise"}
-        </button>
-      </section>
+      <Card className="mt-10">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Code2 className="size-4 text-primary" aria-hidden="true" />
+            Practice in code
+          </CardTitle>
+          <CardDescription>A short exercise on this lesson, with tests you can run in the browser.</CardDescription>
+          <CardAction>
+            <Button type="button" onClick={() => void start()}>
+              {state === "error" ? "Try again" : "Start coding exercise"}
+            </Button>
+          </CardAction>
+        </CardHeader>
+        {error && (
+          <CardContent>
+            <p className="text-sm text-destructive">{error}</p>
+          </CardContent>
+        )}
+      </Card>
     );
   }
 
@@ -229,23 +245,24 @@ export function CodeExercise({ topic, lesson, providerId }: Props) {
     return (
       <section className="mt-10" aria-busy="true">
         <h2 className="lesson-h2">Practice in code</h2>
-        <div className="mt-3 space-y-2">
-          <div className="skeleton-line w-2/3" />
-          <div className="skeleton-line w-1/2" />
-          <div className="skeleton code-skeleton" />
+        <div className="mt-3 space-y-2.5">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-56 w-full rounded-xl" />
         </div>
       </section>
     );
   }
 
   const passed = run?.results.filter((r) => r.pass).length ?? 0;
+  const allPassed = run ? run.results.length > 0 && passed === run.results.length : false;
   return (
     <section className="mt-10">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="lesson-h2">Practice: {exercise.title}</h2>
-        <span className="code-lang">{LABEL[exercise.language] ?? exercise.language}</span>
+        <Badge variant="outline" className="font-mono">{LABEL[exercise.language] ?? exercise.language}</Badge>
       </div>
-      <RichText text={exercise.task} className="mt-3 text-[16px] leading-relaxed text-neutral-800" />
+      <RichText text={exercise.task} className="mt-3 text-[16px] leading-relaxed text-foreground/90" />
 
       <div className="code-editor mt-4">
         <Editor
@@ -269,20 +286,24 @@ export function CodeExercise({ topic, lesson, providerId }: Props) {
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {runnable && (
-          <button type="button" className="code-btn code-btn-primary" onClick={() => void onRun()} disabled={running}>
-            {running ? "Running…" : "Run tests"} <kbd>⌘↵</kbd>
-          </button>
+          <Button type="button" onClick={() => void onRun()} disabled={running}>
+            {running ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Play aria-hidden="true" />}
+            {running ? "Running…" : "Run tests"}
+            <kbd className="ml-1 rounded bg-primary-foreground/20 px-1 font-sans text-[11px]">⌘↵</kbd>
+          </Button>
         )}
-        <button type="button" className="code-btn" onClick={() => void onReview()} disabled={reviewing}>
+        <Button type="button" variant="outline" onClick={() => void onReview()} disabled={reviewing}>
           {reviewing ? "Checking…" : "Check with tutor"}
-        </button>
-        <button type="button" className="code-btn" onClick={() => setCode(exercise.starterCode)}>
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setCode(exercise.starterCode)}>
+          <RotateCcw aria-hidden="true" />
           Reset
-        </button>
-        <button type="button" className="code-btn" onClick={() => setShowSolution(!showSolution)}>
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setShowSolution(!showSolution)}>
+          {showSolution ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
           {showSolution ? "Hide solution" : "Show solution"}
-        </button>
-        <span className="text-xs text-neutral-400">
+        </Button>
+        <span className="text-xs text-muted-foreground">
           {exercise.language === "python" && !pyReady
             ? "Loading Python in your browser (first time takes a few seconds)…"
             : !runnable
@@ -296,38 +317,55 @@ export function CodeExercise({ topic, lesson, providerId }: Props) {
       </div>
 
       {run && (
-        <div className="code-results mt-4">
-          <p className="text-sm font-medium" data-ok={run.results.length > 0 && passed === run.results.length ? "true" : undefined}>
-            {run.error ? "Error" : `${passed} of ${run.results.length} tests passed`}
-            <span className="ml-2 font-normal text-neutral-400">{run.ms} ms</span>
-          </p>
-          {run.results.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm">
-              {run.results.map((r) => (
-                <li key={r.name} data-pass={r.pass ? "true" : "false"} className="code-test">
-                  <span aria-hidden="true">{r.pass ? "✓" : "✗"}</span> {r.name}
-                  {r.error && <span className="text-neutral-500"> ({r.error})</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {(run.output.length > 0 || run.error) && (
-            <pre className="code-console mt-3">
-              {run.output.join("\n")}
-              {run.error && <span className="text-red-300">{`${run.output.length ? "\n" : ""}${run.error}`}</span>}
-            </pre>
-          )}
-        </div>
+        <Card size="sm" className={cn("mt-4", allPassed && "bg-emerald-50 ring-emerald-600/30")}>
+          <CardContent>
+            <p className={cn("text-sm font-medium", allPassed && "text-emerald-800")}>
+              {run.error ? "Error" : `${passed} of ${run.results.length} tests passed`}
+              <span className="ml-2 font-normal text-muted-foreground">{run.ms} ms</span>
+            </p>
+            {run.results.length > 0 && (
+              <ul className="mt-2 space-y-1 text-sm">
+                {run.results.map((r) => (
+                  <li key={r.name} className={cn("flex items-start gap-2", r.pass ? "text-emerald-700" : "text-destructive")}>
+                    {r.pass ? <Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> : <X className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
+                    <span>
+                      {r.name}
+                      {r.error && <span className="text-muted-foreground"> ({r.error})</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {(run.output.length > 0 || run.error) && (
+              <pre className="code-console mt-3">
+                {run.output.join("\n")}
+                {run.error && <span className="text-red-300">{`${run.output.length ? "\n" : ""}${run.error}`}</span>}
+              </pre>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {review && (
-        <div className="code-review mt-4" data-verdict={review.verdict}>
-          <p className="text-sm font-semibold">
-            {review.verdict === "correct" ? "Correct" : review.verdict === "almost" ? "Almost there" : "Not yet"}
-          </p>
-          <RichText text={review.feedback} className="mt-1.5 text-[15px] leading-relaxed" />
-          {review.hint && <p className="mt-2 text-[15px]"><span className="font-medium">Hint:</span> {review.hint}</p>}
-        </div>
+        <Alert
+          className={cn(
+            "mt-4",
+            review.verdict === "correct" && "border-emerald-600/40 bg-emerald-50 text-emerald-900",
+            review.verdict === "almost" && "border-amber-500/40 bg-amber-50 text-amber-900",
+            review.verdict !== "correct" && review.verdict !== "almost" && "border-destructive/30 bg-destructive/5",
+          )}
+        >
+          {review.verdict === "correct" ? <Check /> : review.verdict === "almost" ? <AlertCircle /> : <X />}
+          <AlertTitle>{review.verdict === "correct" ? "Correct" : review.verdict === "almost" ? "Almost there" : "Not yet"}</AlertTitle>
+          <AlertDescription className="text-current/85">
+            <RichText text={review.feedback} className="text-[15px] leading-relaxed" />
+            {review.hint && (
+              <p className="mt-2 text-[15px]">
+                <span className="font-medium">Hint:</span> {review.hint}
+              </p>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
 
       {showSolution && (

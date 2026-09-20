@@ -8,6 +8,8 @@ import { trpc } from "@/lib/trpc";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
 import type { LearnerProfile } from "@/types/learning";
 import { ProviderSelect } from "@/components/ProviderSelect";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Choice, ChoiceGroup, FieldLabel, inputClass, StepShell } from "./ui";
 import { PastRoadmaps } from "./PastRoadmaps";
 
@@ -52,7 +54,7 @@ export function Step1Goal() {
       onSubmit={() => advance()}
     >
       <FieldLabel htmlFor="goal">Your goal</FieldLabel>
-      <input
+      <Input
         id="goal"
         name="goal"
         type="text"
@@ -71,7 +73,7 @@ export function Step1Goal() {
           value={provider as ProviderId}
           onChange={(id) => setProfile({ provider: id })}
         />
-        <p id="goal-count" className="text-xs text-[#8a8a8a]">
+        <p id="goal-count" className="text-xs text-muted-foreground">
           {goal.trim().length}/{GOAL_MAX}
         </p>
       </div>
@@ -80,7 +82,7 @@ export function Step1Goal() {
         <>
           <div className="mt-4">
             <FieldLabel htmlFor="constraints">Anything else we should know? (optional)</FieldLabel>
-            <input
+            <Input
               id="constraints"
               name="constraints"
               type="text"
@@ -93,7 +95,7 @@ export function Step1Goal() {
             />
           </div>
 
-          <p className="mt-6 mb-2 text-sm font-medium text-[#444]">Why this goal? (optional)</p>
+          <p className="mt-6 mb-2 text-sm font-medium text-foreground/80">Why this goal? (optional)</p>
           <ChoiceGroup label="Why are you learning this?" className="flex flex-wrap gap-2">
             {REASONS.map((reason) => (
               <Choice
@@ -112,7 +114,7 @@ export function Step1Goal() {
           <div className="mt-6">
             <FieldLabel htmlFor="deadline">Goal completion date (optional)</FieldLabel>
             <div className="flex items-center gap-2">
-              <input
+              <Input
                 id="deadline"
                 name="deadline"
                 type="date"
@@ -122,13 +124,9 @@ export function Step1Goal() {
                 className={`${inputClass} max-w-64`}
               />
               {profile.deadline && (
-                <button
-                  type="button"
-                  onClick={() => setProfile({ deadline: undefined })}
-                  className="min-h-10 rounded-full px-3 text-sm text-[#555] hover:bg-[#f0f0ee] focus-visible:outline-2 focus-visible:outline-[color:var(--accent)]"
-                >
+                <Button type="button" variant="ghost" onClick={() => setProfile({ deadline: undefined })}>
                   Clear
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -139,17 +137,18 @@ export function Step1Goal() {
 
       {!typing && (
         <>
-          <p className="mt-4 mb-2 text-sm font-medium text-[#444]">Need ideas?</p>
+          <p className="mt-4 mb-2 text-sm font-medium text-foreground/80">Need ideas?</p>
           <div className="flex flex-wrap gap-2">
             {EXAMPLES.map((example) => (
-              <button
+              <Button
                 key={example}
                 type="button"
+                variant="outline"
+                className="h-10 rounded-full font-normal"
                 onClick={() => setProfile({ goal: example })}
-                className="min-h-10 rounded-full border border-[#d5d5d1] bg-white px-4 text-sm text-[#333] hover:border-[#b9b9b4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
               >
                 {example}
-              </button>
+              </Button>
             ))}
           </div>
         </>

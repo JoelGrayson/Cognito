@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface ChatGPTUser {
   accountId: string;
@@ -178,74 +181,87 @@ export function ChatGPTConnect({ onConnected, onDisconnected }: Props) {
   if (status?.linked && status.user) {
     const identity = status.user.email ?? status.user.name ?? "account";
     return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700">
-        <span>ChatGPT · {identity}{status.user.plan ? ` · ${status.user.plan}` : ""}</span>
-        <button type="button" className="text-neutral-500 underline underline-offset-2 hover:text-neutral-900" onClick={() => void disconnect()}>
+      <div className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
+        <span className="truncate text-muted-foreground">
+          ChatGPT · {identity}{status.user.plan ? ` · ${status.user.plan}` : ""}
+        </span>
+        <Button type="button" variant="link" size="xs" className="shrink-0 px-0 text-muted-foreground" onClick={() => void disconnect()}>
           Disconnect
-        </button>
-      </span>
+        </Button>
+      </div>
     );
   }
 
   return (
-    <>
-      <button
-        type="button"
-        className="rounded-full bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-200"
-        onClick={() => { setOpen(true); setError(null); }}
-      >
-        Sign in with ChatGPT
-      </button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            {step === "consent" ? (
-              <>
-                <h2 className="text-lg font-medium">Sign in with ChatGPT</h2>
-                <p className="mt-3 text-sm leading-6 text-neutral-600">
-                  You&apos;ll sign in with your own ChatGPT account. Lessons you generate with the ChatGPT model use your ChatGPT plan, not ours. We store an encrypted token so you don&apos;t have to sign in every time; disconnect any time.
-                </p>
-                <div className="mt-6 flex justify-end gap-3 text-sm">
-                  <button type="button" className="rounded-full px-3 py-1.5 text-neutral-600 hover:bg-neutral-100" onClick={close}>Cancel</button>
-                  <button type="button" className="rounded-full bg-neutral-900 px-4 py-1.5 text-white hover:bg-neutral-700" onClick={() => void start()}>Continue</button>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          setOpen(true);
+          setError(null);
+        } else {
+          close();
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" className="w-full">
+          Sign in with ChatGPT
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        {step === "consent" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Sign in with ChatGPT</DialogTitle>
+              <DialogDescription className="leading-6">
+                You&apos;ll sign in with your own ChatGPT account. Lessons you generate with the ChatGPT model use your ChatGPT plan, not ours. We store an encrypted token so you don&apos;t have to sign in every time; disconnect any time.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={close}>Cancel</Button>
+              <Button type="button" onClick={() => void start()}>Continue</Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Finish signing in with ChatGPT</DialogTitle>
+              <DialogDescription>
+                {phase === "starting" ? "Preparing your sign-in code…" : "Enter this code in ChatGPT to link your account."}
+              </DialogDescription>
+            </DialogHeader>
+            {device && phase !== "expired" && phase !== "error" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-xl border border-border bg-muted px-4 py-3">
+                  <strong className="font-mono text-2xl tracking-widest">{device.userCode}</strong>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void navigator.clipboard?.writeText(device.userCode)}>
+                    Copy
+                  </Button>
                 </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-lg font-medium">Finish signing in with ChatGPT</h2>
-                {phase === "starting" && <p className="mt-4 text-sm text-neutral-600">Preparing your sign-in code…</p>}
-                {device && phase !== "expired" && phase !== "error" && (
-                  <>
-                    <p className="mt-4 text-sm text-neutral-600">Enter this code in ChatGPT:</p>
-                    <div className="mt-2 flex items-center justify-between rounded-xl bg-neutral-100 px-4 py-3">
-                      <strong className="font-mono text-2xl tracking-widest">{device.userCode}</strong>
-                      <button type="button" className="text-sm underline underline-offset-2" onClick={() => void navigator.clipboard?.writeText(device.userCode)}>Copy</button>
-                    </div>
-                    <a className="mt-4 inline-block text-sm text-neutral-700 underline underline-offset-2" href={device.verificationUrl} target="_blank" rel="noopener">Open ChatGPT</a>
-                    {phase === "polling" && <p className="mt-4 text-sm text-neutral-500">Waiting for authorization…</p>}
-                  </>
-                )}
-                {phase === "expired" && (
-                  <div className="mt-4">
-                    <p className="text-sm text-red-600">Code expired</p>
-                    <button type="button" className="mt-3 text-sm underline underline-offset-2" onClick={() => void start()}>Try again</button>
-                  </div>
-                )}
-                {phase === "error" && (
-                  <div className="mt-4">
-                    <p className="text-sm text-red-600">{error}</p>
-                    <button type="button" className="mt-3 text-sm underline underline-offset-2" onClick={() => void start()}>Try again</button>
-                  </div>
-                )}
-                {error && phase !== "error" && <p className={retrying ? "mt-4 text-sm text-neutral-500" : "mt-4 text-sm text-red-600"}>{error}{retrying ? " Retrying…" : ""}</p>}
-                <div className="mt-6 flex justify-end">
-                  <button type="button" className="rounded-full px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100" onClick={close}>Cancel</button>
-                </div>
-              </>
+                <Button asChild variant="secondary" className="w-full">
+                  <a href={device.verificationUrl} target="_blank" rel="noopener">Open ChatGPT</a>
+                </Button>
+                {phase === "polling" && <p className="text-sm text-muted-foreground">Waiting for authorization…</p>}
+              </div>
             )}
-          </div>
-        </div>
-      )}
-    </>
+            {(phase === "expired" || phase === "error") && (
+              <Alert variant="destructive">
+                <AlertTitle>{phase === "expired" ? "Code expired" : error}</AlertTitle>
+                <AlertAction>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void start()}>Try again</Button>
+                </AlertAction>
+              </Alert>
+            )}
+            {error && phase !== "error" && (
+              <p className={retrying ? "text-sm text-muted-foreground" : "text-sm text-destructive"}>{error}{retrying ? " Retrying…" : ""}</p>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={close}>Cancel</Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
