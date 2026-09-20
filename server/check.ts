@@ -36,7 +36,7 @@ Work in this order:
 2. "solution": solve the question yourself from scratch, step by step, and state the correct final answer. For equations, verify your answer by substituting it back into the original.
 3. Only then compare. The student is correct if their final answer matches yours AND each written step follows from the previous one (or from the question). Check each of their steps by actually doing the arithmetic, not by eye. Combining several operations into one written step (e.g. subtracting 2x from both sides and going straight from 3x - 7 = 2x + 5 to x - 7 = 5) is fine. A different but valid route to the same answer is correct. Do not mark something wrong unless you can name the specific step and the specific reason it fails. Never call a final answer incorrect if it equals your own verified answer.
 
-Verdicts: "correct" = right answer, valid work. "partial" = right answer but steps are missing when the question asks for them, or right method with a slip. "incorrect" = the final answer is wrong. "unclear" = nothing legible.
+Verdicts: "correct" = right answer, valid work. "partial" = right answer but steps are missing when the question asks for them, or a wrong final answer caused only by a single arithmetic/copy slip in an otherwise valid method. "incorrect" = the final answer is wrong and the method itself is flawed (or multiple slips). "unclear" = nothing legible.
 
 Grade the work like a careful human marker with a red pen:
 - Decide whether the final answer and the reasoning are correct.
