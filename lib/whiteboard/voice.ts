@@ -93,6 +93,10 @@ export interface PushToTalk {
   dispose(): void;
 }
 
+/** Chrome and Firefox record WebM; Safari only records MP4. Asking a browser for a
+ *  container it cannot write throws, which used to surface as a microphone error. */
+const RECORDING_TYPES = ["audio/webm", "audio/mp4"];
+
 export function createPushToTalk(): PushToTalk {
   let stream: MediaStream | null = null;
   let recorder: MediaRecorder | null = null;
@@ -128,7 +132,8 @@ export function createPushToTalk(): PushToTalk {
       }
       stream = acquired;
       chunks = [];
-      recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const mimeType = RECORDING_TYPES.find((t) => MediaRecorder.isTypeSupported(t));
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
       };
@@ -147,17 +152,23 @@ export function createPushToTalk(): PushToTalk {
       recording = false;
       await done;
 
-      const blob = new Blob(chunks, { type: "audio/webm" });
+      // "audio/webm;codecs=opus" -> "audio/webm": the route allow-lists bare types.
+      const type = recorder.mimeType.split(";")[0] || "audio/webm";
+      const blob = new Blob(chunks, { type });
       // A clip this short is a mis-tap, not speech.
       if (blob.size < 2000) return { transcript: "", ms: 0 };
 
       const res = await fetch("/api/voice/transcribe", {
         method: "POST",
-        headers: { "Content-Type": "audio/webm" },
+        headers: { "Content-Type": type },
         body: blob,
       });
       if (!res.ok) return { transcript: "", ms: 0 };
       const data = await res.json();
+      // Scribe occasionally hallucinates a caption ("[Outro-Musik]") for clear speech,
+      // at about 0.3 confidence against 0.99 for a real reading. Treat that as not
+      // heard, so the learner is asked to repeat rather than answered about nonsense.
+      if (typeof data.confidence === "number" && data.confidence < 0.5) return { transcript: "", ms: data.ms ?? 0 };
       return { transcript: (data.transcript ?? "").trim(), ms: data.ms ?? 0 };
     },
 

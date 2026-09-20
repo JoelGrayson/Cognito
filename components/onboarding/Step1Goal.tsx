@@ -11,9 +11,21 @@ import { ProviderSelect } from "@/components/ProviderSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Choice, ChoiceGroup, FieldLabel, inputClass, StepShell } from "./ui";
+import { SubjectIcon, type SubjectIconName } from "@/components/SubjectIcon";
 import { PastRoadmaps } from "./PastRoadmaps";
 
-const EXAMPLES = ["Linear algebra for machine learning", "Conversational Spanish", "Personal finance basics", "Rust for backend work"];
+/** Each tile fills the goal with a specific, editable example rather than a bare subject name. */
+const IDEAS: { label: string; goal: string; icon: SubjectIconName }[] = [
+  { label: "Math", goal: "Linear algebra for machine learning", icon: "math" },
+  { label: "Chemistry", goal: "Organic chemistry reaction mechanisms", icon: "chemistry" },
+  { label: "Physics", goal: "Classical mechanics from the ground up", icon: "physics" },
+  { label: "Coding", goal: "Rust for backend work", icon: "code" },
+  { label: "AI", goal: "How large language models work", icon: "ai" },
+  { label: "Languages", goal: "Conversational Spanish", icon: "language" },
+  { label: "Money", goal: "Personal finance basics", icon: "money" },
+  { label: "History", goal: "World history since 1900", icon: "history" },
+  { label: "Writing", goal: "Writing clear technical essays", icon: "writing" },
+];
 
 const REASONS: { value: NonNullable<LearnerProfile["goalType"]>; label: string }[] = [
   { value: "career", label: "Career" },
@@ -137,17 +149,18 @@ export function Step1Goal() {
 
       {!typing && (
         <>
-          <p className="mt-4 mb-2 text-sm font-medium text-foreground/80">Need ideas?</p>
-          <div className="flex flex-wrap gap-2">
-            {EXAMPLES.map((example) => (
+          <p className="mt-6 mb-2 text-sm font-medium text-foreground/80">Or pick something to start from</p>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {IDEAS.map((idea) => (
               <Button
-                key={example}
+                key={idea.label}
                 type="button"
                 variant="outline"
-                className="h-10 rounded-full font-normal"
-                onClick={() => setProfile({ goal: example })}
+                className="h-auto min-h-16 justify-start gap-3 rounded-2xl p-2.5 text-left text-[15px] leading-tight font-normal whitespace-normal"
+                onClick={() => setProfile({ goal: idea.goal })}
               >
-                {example}
+                <SubjectIcon name={idea.icon} size={40} />
+                {idea.label}
               </Button>
             ))}
           </div>

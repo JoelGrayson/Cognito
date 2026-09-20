@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Mascot } from "./Mascot";
 import { ProfileMenu } from "./ProfileMenu";
 
 const LINKS = [
-  { href: "/", label: "Home", match: (path: string) => path === "/" },
-  { href: "/onboarding?new=1", label: "New learning plan", match: (path: string) => path.startsWith("/onboarding") },
-  { href: "/topics", label: "Topics", match: (path: string) => path.startsWith("/topics") },
+  { href: "/", label: "Home", short: "Home", match: (path: string) => path === "/" },
+  { href: "/onboarding?new=1", label: "New learning plan", short: "New plan", match: (path: string) => path.startsWith("/onboarding") },
+  { href: "/topics", label: "Topics", short: "Topics", match: (path: string) => path.startsWith("/topics") },
 ];
 
 function Nav({ pathname }: { pathname: string | null }) {
@@ -19,11 +19,9 @@ function Nav({ pathname }: { pathname: string | null }) {
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-2.5 sm:px-8">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 rounded-md text-base font-semibold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="wb-serif inline-flex items-center gap-2 rounded-md text-xl font-medium tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-2xl"
         >
-          <span className="inline-flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Sparkles className="size-4" aria-hidden="true" />
-          </span>
+          <Mascot size={30} />
           Cognito
         </Link>
         <ul className="flex items-center gap-1">
@@ -35,12 +33,13 @@ function Nav({ pathname }: { pathname: string | null }) {
                   asChild
                   variant="ghost"
                   className={cn(
-                    "text-muted-foreground",
-                    active && "bg-brand-soft text-primary hover:bg-brand-soft hover:text-primary",
+                    "px-2.5 text-muted-foreground sm:px-4",
+                    active && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
                   )}
                 >
                   <Link href={link.href} aria-current={active ? "page" : undefined}>
-                    {link.label}
+                    <span className="sm:hidden">{link.short}</span>
+                    <span className="hidden sm:inline">{link.label}</span>
                   </Link>
                 </Button>
               </li>
