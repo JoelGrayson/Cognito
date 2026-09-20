@@ -41,10 +41,10 @@ const LABEL: Record<string, string> = {
 
 /** Fence tags that mean a code block holds a program rather than a formula or shell transcript of prose. */
 const CODE_FENCE =
-  /```[ \t]*(python|py|javascript|js|jsx|typescript|ts|tsx|rust|rs|go|golang|java|c|cpp|c\+\+|csharp|cs|c#|sql|shell|sh|bash|zsh|ruby|rb|kotlin|kt|swift|php|node)\b/i;
+  /```[ \t]*(python|py|javascript|js|jsx|typescript|ts|tsx|rust|rs|go|golang|java|c|cpp|c\+\+|csharp|cs|c#|sql|shell|sh|bash|zsh|ruby|rb|kotlin|kt|swift|php|node)(?!\w)/i;
 /** Words that mean the roadmap itself is about programming. */
 const PROGRAMMING_TERMS =
-  /\b(programming|coding|code|software|developer|python|javascript|typescript|react|node(\.js)?|rust|golang|java|kotlin|swift|c\+\+|c#|sql|database|algorithms?|data structures?|api|backend|frontend|web dev(elopment)?|machine learning|pandas|numpy|git|linux|shell scripting|compiler|functional programming|object[- ]oriented)\b/i;
+  /\b(programming|coding|software|developer|python|javascript|typescript|react|node(\.js)?|rust|golang|java|kotlin|swift|c\+\+|c#|sql|database|algorithms?|data structures?|api|backend|frontend|web dev(elopment)?|machine learning|pandas|numpy|git|linux|shell scripting|compiler|functional programming|object[- ]oriented)(?!\w)/i;
 
 /**
  * Only lessons that actually teach programming get a coding exercise. That means a
