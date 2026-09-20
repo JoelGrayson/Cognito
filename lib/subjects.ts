@@ -16,6 +16,8 @@ export interface Subject {
   icon: SubjectIconName;
   /** One line under the name on the home screen. */
   blurb: string;
+  /** What work in this subject looks like, shown on its card: a step, then the next. */
+  sample: [from: string, to: string];
   checker: SubjectChecker | null;
   panels: readonly SubjectPanel[];
 }
@@ -26,6 +28,7 @@ export const SUBJECTS: readonly Subject[] = [
     name: "Math",
     icon: "math",
     blurb: "Work a problem by hand and get each step checked as you write it.",
+    sample: ["2x + 3 = 11", "x = 4"],
     checker: "algebra-steps",
     panels: ["worksheets", "mastery", "graphs"],
   },
@@ -34,6 +37,7 @@ export const SUBJECTS: readonly Subject[] = [
     name: "Chemistry",
     icon: "chemistry",
     blurb: "Upload a worksheet and draw structures and mechanisms on it.",
+    sample: ["CH₃CH₂OH", "CH₂=CH₂ + H₂O"],
     checker: null,
     panels: ["worksheets"],
   },
