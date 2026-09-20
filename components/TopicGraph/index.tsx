@@ -48,6 +48,13 @@ export type TopicGraphProps = {
   /** Called on every node click or Enter, in both modes. */
   onNodeClick?: (node: DraftNode) => void;
   /**
+   * When set, hovering (or keyboard-focusing) a node shows quick actions: mark known,
+   * ignore, delete. The parent applies the matching ops and passes the new graph back.
+   */
+  onNodeAction?: (node: DraftNode, action: NodeAction) => void;
+  /** When set, right-clicking empty canvas opens a small bar to type an extra topic. */
+  onAddTopic?: (title: string) => void;
+  /**
    * Edit mode only. Every change the user makes is emitted here as ops. The component never
    * mutates or stores the graph; the parent applies the ops (applyOps or applyPlanOps, then
    * validateGraph) and passes the new graph back in.
@@ -123,6 +130,8 @@ function AutoFit({
   return null;
 }
 
+export type NodeAction = "known" | "excluded" | "delete";
+
 function enablePointerEvents() {}
 
 export function TopicGraph({
@@ -131,6 +140,8 @@ export function TopicGraph({
   highlightIds = EMPTY_IDS,
   progress = EMPTY_PROGRESS,
   onNodeClick,
+  onNodeAction,
+  onAddTopic,
   onOps,
   graphKind,
   className,
@@ -138,6 +149,7 @@ export function TopicGraph({
 }: TopicGraphProps) {
   const [rootRef, size] = useElementSize();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [composer, setComposer] = useState<{ x: number; y: number } | null>(null);
 
   // A new highlightIds array restarts the pulse. State is adjusted during render (not in an
   // effect) so the first paint already carries the ring.
@@ -213,6 +225,7 @@ export function TopicGraph({
           pulseKey: highlighted.has(node.id) ? pulseKey : null,
           selected: node.id === selectedId && editing,
           onSelect: handleSelect,
+          onAction: onNodeAction,
         },
       };
     };
@@ -224,7 +237,7 @@ export function TopicGraph({
       for (const child of graph.nodes) if (layout.parentOf[child.id] === node.id) result.push(toNode(child));
     }
     return result;
-  }, [graph, layout, progress, highlightIds, pulseKey, selectedId, editing, handleSelect]);
+  }, [graph, layout, progress, highlightIds, pulseKey, selectedId, editing, handleSelect, onNodeAction]);
 
   const edges = useMemo<FlowEdge[]>(() => {
     const byId = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -241,10 +254,10 @@ export function TopicGraph({
           focusable: false,
           selectable: false,
           markerEnd: prerequisite
-            ? { type: MarkerType.ArrowClosed, width: 18, height: 18, color: "#6b6b66" }
+            ? { type: MarkerType.ArrowClosed, width: 18, height: 18, color: "#a3948a" }
             : undefined,
           style: {
-            stroke: prerequisite ? "#6b6b66" : "#9a9a95",
+            stroke: prerequisite ? "#a3948a" : "#c4b5a6",
             strokeWidth: prerequisite ? 2 : 1.5,
             strokeDasharray: prerequisite ? undefined : "6 5",
             opacity: faded ? 0.35 : 1,
@@ -283,7 +296,20 @@ export function TopicGraph({
           fitView={!narrow}
           fitViewOptions={{ padding: 0.06, minZoom: 0.3, maxZoom: 1 }}
           defaultViewport={narrow ? narrowViewport(layout, size.w) : undefined}
-          onPaneClick={() => editing && selectedId && closeInspector()}
+          onPaneClick={() => {
+            setComposer(null);
+            if (editing && selectedId) closeInspector();
+          }}
+          onPaneContextMenu={(event) => {
+            if (!onAddTopic) return;
+            event.preventDefault();
+            const rect = rootRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            setComposer({
+              x: Math.min(Math.max(8, event.clientX - rect.left), Math.max(8, rect.width - 268)),
+              y: Math.min(Math.max(8, event.clientY - rect.top), Math.max(8, rect.height - 84)),
+            });
+          }}
           // React Flow sets pointer-events: none on nodes that are neither selectable, draggable
           // nor clickable; the cards handle clicks themselves, so this only turns them back on.
           onNodeClick={enablePointerEvents}
@@ -292,6 +318,30 @@ export function TopicGraph({
           <Controls showInteractive={false} position="bottom-left" />
           <AutoFit signature={signature} narrow={narrow} layout={layout} containerWidth={size.w} />
         </ReactFlow>
+      )}
+      {composer && onAddTopic && (
+        <form
+          className="tg-composer"
+          style={{ left: composer.x, top: composer.y }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const title = new FormData(event.currentTarget).get("topic");
+            if (typeof title === "string" && title.trim()) onAddTopic(title.trim());
+            setComposer(null);
+          }}
+        >
+          <input
+            name="topic"
+            autoFocus
+            maxLength={80}
+            placeholder="Add a topic…"
+            aria-label="Add a topic"
+            className="tg-field"
+            onKeyDown={(event) => event.key === "Escape" && setComposer(null)}
+            onBlur={() => setComposer(null)}
+          />
+          <span className="tg-composer-hint">Enter to add, Esc to cancel</span>
+        </form>
       )}
       {editing && selectedNode && onOps && (
         <Inspector
