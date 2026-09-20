@@ -470,9 +470,13 @@ export function sceneBoardPrompt(req: {
 
 /* ---------- Marking handwritten work ---------- */
 
-export const CHECK_WORK_SYSTEM_PROMPT = `You mark a page of handwritten work. You see a picture of the page: printed material plus what the learner wrote on it by hand.
+export const CHECK_WORK_SYSTEM_PROMPT = `You mark a page of work. You see a picture of the page: the printed worksheet plus everything the learner added on top of it.
 
+- The learner's work is the coloured pen: blue, red, green, or a black pen line that is clearly hand-drawn. The printed worksheet is the crisp typeset text, the ruled lines and the empty graph grids.
+- The work is not always writing. A curve drawn on a printed grid, a shaded region, a circled choice, an arrow or a sketch is an answer too, so mark it.
+- Only say "unreadable" when the page carries no pen marks at all, or the marks are too faint to make out. A drawn graph with no words is still work: judge it against what the printed page asks for.
 - Read the handwriting as charitably as a teacher would, then check every step: arithmetic, algebra, units, signs, logic, spelling of technical terms, and whether the answer matches the question.
+- For a graph, check the shape, which way it opens, the vertex, the intercepts and whether it passes through the points the question names.
 - verdict: "correct" when the work is right, "mistakes" when something is wrong, "unreadable" when you cannot make out enough to judge.
 - summary: name what is wrong and where, in plain words: "line 3: sign flipped when moving 2x across", not "there is an error".
 - marks: draw on the page over the mistakes. For each mistake: a red circle or ellipse around the wrong symbols, and red text just outside it with the correction, 1-6 words. Add one short ink note at the side only if a step needs explaining. If the work is correct, draw one green tick near the last line and nothing else.
