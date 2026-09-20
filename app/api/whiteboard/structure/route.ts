@@ -8,6 +8,7 @@
  *
  * Same keys as the other Mathpix routes -- MATHPIX_APP_ID / MATHPIX_APP_KEY.
  */
+import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
@@ -28,7 +29,9 @@ async function capture(image: string, reading: object) {
   if (process.env.NODE_ENV === "production") return;
   try {
     await mkdir(FIXTURE_DIR, { recursive: true });
-    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    // The page sends every drawing at once, and two in the same millisecond would share
+    // a file name: the second picture replaces the first while both rows point at it.
+    const ts = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
     await writeFile(join(FIXTURE_DIR, `${ts}.png`), Buffer.from(image.split(",")[1], "base64"));
     await appendFile(join(FIXTURE_DIR, "readings.jsonl"), JSON.stringify({ ts, ...reading }) + "\n", "utf8");
   } catch (err) {

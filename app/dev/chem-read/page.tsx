@@ -201,7 +201,7 @@ export default function ChemReadPage() {
         </label>
         <span className="flex-1" />
         <span className="text-[11px] text-neutral-500">{rdkitReady ? "RDKit ready" : "loading RDKit…"}</span>
-        <button onClick={() => void read()} disabled={busy} className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-neutral-950 disabled:opacity-50">
+        <button onClick={() => void read()} disabled={busy || !rdkitReady} className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-neutral-950 disabled:opacity-50">
           {busy ? "reading…" : "Read structures"}
         </button>
         <button onClick={clear} className="rounded border border-neutral-700 px-3 py-2 text-sm">

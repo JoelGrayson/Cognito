@@ -27,6 +27,7 @@ check("the usual mistake is named", judgeStructure("CCCC(=O)O", KEY.slice(0, 2),
 check("with no question given, a real answer beats a mistake", judgeStructure("CCCC(=O)O", KEY, null), { kind: "correct", problem: 7, name: "butanoic acid" });
 check("on question 5, its own mistake beats question 7's answer", judgeStructure("CCCC(=O)O", KEY, 5), { kind: "known-mistake", problem: 5, name: "butanoic acid (over-oxidised)" });
 check("on question 7 it is simply correct", judgeStructure("CCCC(=O)O", KEY, 7), { kind: "correct", problem: 7, name: "butanoic acid" });
+check("another question's mistake is just wrong here", judgeStructure("CCCC(=O)O", KEY.slice(0, 2), 1), { kind: "no-match", asked: 1 });
 check("matches nothing", judgeStructure("c1ccccc1", KEY, null), { kind: "no-match", asked: null });
 check("matches nothing, question known", judgeStructure("c1ccccc1", KEY, 5), { kind: "no-match", asked: 5 });
 

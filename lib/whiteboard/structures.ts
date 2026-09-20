@@ -59,7 +59,10 @@ export async function readStructures(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: await dataUrlOf(blob), intended: asked === null ? "" : `question ${asked}` }),
       }).catch(() => null);
-      const data = res?.ok ? await res.json().catch(() => null) : null;
+      const data = await res?.json().catch(() => null);
+      // A failed request is not an unreadable drawing. Folding the two together had
+      // the tutor ask for larger lettering when the network was down.
+      if (!res?.ok || !data) throw new Error(data?.error ?? "Couldn't reach the structure reader. Check the connection and try again.");
 
       const drawn = depict(rdkit, data?.smiles ?? null, 200, 130);
       return {

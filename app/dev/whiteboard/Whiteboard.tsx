@@ -316,6 +316,9 @@ function Notebook({
   /** Numbered questions on the sheet, for subjects whose questions are prose. */
   const questionsRef = useRef<ProblemAnchor[]>([]);
   const [structures, setStructures] = useState<StructureReading[]>([]);
+  /** Bumped by reset. A structure check that comes back to a different generation was
+   *  for a board that has since been cleared, and must not draw on the new one. */
+  const structureGenRef = useRef(0);
   const modeRef = useRef<CheckMode>(mode);
   useEffect(() => {
     modeRef.current = mode;
@@ -642,9 +645,11 @@ function Notebook({
 
     setChecking(true);
     setError(null);
+    const gen = ++structureGenRef.current;
     try {
       const rdkit = await loadRDKit();
       const read = await readStructures(editor, rdkit, canonicalKey(rdkit, rawKey), questionsRef.current);
+      if (gen !== structureGenRef.current) return;
       setStructures(read);
 
       annotatorRef.current?.clear();
@@ -675,7 +680,7 @@ function Notebook({
       setSaid(line);
       speak(line);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't check the structures.");
+      if (gen === structureGenRef.current) setError(e instanceof Error ? e.message : "Couldn't check the structures.");
     } finally {
       setChecking(false);
     }
@@ -858,6 +863,7 @@ function Notebook({
   const reset = useCallback(() => {
     setReadings([]);
     setStructures([]);
+    structureGenRef.current += 1;
     annotatorRef.current?.clear();
     setError(null);
     recorderRef.current?.clear();
