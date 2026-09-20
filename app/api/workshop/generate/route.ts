@@ -38,14 +38,14 @@ function withConceptsAsKnowledge(profile: OnboardingProfile): OnboardingProfile 
 async function respondWithStored(userId: string, state: OnboardingState) {
   const graph = applyKnownScope(state.draftGraph!, state.profile.priorKnowledge ?? []);
   if (graph !== state.draftGraph) {
-    await Promise.all([
-      onboardingRepo.update(userId, { draftGraph: graph }),
-      state.activeRoadmapId
-        ? roadmapRepo
-            .update(state.activeRoadmapId, userId, { graph })
-            .catch((error) => console.error("roadmap record sync failed", error))
-        : null,
-    ]);
+    // The session is the primary draft; the roadmap record mirrors it. Writing the
+    // record only after the session succeeds keeps the two from diverging.
+    await onboardingRepo.update(userId, { draftGraph: graph });
+    if (state.activeRoadmapId) {
+      await roadmapRepo
+        .update(state.activeRoadmapId, userId, { graph })
+        .catch((error) => console.error("roadmap record sync failed", error));
+    }
   }
   return Response.json({ graph, roadmapId: state.activeRoadmapId, usedFallback: isFallbackGraph(graph) });
 }
