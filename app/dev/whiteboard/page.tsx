@@ -65,6 +65,23 @@ interface Reading {
   checkMs: number | null;
 }
 
+/** Speak, and surface a failure rather than swallowing it. Every call site used to
+ *  drop its own rejection, so an utterance that never played was indistinguishable
+ *  from a tutor that had nothing to say. */
+function speakOrReport(
+  speaker: Speaker | null,
+  report: (message: string | null) => void,
+  text: string,
+  voice?: string,
+): void {
+  speaker
+    ?.say(text, voice)
+    // Clear on success too. A "playback blocked" banner left standing while the next
+    // line plays aloud is worse than the silence it was added to explain.
+    .then(() => report(null))
+    .catch((e) => report(e instanceof Error ? e.message : "Voice failed."));
+}
+
 export default function SpikePage() {
   const editorRef = useRef<Editor | null>(null);
   const [readings, setReadings] = useState<Reading[]>([]);
@@ -184,7 +201,7 @@ export default function SpikePage() {
         pendingSpeechRef.current = null;
         finalizedRef.current.delete(lineId);
         if (voiceOnRef.current) {
-          speakerRef.current?.say(pending.text, voiceIdRef.current).catch(() => {});
+          speakOrReport(speakerRef.current, setError, pending.text, voiceIdRef.current);
         }
       }
       return;
@@ -303,15 +320,13 @@ export default function SpikePage() {
           // commit is explicitly provisional - the learner may still be writing.
           if (reason === "line-break") {
             if (voiceOnRef.current) {
-              speakerRef.current?.say(utterance, voiceIdRef.current).catch((e) => {
-                setError(e instanceof Error ? e.message : "Voice failed.");
-              });
+              speakOrReport(speakerRef.current, setError, utterance, voiceIdRef.current);
             }
           } else if (wasFinalized) {
             // Finalization won the race and arrived before this reading existed.
             // Consume it now rather than waiting for an event that already passed.
             if (voiceOnRef.current) {
-              speakerRef.current?.say(utterance, voiceIdRef.current).catch(() => {});
+              speakOrReport(speakerRef.current, setError, utterance, voiceIdRef.current);
             }
           } else {
             // Provisional: hold the words until the line is settled, so a half-read
@@ -460,7 +475,7 @@ export default function SpikePage() {
 
       setSaid(line);
       if (voiceOnRef.current) {
-        speakerRef.current?.say(line, voiceIdRef.current).catch(() => {});
+        speakOrReport(speakerRef.current, setError, line, voiceIdRef.current);
       }
     } catch {
       setError("Transcription failed.");
@@ -546,9 +561,12 @@ export default function SpikePage() {
           onChange={(e) => {
             setVoiceId(e.target.value);
             // Speak on change so the voice can be auditioned without writing anything.
-            speakerRef.current
-              ?.say("Something in there doesn't hold up. Want to take another look?", e.target.value)
-              .catch(() => {});
+            speakOrReport(
+              speakerRef.current,
+              setError,
+              "Something in there doesn't hold up. Want to take another look?",
+              e.target.value,
+            );
           }}
           className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-[11px] text-neutral-200"
         >
