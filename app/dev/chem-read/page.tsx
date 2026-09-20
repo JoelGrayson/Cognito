@@ -21,6 +21,11 @@
  *     dropped a bond and repaired the mistake. Confidence fell to 0.52. So an
  *     impossible structure is never reported as such; the signals are low confidence
  *     and a molecule that does not match the answer key.
+ *   - Acetic acid, toluene and cyclohexanol read correctly (0.95-1.00). A BARE hexagon
+ *     with nothing on it reads as cycloheptane, every time, at 0.82.
+ *   - Across every run so far: correct readings scored 0.95 or higher, wrong or
+ *     repaired ones 0.82 or lower. A confidence floor near 0.9 would have separated
+ *     them all, the same idea as the math checker's recognition floor.
  */
 "use client";
 
