@@ -180,7 +180,7 @@ export function chatgptPlugin(): BetterAuthPlugin {
             return ctx.json({ status: "authenticated" as const, linked: true, user: publicUser(chatgptUser) });
           }
 
-          const email = chatgptUser.email ?? `chatgpt-${chatgptUser.accountId}@users.noreply.structuredlearning.ai`;
+          const email = chatgptUser.email ?? `chatgpt-${chatgptUser.accountId}@users.noreply.cognition.dev`;
           const existingUser = await ctx.context.internalAdapter.findUserByEmail(email, { includeAccounts: false });
           if (existingUser && !isAnonymousUser(existingUser.user)) {
             throw new APIError("CONFLICT", {
