@@ -5,14 +5,17 @@
  */
 import type { SubjectIconName } from "@/components/SubjectIcon";
 
-export type SubjectId = "math" | "chemistry";
+export type SubjectId = "math" | "chemistry" | "ee";
 export type SubjectPanel = "worksheets" | "mastery" | "graphs";
 /** How written work is judged. `null` means nothing can check this subject yet. */
 export type SubjectChecker =
   /** Each line is judged against the one before it, as it is written. */
   | "algebra-steps"
   /** Each drawn structure is judged against the sheet's answer key, when asked. */
-  | "structure-key";
+  | "structure-key"
+  /** Each line is judged against the solved circuit it is written under, as it is
+   *  written: a KVL loop, a KCL node sum, Ohm's law or a final value. */
+  | "circuit-laws";
 
 export interface Subject {
   id: SubjectId;
@@ -49,6 +52,16 @@ export const SUBJECTS: readonly Subject[] = [
     panels: ["worksheets"],
     sampleSheet: { path: "/worksheets/ochem-practice.pdf", file: "ochem-practice.pdf", title: "Organic chemistry practice", caption: "Sample · 6 structures" },
   },
+  {
+    id: "ee",
+    name: "EE",
+    icon: "physics",
+    blurb: "Write KVL and KCL for a circuit and get each equation checked against it as you go.",
+    sample: ["12 − 4I − 2I = 0", "I = 2 A"],
+    checker: "circuit-laws",
+    panels: ["worksheets", "mastery"],
+    sampleSheet: { path: "/worksheets/circuits-practice.pdf", file: "circuits-practice.pdf", title: "Circuits practice", caption: "Sample · 4 circuits" },
+  },
 ];
 
 export const DEFAULT_SUBJECT = SUBJECTS[0];
@@ -62,6 +75,7 @@ export function subjectFrom(value: string | null | undefined): Subject {
 const MATH_TERMS =
   /\b(algebra|math(ematics)?|equations?|inequalities|linear|quadratic|polynomial|calculus|precalculus|geometry|trigonometry|arithmetic|factori[sz]e|graphing)\b/i;
 const CHEM_TERMS = /\b(chem(istry|ical)?|organic|molecule|reaction|stoichiometry|ochem|mechanism)\b/i;
+const EE_TERMS = /\b(circuits?|kvl|kcl|kirchhoff'?s?|ohm'?s|resistors?|electrical engineering|nodal|mesh analysis|voltage)\b/i;
 
 /**
  * A whiteboard practice link for a roadmap, or null when practice-by-hand doesn't
@@ -69,6 +83,7 @@ const CHEM_TERMS = /\b(chem(istry|ical)?|organic|molecule|reaction|stoichiometry
  */
 export function practiceHref(goal: string, title: string): string | null {
   const text = `${goal} ${title}`;
+  if (EE_TERMS.test(text)) return "/dev/whiteboard?subject=ee&sheet=sample";
   if (MATH_TERMS.test(text)) return "/dev/whiteboard?subject=math&sheet=sample";
   if (CHEM_TERMS.test(text)) return "/dev/whiteboard?subject=chemistry&sheet=sample";
   return null;

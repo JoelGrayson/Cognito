@@ -6,13 +6,13 @@
  * telling someone which line is wrong does their re-reading for them. Each rung after
  * gives away more, and is only reached because they asked.
  */
-import type { Equivalence } from "./checker/numeric.ts";
+import type { Verdict } from "./checker/circuit.ts";
 import type { HintLevel } from "./policy.ts";
 import type { Mark } from "./annotate.ts";
 import type { Bounds } from "./strokes.ts";
 
 export function marksFor(
-  verdict: Equivalence,
+  verdict: Verdict,
   lineId: number,
   rung: HintLevel,
   /** Bounds of the offending symbol, when we could locate it. Null degrades to
@@ -67,7 +67,7 @@ export function marksFor(
 }
 
 /** Short enough to live in a margin. The checker's `kind` IS the misconception. */
-function noteFor(verdict: Equivalence): string {
+function noteFor(verdict: Verdict): string {
   switch (verdict.kind) {
     case "direction":
       return `÷ by a negative → flip to ${verdict.expected}`;
@@ -75,7 +75,17 @@ function noteFor(verdict: Equivalence): string {
       return `scaled by ${verdict.by.toFixed(2)} — value changed`;
     case "not-equivalent":
       return "doesn't follow from the line above";
+    case "sign":
+      return `sign of ${verdict.term}?`;
+    case "wrong-value":
+      return `${verdict.variable} isn't ${trim(verdict.got)} — recheck the arithmetic`;
+    case "not-holding":
+      return "the circuit doesn't satisfy this";
     default:
       return "?";
   }
+}
+
+function trim(n: number): string {
+  return Number(n.toFixed(2)).toString();
 }

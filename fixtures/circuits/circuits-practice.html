@@ -1,0 +1,210 @@
+<!doctype html>
+<!--
+  Source of public/worksheets/circuits-practice.pdf. The circuits are the ones in
+  circuits-practice.key.json, with the same element and label names. Regenerate with:
+
+    google-chrome --headless --no-pdf-header-footer --print-to-pdf=public/worksheets/circuits-practice.pdf \
+      file://$PWD/fixtures/circuits/circuits-practice.html
+-->
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Circuits practice</title>
+<style>
+  @page { size: letter; margin: 0.6in 0.7in; }
+  body { font-family: Georgia, "Times New Roman", serif; color: #111; margin: 0; }
+  h1 { font-size: 20pt; font-weight: normal; margin: 0 0 2pt; }
+  .sub { font-size: 10.5pt; color: #444; margin: 0 0 14pt; }
+  .q { break-inside: avoid; height: 2.3in; margin-bottom: 0.12in; }
+  .q p { font-size: 12pt; margin: 0 0 6pt; }
+  svg { display: block; }
+  text { font-family: Georgia, "Times New Roman", serif; font-size: 12px; }
+  .lbl { font-style: italic; }
+  .val { font-size: 11px; }
+  line, path, polyline, circle.node, rect { stroke: #111; stroke-width: 1.4; fill: none; }
+  circle.dot { fill: #111; stroke: none; }
+</style>
+</head>
+<body>
+<h1>Circuits practice</h1>
+<p class="sub">Write your KVL and KCL equations under each circuit, then the values asked for. Use the names printed on the diagram.</p>
+
+<div class="q">
+  <p>1. Write KVL around the loop and find the current <i>I</i>.</p>
+  <svg width="260" height="150" viewBox="0 0 260 150">
+    <!-- top wire with R1 -->
+    <line x1="40" y1="30" x2="95" y2="30"/>
+    <rect x="95" y="22" width="60" height="16"/>
+    <line x1="155" y1="30" x2="220" y2="30"/>
+    <text x="125" y="16" text-anchor="middle" class="lbl">R<tspan baseline-shift="sub" font-size="9">1</tspan> <tspan class="val" font-style="normal">4 Ω</tspan></text>
+    <!-- right wire with R2 -->
+    <line x1="220" y1="30" x2="220" y2="55"/>
+    <rect x="212" y="55" width="16" height="50"/>
+    <line x1="220" y1="105" x2="220" y2="130"/>
+    <text x="234" y="84" class="lbl">R<tspan baseline-shift="sub" font-size="9">2</tspan></text>
+    <text x="234" y="98" class="val">2 Ω</text>
+    <!-- bottom wire -->
+    <line x1="220" y1="130" x2="40" y2="130"/>
+    <!-- left: battery V1 -->
+    <line x1="40" y1="130" x2="40" y2="88"/>
+    <line x1="28" y1="88" x2="52" y2="88"/>
+    <line x1="34" y1="78" x2="46" y2="78" stroke-width="3"/>
+    <line x1="40" y1="78" x2="40" y2="30"/>
+    <text x="6" y="70" class="lbl">V<tspan baseline-shift="sub" font-size="9">1</tspan></text>
+    <text x="6" y="84" class="val">12 V</text>
+    <text x="46" y="70" font-size="10">+</text>
+    <text x="46" y="100" font-size="10">−</text>
+    <!-- current arrow -->
+    <line x1="60" y1="46" x2="82" y2="46"/>
+    <path d="M78 42 L86 46 L78 50 Z" fill="#111"/>
+    <text x="66" y="62" class="lbl">I</text>
+    <!-- nodes -->
+    <circle class="dot" cx="40" cy="30" r="2"/><text x="44" y="24" font-size="10">a</text>
+    <circle class="dot" cx="220" cy="30" r="2"/><text x="226" y="24" font-size="10">b</text>
+  </svg>
+</div>
+
+<div class="q">
+  <p>2. Write KCL at the top node and find <i>I</i><sub>1</sub>, <i>I</i><sub>2</sub> and the source current <i>I</i>.</p>
+  <svg width="280" height="150" viewBox="0 0 280 150">
+    <!-- top wire -->
+    <line x1="40" y1="30" x2="240" y2="30"/>
+    <!-- bottom wire -->
+    <line x1="40" y1="130" x2="240" y2="130"/>
+    <!-- battery V1 on the left -->
+    <line x1="40" y1="30" x2="40" y2="72"/>
+    <line x1="34" y1="72" x2="46" y2="72" stroke-width="3"/>
+    <line x1="28" y1="82" x2="52" y2="82"/>
+    <line x1="40" y1="82" x2="40" y2="130"/>
+    <text x="4" y="66" class="lbl">V<tspan baseline-shift="sub" font-size="9">1</tspan></text>
+    <text x="4" y="80" class="val">6 V</text>
+    <text x="46" y="64" font-size="10">+</text>
+    <text x="46" y="96" font-size="10">−</text>
+    <!-- R1 middle -->
+    <line x1="140" y1="30" x2="140" y2="55"/>
+    <rect x="132" y="55" width="16" height="50"/>
+    <line x1="140" y1="105" x2="140" y2="130"/>
+    <text x="152" y="76" class="lbl">R<tspan baseline-shift="sub" font-size="9">1</tspan></text>
+    <text x="152" y="90" class="val">3 Ω</text>
+    <!-- R2 right -->
+    <line x1="240" y1="30" x2="240" y2="55"/>
+    <rect x="232" y="55" width="16" height="50"/>
+    <line x1="240" y1="105" x2="240" y2="130"/>
+    <text x="252" y="76" class="lbl">R<tspan baseline-shift="sub" font-size="9">2</tspan></text>
+    <text x="252" y="90" class="val">6 Ω</text>
+    <!-- current arrows -->
+    <line x1="70" y1="44" x2="92" y2="44"/><path d="M88 40 L96 44 L88 48 Z" fill="#111"/>
+    <text x="76" y="60" class="lbl">I</text>
+    <line x1="124" y1="38" x2="124" y2="52"/><path d="M120 48 L124 56 L128 48 Z" fill="#111"/>
+    <text x="104" y="52" class="lbl">I<tspan baseline-shift="sub" font-size="9">1</tspan></text>
+    <line x1="224" y1="38" x2="224" y2="52"/><path d="M220 48 L224 56 L228 48 Z" fill="#111"/>
+    <text x="204" y="52" class="lbl">I<tspan baseline-shift="sub" font-size="9">2</tspan></text>
+    <circle class="dot" cx="140" cy="30" r="2.5"/>
+    <circle class="dot" cx="240" cy="30" r="2.5"/>
+  </svg>
+</div>
+
+<div class="q">
+  <p>3. Find <i>V</i><sub>a</sub>, then <i>I</i><sub>1</sub>, <i>I</i><sub>2</sub> and <i>I</i><sub>3</sub>. Write KCL at node a, or KVL around each loop.</p>
+  <svg width="320" height="150" viewBox="0 0 320 150">
+    <!-- top left: R1 -->
+    <line x1="40" y1="30" x2="70" y2="30"/>
+    <rect x="70" y="22" width="56" height="16"/>
+    <line x1="126" y1="30" x2="160" y2="30"/>
+    <text x="98" y="16" text-anchor="middle" class="lbl">R<tspan baseline-shift="sub" font-size="9">1</tspan> <tspan class="val" font-style="normal">2 Ω</tspan></text>
+    <!-- top right: R3 -->
+    <line x1="160" y1="30" x2="194" y2="30"/>
+    <rect x="194" y="22" width="56" height="16"/>
+    <line x1="250" y1="30" x2="280" y2="30"/>
+    <text x="222" y="16" text-anchor="middle" class="lbl">R<tspan baseline-shift="sub" font-size="9">3</tspan> <tspan class="val" font-style="normal">4 Ω</tspan></text>
+    <!-- middle: R2 down from a -->
+    <line x1="160" y1="30" x2="160" y2="55"/>
+    <rect x="152" y="55" width="16" height="50"/>
+    <line x1="160" y1="105" x2="160" y2="130"/>
+    <text x="172" y="76" class="lbl">R<tspan baseline-shift="sub" font-size="9">2</tspan></text>
+    <text x="172" y="90" class="val">4 Ω</text>
+    <!-- bottom wire -->
+    <line x1="40" y1="130" x2="280" y2="130"/>
+    <!-- V1 left -->
+    <line x1="40" y1="30" x2="40" y2="72"/>
+    <line x1="34" y1="72" x2="46" y2="72" stroke-width="3"/>
+    <line x1="28" y1="82" x2="52" y2="82"/>
+    <line x1="40" y1="82" x2="40" y2="130"/>
+    <text x="4" y="66" class="lbl">V<tspan baseline-shift="sub" font-size="9">1</tspan></text>
+    <text x="4" y="80" class="val">10 V</text>
+    <text x="46" y="64" font-size="10">+</text>
+    <text x="46" y="96" font-size="10">−</text>
+    <!-- V2 right -->
+    <line x1="280" y1="30" x2="280" y2="72"/>
+    <line x1="274" y1="72" x2="286" y2="72" stroke-width="3"/>
+    <line x1="268" y1="82" x2="292" y2="82"/>
+    <line x1="280" y1="82" x2="280" y2="130"/>
+    <text x="292" y="66" class="lbl">V<tspan baseline-shift="sub" font-size="9">2</tspan></text>
+    <text x="292" y="80" class="val">4 V</text>
+    <text x="264" y="64" font-size="10">+</text>
+    <text x="264" y="96" font-size="10">−</text>
+    <!-- currents -->
+    <line x1="134" y1="44" x2="146" y2="44"/><path d="M142 40 L150 44 L142 48 Z" fill="#111"/>
+    <text x="126" y="60" class="lbl">I<tspan baseline-shift="sub" font-size="9">1</tspan></text>
+    <line x1="176" y1="44" x2="188" y2="44"/><path d="M184 40 L192 44 L184 48 Z" fill="#111"/>
+    <text x="186" y="60" class="lbl">I<tspan baseline-shift="sub" font-size="9">2</tspan></text>
+    <line x1="144" y1="60" x2="144" y2="74"/><path d="M140 70 L144 78 L148 70 Z" fill="#111"/>
+    <text x="128" y="90" class="lbl">I<tspan baseline-shift="sub" font-size="9">3</tspan></text>
+    <!-- node a -->
+    <circle class="dot" cx="160" cy="30" r="2.5"/>
+    <text x="156" y="12" font-size="11">a</text>
+    <!-- ground -->
+    <line x1="160" y1="130" x2="160" y2="140"/>
+    <line x1="150" y1="140" x2="170" y2="140"/>
+    <line x1="154" y1="144" x2="166" y2="144"/>
+    <line x1="158" y1="148" x2="162" y2="148"/>
+  </svg>
+</div>
+
+<div class="q">
+  <p>4. Find <i>V</i><sub>a</sub> and <i>V</i><sub>b</sub> by writing KCL at nodes a and b.</p>
+  <svg width="300" height="150" viewBox="0 0 300 150">
+    <!-- top wire a -> b via R2 -->
+    <line x1="40" y1="30" x2="140" y2="30"/>
+    <line x1="140" y1="30" x2="172" y2="30"/>
+    <rect x="172" y="22" width="56" height="16"/>
+    <line x1="228" y1="30" x2="260" y2="30"/>
+    <text x="200" y="16" text-anchor="middle" class="lbl">R<tspan baseline-shift="sub" font-size="9">2</tspan> <tspan class="val" font-style="normal">2 Ω</tspan></text>
+    <!-- bottom wire -->
+    <line x1="40" y1="130" x2="260" y2="130"/>
+    <!-- current source Is on the left, arrow up -->
+    <line x1="40" y1="30" x2="40" y2="62"/>
+    <circle class="node" cx="40" cy="80" r="18"/>
+    <line x1="40" y1="90" x2="40" y2="74"/><path d="M36 76 L40 68 L44 76 Z" fill="#111"/>
+    <line x1="40" y1="98" x2="40" y2="130"/>
+    <text x="2" y="76" class="lbl">I<tspan baseline-shift="sub" font-size="9">s</tspan></text>
+    <text x="2" y="90" class="val">3 A</text>
+    <!-- R1 from a down -->
+    <line x1="140" y1="30" x2="140" y2="55"/>
+    <rect x="132" y="55" width="16" height="50"/>
+    <line x1="140" y1="105" x2="140" y2="130"/>
+    <text x="152" y="76" class="lbl">R<tspan baseline-shift="sub" font-size="9">1</tspan></text>
+    <text x="152" y="90" class="val">4 Ω</text>
+    <!-- R3 from b down -->
+    <line x1="260" y1="30" x2="260" y2="55"/>
+    <rect x="252" y="55" width="16" height="50"/>
+    <line x1="260" y1="105" x2="260" y2="130"/>
+    <text x="272" y="76" class="lbl">R<tspan baseline-shift="sub" font-size="9">3</tspan></text>
+    <text x="272" y="90" class="val">2 Ω</text>
+    <!-- currents -->
+    <line x1="124" y1="40" x2="124" y2="54"/><path d="M120 50 L124 58 L128 50 Z" fill="#111"/>
+    <text x="104" y="54" class="lbl">I<tspan baseline-shift="sub" font-size="9">1</tspan></text>
+    <line x1="150" y1="40" x2="162" y2="40"/><path d="M158 36 L166 40 L158 44 Z" fill="#111"/>
+    <text x="152" y="54" class="lbl">I<tspan baseline-shift="sub" font-size="9">2</tspan></text>
+    <!-- nodes -->
+    <circle class="dot" cx="140" cy="30" r="2.5"/><text x="136" y="12" font-size="11">a</text>
+    <circle class="dot" cx="260" cy="30" r="2.5"/><text x="256" y="12" font-size="11">b</text>
+    <!-- ground -->
+    <line x1="140" y1="130" x2="140" y2="140"/>
+    <line x1="130" y1="140" x2="150" y2="140"/>
+    <line x1="134" y1="144" x2="146" y2="144"/>
+    <line x1="138" y1="148" x2="142" y2="148"/>
+  </svg>
+</div>
+</body>
+</html>
