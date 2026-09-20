@@ -37,9 +37,13 @@ function blankCanvas(w: number, h: number) {
 }
 
 async function pagesOfPdf(file: File): Promise<PageImage[]> {
-  const pdfjs = await import("pdfjs-dist");
+  // The LEGACY build, on purpose. The default one calls Map.prototype.getOrInsertComputed,
+  // which no iPad browser has (they are all WebKit), so opening any PDF on a tablet
+  // died with "getOrInsertComputed is not a function". Legacy carries the polyfills.
+  // The worker must be the legacy one too: it runs the same code in its own realm.
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
+    "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
     import.meta.url,
   ).toString();
 
