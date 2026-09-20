@@ -3,7 +3,8 @@
  *
  * MOCK_AI=true swaps every function for a deterministic mock (no API calls). Mock failure
  * switches: MOCK_AI_FAIL_CONCEPTS=true, MOCK_AI_FAIL_GRAPH=true, MOCK_AI_FAIL_EDIT=true,
- * MOCK_AI_FAIL_ENRICH=true|<coreNodeId>; MOCK_AI_DELAY_MS adds latency to every mock.
+ * MOCK_AI_FAIL_ENRICH=true|<coreNodeId>, MOCK_JEV_FAIL=true; MOCK_AI_DELAY_MS adds latency to
+ * every mock.
  *
  * FALLBACK POLICY. Every function makes one forced tool call, validates it with zod (plus
  * validateGraph / applyOps where relevant), retries once with the errors appended, and then
@@ -37,6 +38,9 @@ import type { AiCallOptions } from "./withRetry";
 
 export { AiValidationError, type AiCallOptions, type AttemptReport, type ToolClient } from "./withRetry";
 export { fallbackObjectives } from "./functions/enrichModule";
+/** Typed decisions: `jev.tryAsk(state, { fits: jev.noul("...") })`. */
+export * as jev from "./jev";
+export { JevError, jevConfigured } from "./jev";
 export { generateConceptsWithProvider, generateGraphWithProvider, pickProvider } from "./provider";
 export type { EditGraphInput, EditGraphResult, EnrichModuleInput, EnrichModuleResult };
 
