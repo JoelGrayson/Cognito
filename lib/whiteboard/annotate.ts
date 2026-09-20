@@ -13,6 +13,7 @@
  *   margin-note -> "something above is wrong"   (rung 1: deliberately NO location)
  *   arrow       -> "these two disagree"         (links a step to the one it broke)
  *   underline   -> "this part is right"         (confirmation, used sparingly)
+ *   tick        -> "this step follows"          (a green check in the margin)
  *
  * The margin note is the important one. Chiron-style tools mark the error itself,
  * which does the re-reading for the learner. Rung 1 here marks the MARGIN and says
@@ -24,9 +25,9 @@ import type { Editor } from "tldraw";
 import type { Bounds } from "./strokes.ts";
 
 /** Line shapes key their points by a fractional IndexKey, not a plain string. */
-const [IDX_A, IDX_B] = getIndices(2);
+const [IDX_A, IDX_B, IDX_C] = getIndices(3);
 
-export type MarkKind = "circle" | "strike" | "margin-note" | "arrow" | "underline";
+export type MarkKind = "circle" | "strike" | "margin-note" | "arrow" | "underline" | "tick";
 
 export interface Mark {
   kind: MarkKind;
@@ -131,6 +132,32 @@ export function createAnnotator(editor: Editor): Annotator {
     return id;
   }
 
+  /** In the margin, where a teacher puts it: beside the line, never over the ink. */
+  function tick(b: Bounds) {
+    const id = createShapeId();
+    // Sized from the line so it reads the same beside small and large handwriting.
+    const h = Math.min(Math.max(b.maxY - b.minY, 18), 40);
+    editor.createShape({
+      id,
+      type: "line",
+      x: b.maxX + MARGIN_GAP,
+      y: (b.minY + b.maxY) / 2,
+      meta: MARK_META,
+      props: {
+        color: "green",
+        size: "m",
+        dash: "draw",
+        spline: "line",
+        points: {
+          a1: { id: "a1", index: IDX_A, x: 0, y: 0 },
+          a2: { id: "a2", index: IDX_B, x: h * 0.3, y: h * 0.35 },
+          a3: { id: "a3", index: IDX_C, x: h * 0.95, y: -h * 0.5 },
+        },
+      },
+    });
+    return id;
+  }
+
   function marginNote(b: Bounds, text: string, tone: Mark["tone"]) {
     const id = createShapeId();
     editor.createShape({
@@ -182,6 +209,7 @@ export function createAnnotator(editor: Editor): Annotator {
           case "circle": id = circle(b, m.tone); break;
           case "strike": id = strike(b); break;
           case "underline": id = underline(b); break;
+          case "tick": id = tick(b); break;
           case "margin-note": id = marginNote(b, m.text ?? "?", m.tone); break;
           case "arrow": {
             const to = m.toLineId !== undefined ? boundsOf(m.toLineId) : undefined;
