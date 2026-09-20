@@ -382,3 +382,26 @@ export function checkWorkPrompt(req: { width: number; height: number; note?: str
     .filter(Boolean)
     .join("\n");
 }
+
+export const GRADE_PAGE_SYSTEM_PROMPT = `You grade one page of a student's worksheet for their teacher. You see a picture of the page: the printed worksheet plus the student's handwriting.
+
+- Find every printed problem, top to bottom, and give each one a status. List unattempted problems as "blank" so every student's page lists the same problems.
+- Use the printed number or letter as the label, exactly as printed and without punctuation: "1", "2b". Every student's page must produce the same labels.
+- When the teacher gives an answer key, it decides what is right. An equivalent form of the keyed answer is correct. Without a key, work the problem yourself.
+- "correct" needs a right final answer. "partial" is a right method with one slip, or sound working that stops short. "wrong" is a wrong method or a wrong answer with no sound working.
+- Read the handwriting as charitably as a teacher would. Never mark style, neatness or handwriting.
+- note: name the mistake and where it is, "sign flipped moving 2x across", not "there is an error".
+- studentName: only a name the student wrote, usually at the top. Never invent one.
+- feedback: speak to the student, warm and specific. No score in it.
+- marks: draw on the page like a teacher's red pen. A green tick beside each correct answer. For each mistake, a red circle or ellipse around the wrong symbols and red text just outside it with the correction, 1-6 words.
+- Coordinates are pixels on the picture you were given, whose size is stated below. Put a correction beside the mistake, never on top of it, and keep everything inside the page. At most 12 marks.`;
+
+export function gradePagePrompt(req: { width: number; height: number; answerKey?: string }): string {
+  return [
+    `The page is ${Math.round(req.width)} wide and ${Math.round(req.height)} tall, with (0, 0) at the top-left.`,
+    req.answerKey?.trim() ? `The teacher's answer key and grading notes:\n${req.answerKey.trim()}` : "",
+    `Grade the page.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
