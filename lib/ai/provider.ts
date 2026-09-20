@@ -27,7 +27,7 @@ export async function generateGraphWithProvider(
   const prompt = buildGenerateGraphPrompt(profile);
   const request = (user: string) =>
     provider.structured(
-      { name: "draft_graph", schema: DraftGraph, system: GENERATE_GRAPH_SYSTEM, user, maxTokens: 8000 },
+      { name: "draft_graph", schema: DraftGraph, system: GENERATE_GRAPH_SYSTEM, user, maxTokens: 8000, effort: "low" },
       undefined,
       ctx,
     );
@@ -57,6 +57,7 @@ export async function generateConceptsWithProvider(
       system: GENERATE_CONCEPTS_SYSTEM,
       user: `The learner wants to learn: ${goal}`,
       maxTokens: 400,
+      effort: "minimal",
     },
     undefined,
     ctx,

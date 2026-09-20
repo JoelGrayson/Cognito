@@ -9,7 +9,7 @@ import { requireUserId } from "@/lib/session";
 import type { DraftGraph, OnboardingProfile, OnboardingState } from "@/types/learning";
 
 // Real graph generation can take a while.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const Body = z.object({ regenerate: z.boolean().optional() });
 
