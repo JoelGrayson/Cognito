@@ -7,6 +7,18 @@ export type { Provider, ProviderContext, ProviderId, ProviderInfo } from "./type
 export { ProviderError } from "./types";
 export type { StructuredRequest, StructuredResult } from "./types";
 
+/** OpenRouter, routed to Cerebras so gpt-oss-120b runs on their hardware. */
+export const cerebrasProvider = createOpenAICompatibleProvider({
+  id: "cerebras",
+  label: "Cerebras",
+  defaultModel: "openai/gpt-oss-120b",
+  modelEnv: "OPENROUTER_MODEL",
+  apiKeyEnv: "OPENROUTER_API_KEY",
+  defaultBaseUrl: "https://openrouter.ai/api/v1",
+  hint: "Set OPENROUTER_API_KEY in .env.local",
+  extraBody: { provider: { only: ["cerebras"] } },
+});
+
 export const openaiProvider = createOpenAICompatibleProvider({
   id: "openai",
   label: "OpenAI",
@@ -44,6 +56,7 @@ export const localProvider = createOpenAICompatibleProvider({
 });
 
 export const PROVIDERS: Record<ProviderId, Provider> = {
+  cerebras: cerebrasProvider,
   anthropic: anthropicProvider,
   openai: openaiProvider,
   chatgpt: chatgptProvider,
@@ -52,7 +65,14 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
 };
 
 /** Dropdown order. The first configured one is the default. */
-export const PROVIDER_ORDER: ProviderId[] = ["openai", "chatgpt", "xai", "anthropic", "local"];
+export const PROVIDER_ORDER: ProviderId[] = [
+  "cerebras",
+  "openai",
+  "chatgpt",
+  "xai",
+  "anthropic",
+  "local",
+];
 
 export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && value in PROVIDERS;
@@ -64,7 +84,7 @@ export async function listProviders(ctx?: ProviderContext): Promise<ProviderInfo
 
 /**
  * The provider to use when the profile names none: the first configured one in
- * dropdown order (what screen 1 shows selected), or Anthropic when none is.
+ * dropdown order (what screen 1 shows selected), or Cerebras when none is.
  */
 export async function defaultProviderId(ctx?: ProviderContext): Promise<ProviderId> {
   for (const id of PROVIDER_ORDER) {
@@ -74,5 +94,5 @@ export async function defaultProviderId(ctx?: ProviderContext): Promise<Provider
       // One unavailable provider must not hide the remaining configured ones.
     }
   }
-  return "anthropic";
+  return "cerebras";
 }

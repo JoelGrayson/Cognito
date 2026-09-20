@@ -56,7 +56,7 @@ export function Step1Goal() {
       .catch(() => {});
   }, []);
   const configured = providers.find((p) => p.configured)?.id;
-  const provider = profile.provider ?? configured ?? "anthropic";
+  const provider = profile.provider ?? configured ?? "cerebras";
   // The picker shows the first configured provider by default; persist it so
   // every server call goes through the provider the learner sees.
   useEffect(() => {

@@ -67,8 +67,8 @@ export const OnboardingProfile = LearnerProfile.partial().extend({
   availability: LearnerProfile.shape.availability.unwrap().partial().optional(),
   /** The concept list shown for rating. Persisted so ratings survive revisits. */
   concepts: z.array(z.string().min(1)).optional(),
-  /** AI provider chosen on screen 1; unset means the default (Anthropic). */
-  provider: z.enum(["anthropic", "openai", "chatgpt", "xai", "local"]).optional(),
+  /** AI provider chosen on screen 1; unset means the default (Cerebras). */
+  provider: z.enum(["cerebras", "anthropic", "openai", "chatgpt", "xai", "local"]).optional(),
 });
 export type OnboardingProfile = z.infer<typeof OnboardingProfile>;
 
