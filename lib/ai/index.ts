@@ -3,8 +3,8 @@
  *
  * MOCK_AI=true swaps every function for a deterministic mock (no API calls). Mock failure
  * switches: MOCK_AI_FAIL_CONCEPTS=true, MOCK_AI_FAIL_GRAPH=true, MOCK_AI_FAIL_EDIT=true,
- * MOCK_AI_FAIL_ENRICH=true|<coreNodeId>, MOCK_JEV_FAIL=true; MOCK_AI_DELAY_MS adds latency to
- * every mock.
+ * MOCK_AI_FAIL_ENRICH=true|<coreNodeId>, MOCK_AI_FAIL_GRADE=true, MOCK_JEV_FAIL=true;
+ * MOCK_AI_DELAY_MS adds latency to every mock.
  *
  * FALLBACK POLICY. Every function makes one forced tool call, validates it with zod (plus
  * validateGraph / applyOps where relevant), retries once with the errors appended, and then
@@ -30,10 +30,13 @@ import { editGraph as realEditGraph, type EditGraphInput, type EditGraphResult }
 import { enrichModule as realEnrichModule, type EnrichModuleInput, type EnrichModuleResult } from "./functions/enrichModule";
 import { generateConcepts as realGenerateConcepts } from "./functions/generateConcepts";
 import { generateGraph as realGenerateGraph } from "./functions/generateGraph";
+import { gradePage as realGradePage, type GradePageInput, type GradePageResult } from "./functions/gradePage";
 import { mockConcepts } from "./mock/concepts";
 import { mockEditGraph } from "./mock/edit";
 import { mockEnrichModule } from "./mock/enrich";
+import { mockGradePage } from "./mock/grade";
 import { mockGenerateGraph } from "./mock/graph";
+import type { Provider, ProviderContext } from "@/lib/providers/types";
 import type { AiCallOptions } from "./withRetry";
 
 export { AiValidationError, type AiCallOptions, type AttemptReport, type ToolClient } from "./withRetry";
@@ -42,7 +45,7 @@ export { fallbackObjectives } from "./functions/enrichModule";
 export * as jev from "./jev";
 export { JevError, jevConfigured } from "./jev";
 export { generateConceptsWithProvider, generateGraphWithProvider, pickProvider } from "./provider";
-export type { EditGraphInput, EditGraphResult, EnrichModuleInput, EnrichModuleResult };
+export type { EditGraphInput, EditGraphResult, EnrichModuleInput, EnrichModuleResult, GradePageInput, GradePageResult };
 
 // Mocks succeed on the first try; report that so observers behave the same in both modes.
 async function mocked<T>(run: () => Promise<T>, options?: AiCallOptions): Promise<T> {
@@ -69,3 +72,11 @@ export const editGraph = (input: EditGraphInput, options?: AiCallOptions): Promi
 
 export const enrichModule = (input: EnrichModuleInput, options?: AiCallOptions): Promise<EnrichModuleResult> =>
   isMockAi() ? mocked(() => mockEnrichModule(input), options) : realEnrichModule(input, options);
+
+export const gradePage = async (
+  input: GradePageInput,
+  provider: Provider,
+  model?: string,
+  ctx?: ProviderContext,
+): Promise<GradePageResult> =>
+  isMockAi() ? { page: await mockGradePage(input), model: "mock" } : realGradePage(input, provider, model, ctx);

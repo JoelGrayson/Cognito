@@ -57,16 +57,17 @@ export function Step2Start() {
   const ratings = priorKnowledgeToRatings(profile.priorKnowledge, ready ? concepts.items : []);
   const selfLevel = priorKnowledgeToLevel(profile.priorKnowledge, goal) ?? 0;
 
-  // Roadmap generation starts as soon as the profile has enough for a graph, so the
-  // ~30s model call overlaps the learner's rating time. Ratings finish on the server
-  // anyway: the generate route re-marks known scope from the latest priorKnowledge.
+  // Roadmap generation starts the moment the profile has enough for a graph — the first
+  // format pick, not the finished concept list — so the model call overlaps the concept
+  // fetch AND the rating time. Ratings still land: the generate route re-marks known
+  // scope from the latest priorKnowledge when the graph is read back.
   const prefetchGraph = useOnboarding((s) => s.prefetchGraph);
   const prefetched = useRef(false);
   useEffect(() => {
-    if (prefetched.current || !ready || formats.length === 0) return;
+    if (prefetched.current || formats.length === 0) return;
     prefetched.current = true;
     prefetchGraph();
-  }, [ready, formats.length, prefetchGraph]);
+  }, [formats.length, prefetchGraph]);
 
   function toggle(format: Format) {
     const next = formats.includes(format) ? formats.filter((f) => f !== format) : [...formats, format];

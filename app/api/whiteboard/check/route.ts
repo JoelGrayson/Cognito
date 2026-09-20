@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { apiHandler, BadRequest, providerFrom, readJson } from "@/lib/api";
+import { apiHandler, PAGE_IMAGE_MAX_CHARS, pageReaderFrom, readJson } from "@/lib/api";
 import type { ResolvedAction } from "@/lib/board";
 import { CHECK_WORK_SYSTEM_PROMPT, checkWorkPrompt } from "@/lib/prompt";
 import { WorkCheckSchema } from "@/lib/schema";
 
 export const maxDuration = 120;
 
-/** A picture of the page, as a data URL. 8 MB of base64 is roughly a 6 MB image. */
 const BodySchema = z.object({
-  image: z.string().max(8_000_000),
+  image: z.string().max(PAGE_IMAGE_MAX_CHARS),
   width: z.number().positive().max(4000),
   height: z.number().positive().max(4000),
   note: z.string().max(500).optional(),
@@ -20,13 +19,7 @@ const BodySchema = z.object({
 /** Look at a page of work and say what to draw on it. */
 export const POST = apiHandler(async (request) => {
   const body = await readJson(request, BodySchema);
-  if (!/^data:image\/(png|jpeg|webp);base64,/.test(body.image)) {
-    throw new BadRequest("The page must be a PNG, JPEG or WebP picture.");
-  }
-  const provider = providerFrom(body.provider);
-  if (provider.id === "local" || provider.id === "xai") {
-    throw new BadRequest(`${provider.label} cannot read pictures here. Switch the model to OpenAI or Claude.`);
-  }
+  const provider = pageReaderFrom(body.provider, body.image);
 
   const started = Date.now();
   const { output, model } = await provider.structured(
