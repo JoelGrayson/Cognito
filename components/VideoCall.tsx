@@ -3,10 +3,12 @@
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
 import { applyActions, describeBoard, learnerStroke, type BoardElement, type ResolvedAction } from "@/lib/board";
 import { ensureOk } from "@/lib/ndjson";
-import { speak } from "@/lib/speech";
+import { speak, stopSpeaking } from "@/lib/speech";
 import type { ProviderId } from "@/lib/providers/types";
 import type { BoardColor, Lesson } from "@/lib/schema";
 import { readLearnerWork, describeLearnerWork, type FlatStroke } from "@/lib/whiteboard/board-bridge";
+import { marksForLine, clearMarks } from "@/lib/whiteboard/board-marks";
+import { createPushToTalk, type PushToTalk } from "@/lib/whiteboard/voice";
 import { Board, INK } from "./Board";
 
 type Status = "thinking" | "speaking" | "listening" | "your-turn" | "drawing" | "ended" | "error";
@@ -65,8 +67,34 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const transcriptEnd = useRef<HTMLDivElement>(null);
+  const pttRef = useRef<PushToTalk | null>(null);
+  const [holding, setHolding] = useState(false);
 
   const canListen = typeof window !== "undefined" && recognitionCtor() !== null;
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      const el = e.target as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      e.preventDefault();
+      void startHold();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      e.preventDefault();
+      void endHold();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      pttRef.current?.dispose();
+    };
+    // Bound once for the life of the call; the handlers close over refs, not state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function setBoard(next: BoardElement[]) {
     elementsRef.current = next;
@@ -96,7 +124,20 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
         const penStrokes: FlatStroke[] = elementsRef.current
           .filter((e): e is Extract<BoardElement, { type: "stroke" }> => e.type === "stroke")
           .map((e) => ({ id: e.id, points: e.points }));
-        if (penStrokes.length > 0) work = describeLearnerWork(await readLearnerWork(penStrokes));
+        if (penStrokes.length > 0) {
+          const readings = await readLearnerWork(penStrokes);
+          work = describeLearnerWork(readings);
+
+          // Mark the work itself. A circle or a strike on the line is glanceable in a
+          // way a spoken sentence is not, and it survives the tutor moving on.
+          // Rung 1 by default: a "?" in the margin that names no location.
+          const marks = readings.flatMap((r) =>
+            r.bounds && (r.confidence === null || r.confidence >= 0.6)
+              ? marksForLine(r.bounds, { rung: 1, verdict: r.verdict, detail: r.detail })
+              : [],
+          );
+          if (marks.length > 0) setBoard([...clearMarks(elementsRef.current), ...marks]);
+        }
       } catch {
         work = "";
       }
@@ -164,6 +205,38 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
   }
 
   /** The learner said or typed something. */
+  /**
+   * Hold SPACE to talk. Uses the same recogniser as the whiteboard rather than the
+   * browser's, and being push-to-talk it cannot cut the learner off mid-sentence -
+   * release IS the end of the turn, so there is no silence timer to get wrong.
+   * The browser recogniser is stopped first so the two never compete for the mic.
+   */
+  async function startHold() {
+    if (pttRef.current?.recording || ended.current) return;
+    recognitionRef.current?.abort();
+    stopSpeaking();
+    interrupted.current = true;
+    pttRef.current ??= createPushToTalk();
+    try {
+      await pttRef.current.start();
+      setHolding(true);
+    } catch {
+      setError("Couldn't reach the microphone.");
+    }
+  }
+
+  async function endHold() {
+    const ptt = pttRef.current;
+    if (!ptt?.recording) return;
+    setHolding(false);
+    try {
+      const { transcript } = await ptt.stopAndTranscribe();
+      if (transcript && !ended.current) reply(transcript);
+    } catch {
+      /* a failed transcription should not end the call */
+    }
+  }
+
   function reply(text: string) {
     const strokes = pendingRef.current;
     const note = strokes ? ` (I drew ${strokes} stroke${strokes === 1 ? "" : "s"} on the board.)` : "";
@@ -376,6 +449,28 @@ export function VideoCall({ topic, lesson, providerId, onClose }: Props) {
       </div>
 
       <footer className="call-controls">
+        <button
+          type="button"
+          onMouseDown={startHold}
+          onMouseUp={endHold}
+          onMouseLeave={endHold}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            void startHold();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            void endHold();
+          }}
+          disabled={status === "ended"}
+          title="Hold to talk (or hold the space bar). Talking interrupts the tutor."
+          style={{
+            background: holding ? "#dc2626" : undefined,
+            color: holding ? "#fff" : undefined,
+          }}
+        >
+          {holding ? "listening…" : "hold to talk"}
+        </button>
         <button
           type="button"
           className="call-btn"

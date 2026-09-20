@@ -52,8 +52,8 @@ check("units: correct", checkLine("2 mol * 18 g/mol", "36 g").verdict, "equivale
 console.log("\n--- what the tutor is handed ---");
 {
   const block = describeLearnerWork([
-    { index: 0, latex: "2x + 3 = 7", parsed: "2*x + 3 = 7", confidence: 1, verdict: "equivalent", detail: "" },
-    { index: 1, latex: "2x = 10", parsed: "2*x = 10", confidence: 1, verdict: "not-equivalent", detail: "at x=0.61 the line above gives -2.77, this gives -8.77" },
+    { index: 0, bounds: null, latex: "2x + 3 = 7", parsed: "2*x + 3 = 7", confidence: 1, verdict: "equivalent", detail: "" },
+    { index: 1, bounds: null, latex: "2x = 10", parsed: "2*x = 10", confidence: 1, verdict: "not-equivalent", detail: "at x=0.61 the line above gives -2.77, this gives -8.77" },
   ]);
   total++;
   const ok =

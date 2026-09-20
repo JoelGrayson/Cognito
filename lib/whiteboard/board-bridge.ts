@@ -90,6 +90,8 @@ export function payloadFor(line: readonly TimedStroke[]) {
 
 export interface LineReading {
   index: number;
+  /** Where the line sits on the board, so a mark can be drawn on it. */
+  bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
   latex: string;
   parsed: string;
   confidence: number | null;
@@ -189,7 +191,11 @@ export async function readLearnerWork(strokes: readonly FlatStroke[]): Promise<L
     if (!r) continue;
     const parsed = latexToMathjs(r.latex);
     const { verdict, detail } = checkLine(previous, parsed);
-    readings.push({ index, latex: r.latex, parsed, confidence: r.confidence, verdict, detail });
+    const line = lines[index];
+    const b = line?.length
+      ? line.map((st) => st.bounds).reduce(mergeBounds)
+      : null;
+    readings.push({ index, bounds: b, latex: r.latex, parsed, confidence: r.confidence, verdict, detail });
     // Only a line we trust becomes the premise for the next one. Judging good work
     // against a misread line produces an accusation caused by our own OCR.
     if (r.confidence === null || r.confidence >= 0.6) previous = parsed;
