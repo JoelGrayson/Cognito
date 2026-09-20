@@ -45,9 +45,20 @@ export function useZoomPan(
     let last: { d: number; cx: number; cy: number } | null = null;
     let drag: Pt | null = null;
     // Two-finger tap detection: a candidate until fingers move or linger too long.
-    let tap: { at: number; cx: number; cy: number } | null = null;
+    let tap: { at: number; start: Map<number, Pt> } | null = null;
     let taps = 0;
     let tapTimer: ReturnType<typeof setTimeout> | undefined;
+    let firstDown: Pt | null = null;
+
+    // Resolve a pending tap sequence now so its action precedes any new input.
+    const flushTaps = () => {
+      if (!tapTimer) return;
+      clearTimeout(tapTimer);
+      tapTimer = undefined;
+      const n = taps;
+      taps = 0;
+      tapRef.current?.(n);
+    };
 
     const zoomAt = (factor: number, cx: number, cy: number, dx = 0, dy = 0) => {
       const v = viewRef.current;
@@ -66,16 +77,20 @@ export function useZoomPan(
     };
 
     const onDown = (e: PointerEvent) => {
-      if (e.pointerType !== "touch") return;
+      if (e.pointerType !== "touch") {
+        flushTaps();
+        return;
+      }
       fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (fingers.size === 2) {
         drag = null;
         last = pinch();
-        tap = { at: e.timeStamp, cx: last.cx, cy: last.cy };
+        tap = { at: e.timeStamp, start: new Map(fingers) };
       } else if (fingers.size > 2) {
         tap = null;
-      } else if (fingers.size === 1 && fingerPansRef.current) {
-        drag = { x: e.clientX, y: e.clientY };
+      } else if (fingers.size === 1) {
+        firstDown = { x: e.clientX, y: e.clientY };
+        if (fingerPansRef.current) drag = firstDown;
       }
     };
     const onMove = (e: PointerEvent) => {
@@ -84,12 +99,15 @@ export function useZoomPan(
       if (fingers.size === 2 && last) {
         const cur = pinch();
         if (tap) {
-          if (Math.hypot(cur.cx - tap.cx, cur.cy - tap.cy) < TAP_SLOP && Math.abs(cur.d - last.d) < TAP_SLOP) return;
+          const s = tap.start.get(e.pointerId);
+          if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) < TAP_SLOP) return;
           tap = null;
         }
         zoomAt(cur.d / last.d, cur.cx, cur.cy, cur.cx - last.cx, cur.cy - last.cy);
         last = cur;
-      } else if (fingers.size === 1 && drag) {
+      } else if (fingers.size === 1) {
+        if (firstDown && Math.hypot(e.clientX - firstDown.x, e.clientY - firstDown.y) >= TAP_SLOP) flushTaps();
+        if (!drag) return;
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         drag = { x: e.clientX, y: e.clientY };
         setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
@@ -101,13 +119,11 @@ export function useZoomPan(
         if (e.timeStamp - tap.at <= TAP_MS) {
           taps++;
           clearTimeout(tapTimer);
-          tapTimer = setTimeout(() => {
-            tapRef.current?.(taps);
-            taps = 0;
-          }, TAP_GAP_MS);
+          tapTimer = setTimeout(flushTaps, TAP_GAP_MS);
         }
         tap = null;
       }
+      if (fingers.size === 0) firstDown = null;
       last = fingers.size === 2 ? pinch() : null;
       drag = fingers.size === 1 && fingerPansRef.current ? [...fingers.values()][0] : null;
     };
