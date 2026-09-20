@@ -37,7 +37,10 @@ const many = planPlot(Array.from({ length: MAX_PLOTS + 2 }, (_, i) => `y=${i}x`)
 check("caps the number of curves", many.ok && many.plots.length === MAX_PLOTS);
 check("says what was left off", many.ok && /left off/.test(many.message));
 
-check("empty request is refused", !planPlot([], null).ok);
+const cleared = planPlot([], null);
+check("an empty request wipes the graph", cleared.ok && cleared.plots.length === 0);
+check("wiping is allowed at rung 0", planPlot([], 0).ok);
+check("unreadable arguments are not a wipe", !planPlot(null, null).ok);
 check("blank expressions are refused", !planPlot(["", "   "], null).ok);
 check("an essay is not an expression", !planPlot(["y=".padEnd(400, "x")], null).ok);
 
@@ -46,11 +49,12 @@ check("* becomes \\cdot", toDesmosLatex("y = 2 * x") === "y = 2 \\cdot x");
 check("nothing else is rewritten", toDesmosLatex("y=\\frac{x}{2}") === "y=\\frac{x}{2}");
 
 // --- arguments arrive as a model-written JSON string ------------------------
-check("list of expressions", parsePlotArgs('{"expressions":["y=x","y=2x"]}').length === 2);
-check("a single expression", parsePlotArgs('{"expressions":"y=x"}')[0] === "y=x");
-check("non-strings are dropped", parsePlotArgs('{"expressions":["y=x",7,null]}').length === 1);
-check("junk is not a plot", parsePlotArgs("not json").length === 0);
-check("missing key is not a plot", parsePlotArgs("{}").length === 0);
+check("list of expressions", parsePlotArgs('{"expressions":["y=x","y=2x"]}')?.length === 2);
+check("a single expression", parsePlotArgs('{"expressions":"y=x"}')?.[0] === "y=x");
+check("non-strings are dropped", parsePlotArgs('{"expressions":["y=x",7,null]}')?.length === 1);
+check("an empty list is a wipe, not junk", parsePlotArgs('{"expressions":[]}')?.length === 0);
+check("junk is not a plot", parsePlotArgs("not json") === null);
+check("missing key is not a plot", parsePlotArgs("{}") === null);
 
 console.log(`\n${pass}/${total} correct`);
 if (pass !== total) process.exit(1);

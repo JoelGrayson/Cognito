@@ -708,8 +708,9 @@ function Notebook({
       if (!plan.ok) return plan.message;
       setPlots(plan.plots);
       // No point drawing into a panel they cannot see. On a narrow screen this
-      // covers the canvas, which is the right trade when a graph was asked for.
-      setPanel("graphs");
+      // covers the canvas, which is the right trade when a graph was asked for -
+      // but wiping the graph is no reason to open it.
+      if (plan.plots.length > 0) setPanel("graphs");
       return plan.message;
     }, []),
   );

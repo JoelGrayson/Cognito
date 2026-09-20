@@ -51,7 +51,17 @@ export function toDesmosLatex(expression: string): string {
  * discussion, or null when nothing is marked - an unmarked page is just a
  * calculator, and asking to see a parabola gives nothing away.
  */
-export function planPlot(expressions: readonly string[], rung: HintLevel | null): PlotPlan {
+export function planPlot(expressions: readonly string[] | null, rung: HintLevel | null): PlotPlan {
+  if (expressions === null) {
+    return { ok: false, message: "Nothing to plot: send one or more expressions as Desmos LaTeX, like y=2x+3." };
+  }
+
+  // Wiping the graph is the one call no rung can forbid: it only takes information
+  // away. It is also how the tutor gets the last answer off the screen.
+  if (expressions.length === 0) {
+    return { ok: true, plots: [], message: "Cleared what you had graphed. Anything they typed in themselves is still there." };
+  }
+
   if (rung !== null && rung < PLOT_FROM_RUNG) {
     return {
       ok: false,
@@ -80,17 +90,20 @@ export function planPlot(expressions: readonly string[], rung: HintLevel | null)
  * The arguments come off the socket as a JSON string written by a model, so
  * anything at all may be in there. A single string is accepted as well as a
  * list: asked for one curve, models send one.
+ *
+ * Null is unreadable arguments, which is NOT the same as an empty list - that is a
+ * request to wipe the graph, and a garbled call must not be read as one.
  */
-export function parsePlotArgs(json: string): string[] {
+export function parsePlotArgs(json: string): string[] | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch {
-    return [];
+    return null;
   }
-  if (typeof parsed !== "object" || parsed === null) return [];
+  if (typeof parsed !== "object" || parsed === null) return null;
   const value = (parsed as Record<string, unknown>).expressions;
   if (typeof value === "string") return [value];
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return null;
   return value.filter((e): e is string => typeof e === "string");
 }
