@@ -38,7 +38,7 @@ export default async function Home() {
   return (
     <div className="wb flex min-h-screen flex-col">
       <main className="flex-1">
-        <section className="mx-auto grid w-full max-w-6xl items-center gap-14 px-5 pb-14 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:pb-24 lg:pt-16">
+        <section className="mx-auto grid w-full max-w-6xl items-center gap-14 px-5 pb-14 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-16 lg:pb-24 lg:pt-16">
           <div>
             <h1 className="wb-serif text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl">
               Learn anything, in the right order.
@@ -60,12 +60,12 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="relative rounded-3xl border border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-6">
-            <div className="absolute -left-5 -top-9 hidden items-start gap-1 sm:flex">
+          <div className="relative rounded-3xl border border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-5">
+            <div className="absolute -right-5 -top-9 hidden flex-row-reverse items-start gap-1 sm:flex">
               <Mascot size={72} />
               <span className="relative mt-3 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
                 What should we dig into today?
-                <span className="absolute -left-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
+                <span className="absolute -right-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
               </span>
             </div>
             <RoadmapPreview className="mx-auto mt-4 h-auto w-full max-w-105" />
