@@ -1675,3 +1675,11 @@ a.card:focus-visible {
     @apply font-sans;
   }
 }
+/* ---------- Waitlist page ---------- */
+.waitlist-bob { display: inline-block; animation: waitlist-bob 3.2s ease-in-out infinite; }
+.waitlist-hop { display: inline-block; animation: waitlist-hop 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
+@keyframes waitlist-bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-7px) rotate(3deg); } }
+@keyframes waitlist-hop { 0% { transform: translateY(14px) scale(0.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .waitlist-bob, .waitlist-hop { animation: none; }
+}

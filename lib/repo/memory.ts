@@ -7,6 +7,8 @@ import type {
   PlanRepo,
   RoadmapRecord,
   RoadmapRepo,
+  WaitlistEntry,
+  WaitlistRepo,
 } from "./types";
 
 // Held on globalThis so dev hot reloads don't wipe the data.
@@ -169,3 +171,11 @@ function lessonIds(roadmapId: string): string[] {
   const prefix = `${roadmapId}:`;
   return [...store.lessons.keys()].filter((tag) => tag.startsWith(prefix)).map((tag) => tag.slice(prefix.length));
 }
+
+const waitlistByEmail = new Map<string, WaitlistEntry>();
+
+export const memoryWaitlistRepo: WaitlistRepo = {
+  async join(entry) {
+    if (!waitlistByEmail.has(entry.email)) waitlistByEmail.set(entry.email, entry);
+  },
+};

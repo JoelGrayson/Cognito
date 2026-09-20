@@ -156,3 +156,18 @@ export type NewStudyPlan = typeof studyPlans.$inferInsert;
 export type OnboardingSession = typeof onboardingSessions.$inferSelect;
 export type TopicProgress = typeof topicProgress.$inferSelect;
 export type NodeContent = typeof nodeContent.$inferSelect;
+
+/**
+ * People who asked to be told when they can try it. Not tied to `user`: someone
+ * scanning a QR code at a demo table has no account, and asking for one would lose them.
+ */
+export const waitlist = pgTable("waitlist", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Lower-cased before it gets here, so the unique index is case-insensitive in effect. */
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  studying: text("studying"),
+  /** Where the sign-up came from, e.g. "qr" for the printed code. */
+  source: text("source"),
+  createdAt: createdAt(),
+}).enableRLS();

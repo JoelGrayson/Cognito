@@ -60,3 +60,20 @@ export interface RoadmapRepo {
   /** Upserts; throws when the roadmap is missing or someone else's. */
   saveLesson(id: string, userId: string, nodeId: string, lesson: Lesson): Promise<void>;
 }
+
+export interface WaitlistEntry {
+  /** Trimmed and lower-cased by the caller. */
+  email: string;
+  name?: string;
+  studying?: string;
+  /** Where the sign-up came from, e.g. "qr". */
+  source?: string;
+}
+
+export interface WaitlistRepo {
+  /**
+   * Idempotent: joining twice with the same email keeps the first entry and is not an
+   * error. Telling the two apart would let anyone test whether an address has signed up.
+   */
+  join(entry: WaitlistEntry): Promise<void>;
+}
