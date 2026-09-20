@@ -19,6 +19,8 @@ export function InkLayer({ strokes, tool, color, width, interactive, visible, on
   const svgRef = useRef<SVGSVGElement>(null);
   const [current, setCurrent] = useState<number[] | null>(null);
   const erasing = useRef(false);
+  const pointers = useRef(new Set<number>());
+  const multiTouch = useRef(false);
 
   const toPage = (e: PointerEvent<SVGSVGElement>): [number, number] | null => {
     const svg = svgRef.current;
@@ -50,6 +52,14 @@ export function InkLayer({ strokes, tool, color, width, interactive, visible, on
         touchAction: "none",
       }}
       onPointerDown={(e) => {
+        pointers.current.add(e.pointerId);
+        if (pointers.current.size > 1) {
+          multiTouch.current = true;
+          erasing.current = false;
+          setCurrent(null);
+          return;
+        }
+        if (!interactive) return;
         const p = toPage(e);
         if (!p) return;
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -59,6 +69,7 @@ export function InkLayer({ strokes, tool, color, width, interactive, visible, on
         } else setCurrent(p);
       }}
       onPointerMove={(e) => {
+        if (multiTouch.current) return;
         const p = toPage(e);
         if (!p) return;
         if (erasing.current) return eraseAt(...p);
@@ -66,14 +77,18 @@ export function InkLayer({ strokes, tool, color, width, interactive, visible, on
         const lx = current[current.length - 2], ly = current[current.length - 1];
         if (Math.hypot(p[0] - lx, p[1] - ly) >= 1.5) setCurrent([...current, ...p]);
       }}
-      onPointerUp={() => {
+      onPointerUp={(e) => {
+        pointers.current.delete(e.pointerId);
+        if (pointers.current.size === 0) multiTouch.current = false;
         erasing.current = false;
         if (current) {
           onAdd({ id: newId(), points: current, color: strokeColor, width: strokeWidth, highlighter: isHl });
           setCurrent(null);
         }
       }}
-      onPointerCancel={() => {
+      onPointerCancel={(e) => {
+        pointers.current.delete(e.pointerId);
+        if (pointers.current.size === 0) multiTouch.current = false;
         erasing.current = false;
         setCurrent(null);
       }}

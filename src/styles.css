@@ -68,9 +68,13 @@ button:disabled { cursor: default; opacity: 0.45; }
 .link:not(:disabled):hover { color: var(--red); }
 
 /* page */
-.canvas-wrap { overflow: auto; padding: 24px; display: flex; justify-content: center; align-items: flex-start; }
+.canvas-wrap { position: relative; overflow: hidden; padding: 24px; display: flex; justify-content: center; align-items: flex-start; touch-action: none; }
+.zoom-badge {
+  position: absolute; right: 16px; bottom: 16px; border: 1px solid var(--border); background: var(--panel);
+  border-radius: 999px; padding: 4px 10px; font-size: 12px; font-variant-numeric: tabular-nums; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
 .page {
-  position: relative; width: min(100%, 816px); background: #fff;
+  position: relative; width: min(100%, 816px); background: #fff; transform-origin: 0 0; touch-action: none;
   box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 12px 32px rgba(0,0,0,.12); border-radius: 4px; overflow: hidden;
   user-select: none;
 }

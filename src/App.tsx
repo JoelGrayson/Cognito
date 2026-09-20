@@ -9,6 +9,7 @@ import { Toolbar } from "./components/Toolbar";
 import { readFileAsDataUrl, renderQuestionPage, SAMPLE_QUESTIONS, type Doc } from "./lib/document";
 import { markToPage, PEN_COLORS, renderPage, type Stroke, type Tool } from "./lib/ink";
 import { useHistory } from "./lib/useHistory";
+import { useZoomPan } from "./lib/useZoomPan";
 
 export default function App() {
   const [doc, setDoc] = useState<Doc | null>(null);
@@ -28,6 +29,8 @@ export default function App() {
   });
 
   const fileInput = useRef<HTMLInputElement>(null);
+  const canvasWrap = useRef<HTMLDivElement>(null);
+  const zoom = useZoomPan(canvasWrap);
   const checkSeq = useRef(0);
 
   const resetInk = ink.reset;
@@ -160,8 +163,14 @@ export default function App() {
           />
         </div>
 
-        <div className="canvas-wrap">
-          <div className="page" style={{ aspectRatio: `${PAGE_W} / ${PAGE_H}` }}>
+        <div className="canvas-wrap" ref={canvasWrap}>
+          <div
+            className="page"
+            style={{
+              aspectRatio: `${PAGE_W} / ${PAGE_H}`,
+              transform: `translate(${zoom.view.x}px, ${zoom.view.y}px) scale(${zoom.view.scale})`,
+            }}
+          >
             {doc && layers.document.visible && (
               <img
                 className="layer"
@@ -184,6 +193,11 @@ export default function App() {
             <MarkLayer marks={marks} visible={layers.marks.visible} />
             {checking && <div className="scan" />}
           </div>
+          {zoom.view.scale !== 1 && (
+            <button className="zoom-badge" onClick={zoom.reset} title="Reset zoom">
+              {Math.round(zoom.view.scale * 100)}%
+            </button>
+          )}
         </div>
 
         <FeedbackPanel
