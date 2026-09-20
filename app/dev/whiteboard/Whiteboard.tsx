@@ -5,8 +5,18 @@
  */
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  AgentProvider,
+  useAgentClientTool,
+  useAgentMicrophone,
+  useAgentMode,
+  useAgentPlayer,
+  useAgentSession,
+  useAgentState,
+  type AgentSessionConfig,
+} from "@deepgram/react";
 import {
   AssetRecordType,
   Tldraw,
@@ -27,24 +37,11 @@ import { masteryOf } from "@/lib/whiteboard/mastery";
 import type { Subject } from "@/lib/subjects";
 import { deleteSheet, fileOf, listSheets, saveSheet, sheetId, type SavedSheet } from "@/lib/whiteboard/library";
 import { anchorsFrom, premiseFor, problemFor, type PrintedLine, type ProblemAnchor } from "@/lib/whiteboard/worksheet";
-import { assessExplanation, replyTo } from "@/lib/whiteboard/explanation";
-import { createSpeaker, createPushToTalk, spokenFor, ASK_WHY, type Speaker, type PushToTalk } from "@/lib/whiteboard/voice";
-
-/** Free-tier-safe voices, verified against this account. Library voices return 402. */
-const VOICE_OPTIONS = [
-  ["XrExE9yKIg1WjnnlVkGX", "Matilda"],
-  ["EXAVITQu4vr4xnSDxMaL", "Sarah"],
-  ["FGY2WhTYpPnrIDTdsKH5", "Laura"],
-  ["cgSgspJ2msm6clMCkdW9", "Jessica"],
-  ["Xb7hH8MSUJpSbSDYk0k2", "Alice"],
-  ["pFZP5JQG7iQjIQuC4Bku", "Lily"],
-  ["JBFqnCBsd6RMkjVDRZzb", "George"],
-  ["IKne3meq5aSn9XLyUdCD", "Charlie"],
-  ["N2lVS1w4EtoT3dr4eOWO", "Callum"],
-  ["bIHbv24MWmeRgasZH58o", "Will"],
-  ["iP95p4xoKVk53GoZ742B", "Chris"],
-  ["onwK4e9ZLuTAKqWW03F9", "Daniel"],
-] as const;
+import { assessExplanation } from "@/lib/whiteboard/explanation";
+import { spokenFor, ASK_WHY } from "@/lib/whiteboard/voice";
+import { workContext, type StepView } from "@/lib/whiteboard/context";
+import { READ_WORK, TUTOR_VOICES, TUTOR_VOICE_MODEL, whiteboardAgentSettings } from "@/lib/ai/whiteboard-agent";
+import { ensureAnonymousSession } from "@/lib/auth-client";
 import { DEFAULT_CONFIG, type HintLevel } from "@/lib/whiteboard/policy";
 import type { Equivalence } from "@/lib/whiteboard/checker/numeric";
 import {
@@ -146,24 +143,88 @@ interface Reading {
   checkMs: number | null;
 }
 
-/** Speak, and surface a failure rather than swallowing it. Every call site used to
- *  drop its own rejection, so an utterance that never played was indistinguishable
- *  from a tutor that had nothing to say. */
-function speakOrReport(
-  speaker: Speaker | null,
-  report: (message: string | null) => void,
-  text: string,
-  voice?: string,
-): void {
-  speaker
-    ?.say(text, voice)
-    // Clear on success too. A "playback blocked" banner left standing while the next
-    // line plays aloud is worse than the silence it was added to explain.
-    .then(() => report(null))
-    .catch((e) => report(e instanceof Error ? e.message : "Voice failed."));
+/**
+ * The tutor's voice is one Deepgram voice agent session, the same stack the live
+ * lessons run on. It is held open for the whole page and is used in two directions:
+ * the checker's findings are injected into its mouth verbatim, and push-to-talk
+ * unmutes the microphone so the learner can just ask it something.
+ *
+ * The microphone is not acquired until the first hold - a permission prompt the
+ * moment the page opens reads as hostile - and once acquired it stays open but
+ * muted, because re-acquiring it on every press swallows the first word.
+ */
+export function Whiteboard({ subject }: { subject: Subject }) {
+  const [micLive, setMicLive] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const config = useMemo<AgentSessionConfig>(
+    () => ({
+      auth: {
+        tokenFactory: async () => {
+          // The token route is authenticated; on this page there may be no session yet.
+          await ensureAnonymousSession();
+          const res = await fetch("/api/voice/token", { cache: "no-store" });
+          if (!res.ok) {
+            throw new Error(
+              res.status === 503
+                ? "Voice is off: set DEEPGRAM_API_KEY in .env.local."
+                : "Couldn't start the tutor's voice.",
+            );
+          }
+          return ((await res.json()) as { access_token: string }).access_token;
+        },
+      },
+      agent: whiteboardAgentSettings(subject.name),
+      audio: {
+        input: { encoding: "linear16", sampleRate: 16000 },
+        output: { encoding: "linear16", sampleRate: 24000 },
+      },
+      reconnect: { enabled: true, maxAttempts: 3 },
+    }),
+    [subject.name],
+  );
+
+  return (
+    <AgentProvider
+      config={config}
+      autoStart
+      microphone={micLive}
+      microphoneOptions={{
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 16000,
+      }}
+      onError={(e) => setVoiceError(e.description || "The tutor's voice dropped out.")}
+      onSdkError={(e) =>
+        setVoiceError(
+          e.name === "NotAllowedError"
+            ? "Couldn't reach the microphone — check the browser permission."
+            : e.message || "The tutor's voice dropped out.",
+        )
+      }
+    >
+      <Notebook
+        subject={subject}
+        onMicLive={() => setMicLive(true)}
+        voiceError={voiceError}
+        clearVoiceError={() => setVoiceError(null)}
+      />
+    </AgentProvider>
+  );
 }
 
-export function Whiteboard({ subject }: { subject: Subject }) {
+function Notebook({
+  subject,
+  onMicLive,
+  voiceError,
+  clearVoiceError,
+}: {
+  subject: Subject;
+  onMicLive: () => void;
+  voiceError: string | null;
+  clearVoiceError: () => void;
+}) {
   const editorRef = useRef<Editor | null>(null);
   /** The same editor, as state: the Dock renders from it, the callbacks read the ref. */
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -199,7 +260,11 @@ export function Whiteboard({ subject }: { subject: Subject }) {
   // Readings mirrored into a ref: the commit callback is registered once at mount
   // and would otherwise close over a stale array.
   const recorderRef = useRef<StrokeRecorder | null>(null);
-  const speakerRef = useRef<Speaker | null>(null);
+  const session = useAgentSession();
+  const { state: agentState } = useAgentState();
+  const { mode: agentMode } = useAgentMode();
+  const { micActive, setMicMuted } = useAgentMicrophone();
+  const { setOutputMuted } = useAgentPlayer();
   const [voiceOn, setVoiceOn] = useState(true);
   const voiceOnRef = useRef(voiceOn);
   useEffect(() => {
@@ -207,7 +272,7 @@ export function Whiteboard({ subject }: { subject: Subject }) {
   }, [voiceOn]);
   const [said, setSaid] = useState<string | null>(null);
   /** Utterance for a line that was read provisionally and hasn't been spoken yet. */
-  const pendingSpeechRef = useRef<{ lineId: number; text: string } | null>(null);
+  const pendingSpeechRef = useRef<{ lineId: number; text: string; gen: number } | null>(null);
   /** Lines already settled by a line break. Kept separately because the two halves
    *  race: the idle OCR request is async, so a fast next line can finalize before
    *  the reading even exists. Whichever arrives second speaks. */
@@ -217,14 +282,11 @@ export function Whiteboard({ subject }: { subject: Subject }) {
    *  response that arrives 800ms late redraws a mark the learner has already fixed,
    *  or speaks about a line they have since rewritten. */
   const genRef = useRef(0);
-  const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
-  const pttRef = useRef<PushToTalk | null>(null);
+  const [voiceId, setVoiceId] = useState<string>(TUTOR_VOICE_MODEL);
   const [listening, setListening] = useState(false);
-  /** Between releasing the mic and the tutor answering: a transcription and a model
-   *  call, several seconds in which the page otherwise shows nothing at all. */
-  const [thinking, setThinking] = useState(false);
-  /** Last few turns, so the tutor can avoid repeating itself. */
-  const historyRef = useRef<{ who: "tutor" | "learner"; text: string }[]>([]);
+  /** Held down right now. A ref as well as state: the microphone opens asynchronously
+   *  on the first press and the effect that mutes it must see the CURRENT hold. */
+  const holdingRef = useRef(false);
   /** The step currently under discussion. Set when a mark is drawn, cleared once the
    *  learner names the error - that is what makes "speaking is the hint request"
    *  possible without a button. */
@@ -261,10 +323,6 @@ export function Whiteboard({ subject }: { subject: Subject }) {
   const [penColor, setPenColor] = useState<PenColor>("black");
   const [penSize, setPenSize] = useState<PenSize>("m");
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const voiceIdRef = useRef(voiceId);
-  useEffect(() => {
-    voiceIdRef.current = voiceId;
-  }, [voiceId]);
   const annotatorRef = useRef<Annotator | null>(null);
   /** lineId -> where that line sits on the canvas. This is what lets marks be placed
    *  without anyone computing coordinates. */
@@ -294,6 +352,59 @@ export function Whiteboard({ subject }: { subject: Subject }) {
     [],
   );
 
+  const agentStateRef = useRef(agentState);
+  useEffect(() => {
+    agentStateRef.current = agentState;
+  }, [agentState]);
+
+  /** An announcement made before the session was up, or during a reconnect. Only
+   *  the newest is kept: by the time the socket is back, an older one is describing
+   *  a line the learner has moved on from. */
+  const heldRef = useRef<{ text: string; gen: number } | null>(null);
+
+  /** Put words in the tutor's mouth. What the checker found is spoken verbatim -
+   *  the verdict is deterministic and nothing may rephrase it into an accusation
+   *  the checker never made. Queued rather than interrupting, so the tutor never
+   *  talks over the learner; the words are on screen either way. */
+  const speak = useCallback(
+    (text: string, gen: number = genRef.current) => {
+      if (!voiceOnRef.current) return;
+      if (agentStateRef.current !== "connected") {
+        // Connecting takes a second or two, and the first line can be written and
+        // checked inside it. Hold the words rather than dropping them silently.
+        // Stamped with the read these words came FROM, not the newest one: reads can
+        // land out of order, and a later one may already have superseded this.
+        const previous = heldRef.current;
+        if (!previous || gen >= previous.gen) heldRef.current = { text, gen };
+        return;
+      }
+      session.injectAgentMessage(text, "queue");
+    },
+    [session],
+  );
+
+  useEffect(() => {
+    if (agentState !== "connected") return;
+    const held = heldRef.current;
+    heldRef.current = null;
+    // Not if any line has been re-read since - the words were about the page as it
+    // stood then, and the canned phrases repeat, so text alone cannot tell the two
+    // apart. Reset clears the hold outright.
+    if (held && held.gen === genRef.current && voiceOnRef.current)
+      session.injectAgentMessage(held.text, "queue");
+  }, [agentState, session]);
+
+  // The voice toggle silences the tutor without dropping the session: the learner
+  // can still talk to it and read the answer in the bubble.
+  useEffect(() => setOutputMuted(!voiceOn), [voiceOn, setOutputMuted]);
+
+  // The microphone is live only while the key is held, and it opens UNMUTED - so a
+  // press shorter than the permission/startup round trip has to be caught here, or
+  // the room stays on air after the learner has let go.
+  useEffect(() => {
+    if (micActive && !holdingRef.current) setMicMuted(true);
+  }, [micActive, setMicMuted]);
+
   /** Redraw from scratch rather than patching: with several steps marked at once,
    *  escalating one of them must not wipe the others. Marks are tagged, so this never
    *  touches the learner's ink. */
@@ -321,9 +432,7 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       if (pending?.lineId === lineId) {
         pendingSpeechRef.current = null;
         finalizedRef.current.delete(lineId);
-        if (voiceOnRef.current) {
-          speakOrReport(speakerRef.current, setError, pending.text, voiceIdRef.current);
-        }
+        speak(pending.text, pending.gen);
       }
       return;
     }
@@ -398,7 +507,6 @@ export function Whiteboard({ subject }: { subject: Subject }) {
         pendingSpeechRef.current = null;
         finalizedRef.current.delete(lineId);
         setSaid(null);
-        historyRef.current = [];
       }
 
       // policy.ts has always carried this rule; the page simply never asked. Below
@@ -444,27 +552,22 @@ export function Whiteboard({ subject }: { subject: Subject }) {
           const line = spokenFor(finding.rung, verdict.kind);
           const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
           const utterance = `${line} ${why}`;
-          historyRef.current = [{ who: "tutor", text: utterance }];
           setSaid(utterance);
 
           // Speak only once the line is FINAL. A mark is glanceable and self-corrects
           // on the next read; a spoken accusation cannot be taken back, and an idle
           // commit is explicitly provisional - the learner may still be writing.
           if (reason === "line-break") {
-            if (voiceOnRef.current) {
-              speakOrReport(speakerRef.current, setError, utterance, voiceIdRef.current);
-            }
+            speak(utterance, gen);
           } else if (wasFinalized) {
             // Finalization won the race and arrived before this reading existed.
             // Consume it now rather than waiting for an event that already passed.
-            if (voiceOnRef.current) {
-              speakOrReport(speakerRef.current, setError, utterance, voiceIdRef.current);
-            }
+            speak(utterance, gen);
           } else {
             // Provisional: hold the words until the line is settled, so a half-read
             // line never becomes a spoken accusation - but the step is not silenced
             // forever either, which is what happened before "finalized" existed.
-            pendingSpeechRef.current = { lineId, text: utterance };
+            pendingSpeechRef.current = { lineId, text: utterance, gen };
           }
         }
       }
@@ -496,11 +599,10 @@ export function Whiteboard({ subject }: { subject: Subject }) {
     } finally {
       setBusy(false);
     }
-  }, [redrawMarks, subject.checker]);
+  }, [redrawMarks, speak, subject.checker]);
 
   /** "I'm done" - settle the last line, wait for every read, then say it all at once. */
   const checkNow = useCallback(async () => {
-    speakerRef.current?.stop();
     recorderRef.current?.flush();
     setChecking(true);
     while (inflightRef.current.size > 0) await Promise.allSettled([...inflightRef.current]);
@@ -532,137 +634,95 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       const count = fresh.length > 1 ? `I've marked ${fresh.length} steps. Start with the first one.` : "";
       const why = ASK_WHY[Math.floor(Math.random() * ASK_WHY.length)];
       utterance = `${count} ${spokenFor(first.rung, first.verdict.kind)} ${why}`.trim();
-      historyRef.current = [{ who: "tutor", text: utterance }];
     }
     setSaid(utterance);
-    if (voiceOnRef.current) speakOrReport(speakerRef.current, setError, utterance, voiceIdRef.current);
-  }, [redrawMarks]);
+    speak(utterance);
+  }, [redrawMarks, speak]);
 
-  const beginTalking = useCallback(async () => {
-    if (pttRef.current?.recording) return;
-    // The learner always outranks the tutor: talking cuts it off mid-sentence.
-    speakerRef.current?.stop();
-    pttRef.current ??= createPushToTalk();
-    try {
-      await pttRef.current.start();
-      setListening(true);
-    } catch {
-      setError("Couldn't reach the microphone — check the browser permission.");
-    }
-  }, []);
+  const beginTalking = useCallback(() => {
+    if (holdingRef.current) return;
+    holdingRef.current = true;
+    setListening(true);
+    // First hold acquires the microphone; later holds just unmute the open one.
+    onMicLive();
+    setMicMuted(false);
+  }, [onMicLive, setMicMuted]);
 
-  const endTalking = useCallback(async () => {
-    const ptt = pttRef.current;
-    if (!ptt?.recording) return;
+  const endTalking = useCallback(() => {
+    if (!holdingRef.current) return;
+    holdingRef.current = false;
     setListening(false);
-    setThinking(true);
-    try {
-      const { transcript } = await ptt.stopAndTranscribe();
-      if (!transcript) {
-        setSaid("I didn't catch that. Hold the mic, say it again, then let go.");
-        return;
-      }
+    setMicMuted(true);
+  }, [setMicMuted]);
 
+  /** The learner just named the error, and the agent has not been told yet. */
+  const justFoundRef = useRef(false);
+
+  /** Everything the tutor may know about the page, gated by the rung of the step
+   *  under discussion - see lib/whiteboard/context.ts. */
+  useAgentClientTool(
+    READ_WORK,
+    useCallback(() => {
+      const visible = readingsRef.current.filter((r) => !r.hidden);
       const open = openRef.current;
-      // Nothing is under discussion, so there is nothing to explain.
-      if (!open) {
-        setSaid("I heard you, but there's no step marked to talk about yet.");
+      const steps: StepView[] = visible.map((r, i) => ({
+        position: i + 1,
+        text: r.parsed || r.raw,
+        status:
+          open?.lineId === r.lineId
+            ? "marked"
+            : followedRef.current.get(r.lineId)?.revealed
+              ? "follows"
+              : "unjudged",
+      }));
+      const justFound = justFoundRef.current;
+      justFoundRef.current = false;
+      return workContext({
+        subject: subject.name,
+        steps,
+        justFound,
+        open: open
+          ? {
+              position: visible.findIndex((r) => r.lineId === open.lineId) + 1,
+              premise: open.premise,
+              step: open.parsedStep,
+              verdict: open.verdict,
+              rung: open.rung,
+            }
+          : null,
+      });
+    }, [subject.name]),
+  );
+
+  // Every learner turn is also a move in the hint ladder. The agent decides the
+  // WORDS; whether they actually found the error stays with the deterministic
+  // check, which knows - a model guessing "yes" closes a real error because the
+  // learner happened to name some other plausible mistake.
+  useEffect(() => {
+    const onText = (msg: { role: string; content: string }) => {
+      if (msg.role === "assistant") {
+        setSaid(msg.content);
         return;
       }
+      if (msg.role !== "user") return;
+      const open = openRef.current;
+      if (!open) return;
 
       // Explaining and not getting there IS the request for more help, so the
       // learner never has to press anything to ask. The system still never
       // volunteers a rung unprompted - this IS the prompt.
-      historyRef.current.push({ who: "learner", text: transcript });
-
-      // Ask the model what to say. It is handed the verdict as ground truth and the
-      // rung as a ceiling on what it may reveal -- it decides the WORDS, never the
-      // maths. Falls back to the canned lines if it is unavailable, so a missing key
-      // or a flaky network degrades instead of breaking mid-demo.
-      let outcome = assessExplanation(transcript, open.verdict);
-      let line = replyTo(outcome, open.verdict);
-      let fromModel = false;
-
-      try {
-        const r = await fetch("/api/whiteboard/reply", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            // reverse first: find() walks forwards and would return the OLDEST earlier
-            // line, so with three or more steps the model would be shown a different
-            // transition than the checker actually judged.
-            // The premise the checker actually used - see openRef.premise.
-            previousStep: open.premise,
-            currentStep: open.parsedStep,
-            verdictKind: open.verdict.kind,
-            verdictDetail:
-              open.verdict.kind === "direction"
-                ? open.verdict.expected
-                : open.verdict.kind === "rescaled"
-                  ? String(open.verdict.by.toFixed(2))
-                  : "",
-            rung: open.rung,
-            said: transcript,
-            history: historyRef.current.slice(-6),
-          }),
-        });
-        if (r.ok) {
-          const d = await r.json();
-          // Discard a reply whose discussion has been superseded - the learner may
-          // have fixed the line while the model was thinking.
-          if (openRef.current !== open) return;
-          if (d.reply) {
-            line = d.reply;
-            fromModel = true;
-            // Take the model's WORDS, not its judgement. At rungs 1-2 it is
-            // deliberately not told the verdict or shown the working, so its
-            // foundIt is a guess - and a wrong guess closes a real error because
-            // the learner happened to name some other plausible mistake. Whether
-            // they found it stays with the deterministic check, which knows.
-            if (open.rung >= 3 && d.foundIt && outcome.kind !== "found-it") {
-              outcome = { kind: "not-yet" };
-              // The model wrote `reply` and `foundIt` together, so its words are a
-              // congratulation. Keeping them while escalating would tell the learner
-              // "exactly, nice catch" and then hand them a bigger hint.
-              line = replyTo(outcome, open.verdict);
-              fromModel = false;
-            }
-          }
-        }
-      } catch {
-        // keep the canned line
-      }
-
-      if (outcome.kind === "found-it") {
-        // They did the work; get out of the way - and if a whole sheet was marked at
-        // once, move on to the next step rather than leaving them to guess which.
+      if (assessExplanation(msg.content, open.verdict).kind === "found-it") {
         findingsRef.current.delete(open.lineId);
-        const following = revealedFindings()[0] ?? null;
-        openRef.current = following;
-        if (following) {
-          line = `${line} There's another step marked. Have a look at that one next.`;
-          historyRef.current = [];
-        }
+        justFoundRef.current = true;
+        openRef.current = revealedFindings()[0] ?? null;
       } else {
-        const next = Math.min(open.rung + 1, 5) as HintLevel;
-        open.rung = next;
-        // Only bolt the canned rung line on when the model didn't write one.
-        if (!fromModel) line = `${line} ${spokenFor(next, open.verdict.kind)}`.trim();
+        open.rung = Math.min(open.rung + 1, 5) as HintLevel;
       }
       redrawMarks();
-
-      historyRef.current.push({ who: "tutor", text: line });
-
-      setSaid(line);
-      if (voiceOnRef.current) {
-        speakOrReport(speakerRef.current, setError, line, voiceIdRef.current);
-      }
-    } catch {
-      setError("Transcription failed.");
-    } finally {
-      setThinking(false);
-    }
-  }, [redrawMarks, revealedFindings]);
+    };
+    session.on("conversation-text", onText);
+    return () => void session.off("conversation-text", onText);
+  }, [session, redrawMarks, revealedFindings]);
 
   // Hold SPACE to talk. A key rather than a button because the learner's hand is
   // already on a pen -- reaching for a target on screen breaks the thought.
@@ -672,37 +732,40 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       const el = e.target as HTMLElement | null;
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
       e.preventDefault();
-      void beginTalking();
+      beginTalking();
     };
     const up = (e: KeyboardEvent) => {
       if (e.code !== "Space") return;
       e.preventDefault();
-      void endTalking();
+      endTalking();
     };
+    // A key held down while the tab loses focus never sends its keyup, and the
+    // microphone would stay open in a window the learner has walked away from.
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    window.addEventListener("blur", endTalking);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", endTalking);
     };
   }, [beginTalking, endTalking]);
-
-  useEffect(() => () => pttRef.current?.dispose(), []);
 
   /** Clears the learner's ink and the tutor's marks. An uploaded sheet stays. */
   const reset = useCallback(() => {
     setReadings([]);
     setError(null);
     recorderRef.current?.clear();
-    speakerRef.current?.stop();
     setSaid(null);
+    heldRef.current = null;
     pendingSpeechRef.current = null;
     finalizedRef.current.clear();
     openRef.current = null;
     findingsRef.current.clear();
     followedRef.current.clear();
-    historyRef.current = [];
+    justFoundRef.current = false;
     boundsRef.current.clear();
+    session.clearConversationHistory();
     const editor = editorRef.current;
     if (!editor) return;
     const ink = editor
@@ -710,7 +773,7 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       .filter((sh) => !(sh.meta as { worksheetPage?: boolean }).worksheetPage)
       .map((sh) => sh.id);
     if (ink.length > 0) editor.deleteShapes(ink);
-  }, []);
+  }, [session]);
 
   const removeWorksheet = useCallback(() => {
     anchorsRef.current = [];
@@ -963,18 +1026,15 @@ export function Whiteboard({ subject }: { subject: Subject }) {
                     value={voiceId}
                     onChange={(e) => {
                       setVoiceId(e.target.value);
-                      // Speak on change so the voice can be auditioned without writing anything.
-                      speakOrReport(
-                        speakerRef.current,
-                        setError,
-                        "Something in there doesn't hold up. Want to take another look?",
-                        e.target.value,
-                      );
+                      // Switch the running session's voice, then audition it, so it
+                      // can be chosen without writing anything.
+                      session.updateSpeak({ provider: { type: "deepgram", version: "v1", model: e.target.value } });
+                      speak("Something in there doesn't hold up. Want to take another look?");
                     }}
                     className={field}
                   >
-                    {VOICE_OPTIONS.map(([id, name]) => (
-                      <option key={id} value={id}>
+                    {TUTOR_VOICES.map(([model, name]) => (
+                      <option key={model} value={model}>
                         {name}
                       </option>
                     ))}
@@ -1055,7 +1115,6 @@ export function Whiteboard({ subject }: { subject: Subject }) {
                 editor.registerExternalContentHandler("text", () => {});
 
                 annotatorRef.current = createAnnotator(editor);
-                speakerRef.current ??= createSpeaker();
                 // React dev-mode mounts twice. Without this, two store listeners end up
                 // registered and every line is submitted twice.
                 recorderRef.current?.stop();
@@ -1072,10 +1131,17 @@ export function Whiteboard({ subject }: { subject: Subject }) {
             />
           </div>
 
-          {error && (
+          {(error ?? voiceError) && (
             <div className="wb-pop absolute inset-x-3 top-3 z-[300] mx-auto flex max-w-md items-start gap-2 rounded-2xl border border-(--wb-bad-ink)/15 bg-(--wb-bad) px-4 py-2.5 text-sm text-(--wb-bad-ink)">
-              <span className="flex-1">{error}</span>
-              <button onClick={() => setError(null)} aria-label="Dismiss" className="mt-0.5">
+              <span className="flex-1">{error ?? voiceError}</span>
+              <button
+                onClick={() => {
+                  setError(null);
+                  clearVoiceError();
+                }}
+                aria-label="Dismiss"
+                className="mt-0.5"
+              >
                 <Icon name="x" size={14} />
               </button>
             </div>
@@ -1092,8 +1158,8 @@ export function Whiteboard({ subject }: { subject: Subject }) {
                 voiceOn={voiceOn}
                 onVoiceOn={setVoiceOn}
                 listening={listening}
-                onTalkStart={() => void beginTalking()}
-                onTalkEnd={() => void endTalking()}
+                onTalkStart={beginTalking}
+                onTalkEnd={endTalking}
                 onReset={reset}
               />
             </div>
@@ -1118,13 +1184,15 @@ export function Whiteboard({ subject }: { subject: Subject }) {
             <div className="min-w-0 flex-1 pt-1">
               {listening ? (
                 <TutorBubble text="I'm listening…" />
-              ) : thinking ? (
+              ) : agentMode === "thinking" ? (
                 <TutorBubble text="Let me think…" />
               ) : said ? (
                 <TutorBubble text={said} onDismiss={() => setSaid(null)} />
               ) : (
                 <p className="pt-2.5 text-sm text-(--wb-muted)">
-                  {subject.checker ? "I'll speak up if a step doesn't follow." : "Draw away. I'm just keeping you company."}
+                  {subject.checker
+                    ? "I'll speak up if a step doesn't follow. Hold space, or the mic, to ask me something."
+                    : "Draw away. Hold space, or the mic, to ask me something."}
                 </p>
               )}
             </div>
