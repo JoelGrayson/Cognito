@@ -210,9 +210,6 @@ export default function SpikePage() {
   const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
   const pttRef = useRef<PushToTalk | null>(null);
   const [listening, setListening] = useState(false);
-  /** What the learner said, newest last. This is the artifact that matters: the
-   *  point of asking "why" is that they articulate it, not that we grade it. */
-  const [explanations, setExplanations] = useState<{ text: string; ms: number; outcome: string }[]>([]);
   /** Last few turns, so the tutor can avoid repeating itself. */
   const historyRef = useRef<{ who: "tutor" | "learner"; text: string }[]>([]);
   /** The step currently under discussion. Set when a mark is drawn, cleared once the
@@ -518,23 +515,12 @@ export default function SpikePage() {
     if (!ptt?.recording) return;
     setListening(false);
     try {
-      const { transcript, ms } = await ptt.stopAndTranscribe();
+      const { transcript } = await ptt.stopAndTranscribe();
       if (!transcript) return;
 
       const open = openRef.current;
-      if (!open) {
-        setExplanations((e) => [...e, { text: transcript, ms, outcome: "" }]);
-        // Always answer. Showing the learner's words with nothing after them looks
-        // like the tutor heard and ignored them. The held-back line is the same
-        // whether or not anything is wrong, so it gives nothing away.
-        const line =
-          modeRef.current === "when-done"
-            ? "I'm saving my comments until you press check my work."
-            : "Nothing's marked right now, so keep going.";
-        setSaid(line);
-        if (voiceOnRef.current) speakOrReport(speakerRef.current, setError, line, voiceIdRef.current);
-        return;
-      }
+      // Nothing is under discussion, so there is nothing to explain.
+      if (!open) return;
 
       // Explaining and not getting there IS the request for more help, so the
       // learner never has to press anything to ask. The system still never
@@ -576,10 +562,7 @@ export default function SpikePage() {
           const d = await r.json();
           // Discard a reply whose discussion has been superseded - the learner may
           // have fixed the line while the model was thinking.
-          if (openRef.current !== open) {
-            setExplanations((e) => [...e, { text: transcript, ms, outcome: "" }]);
-            return;
-          }
+          if (openRef.current !== open) return;
           if (d.reply) {
             line = d.reply;
             fromModel = true;
@@ -601,8 +584,6 @@ export default function SpikePage() {
       } catch {
         // keep the canned line
       }
-
-      setExplanations((e) => [...e, { text: transcript, ms, outcome: outcome.kind }]);
 
       if (outcome.kind === "found-it") {
         // They did the work; get out of the way - and if a whole sheet was marked at
@@ -667,7 +648,6 @@ export default function SpikePage() {
     setSaid(null);
     pendingSpeechRef.current = null;
     finalizedRef.current.clear();
-    setExplanations([]);
     openRef.current = null;
     findingsRef.current.clear();
     historyRef.current = [];
@@ -1046,24 +1026,8 @@ export default function SpikePage() {
           {error && (
             <p className="mb-3 rounded border border-red-900 bg-red-950/50 p-2 text-xs text-red-300">{error}</p>
           )}
-          {explanations.length > 0 && (
-            <div className="mb-3 space-y-1">
-              {explanations.map((x, i) => (
-                <p key={i} className="rounded border border-sky-900 bg-sky-950/40 p-2 text-xs text-sky-200">
-                  you: “{x.text}”
-                  {x.outcome && (
-                    <span
-                      className={`ml-1 ${x.outcome === "found-it" ? "text-green-400" : "text-neutral-500"}`}
-                    >
-                      · {x.outcome}
-                    </span>
-                  )}
-                </p>
-              ))}
-            </div>
-          )}
           {said && (
-            <p className="mb-3 rounded border border-neutral-700 bg-neutral-900 p-2 text-xs italic text-neutral-300">
+            <p className="mb-3 rounded border border-red-900 bg-red-950/40 p-2 text-sm italic text-red-300">
               “{said}”
             </p>
           )}
