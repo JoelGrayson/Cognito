@@ -239,7 +239,7 @@ export function LessonView({
         )}
       </aside>
       {calling && lesson && (
-        <VideoCall topic={topic} lesson={lesson} providerId={providerId} onClose={() => setCalling(false)} />
+        <VideoCall topic={topic} lesson={lesson} onClose={() => setCalling(false)} />
       )}
       {watching && lesson && (
         <Explainer topic={topic} lesson={lesson} providerId={providerId} onClose={() => setWatching(false)} />

@@ -19,6 +19,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Transform the React adapter so call tests can substitute audio hardware/transport.
+    server: { deps: { inline: ["@deepgram/react"] } },
     // .claude/worktrees holds agent worktrees whose tests resolve "@/" to this root.
     // lib/whiteboard tests are plain node scripts, run via `pnpm whiteboard:test`.
     exclude: [...defaultExclude, ".claude/**", "lib/whiteboard/**"],
