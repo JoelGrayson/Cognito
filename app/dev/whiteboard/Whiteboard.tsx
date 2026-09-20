@@ -232,6 +232,9 @@ export function Whiteboard({ subject }: { subject: Subject }) {
   /** Every wrong step not yet resolved, by lineId. The marks on the canvas are always
    *  a pure function of this map - see redrawMarks. */
   const findingsRef = useRef<Map<number, Finding>>(new Map());
+  /** Steps judged to follow, by lineId, and whether the learner may see that yet.
+   *  Drawn as ticks by redrawMarks, alongside the findings. */
+  const followedRef = useRef<Map<number, { verdict: Equivalence; revealed: boolean }>>(new Map());
   const [mode, setMode] = useState<CheckMode>("live");
   const modeRef = useRef<CheckMode>(mode);
   useEffect(() => {
@@ -296,6 +299,9 @@ export function Whiteboard({ subject }: { subject: Subject }) {
    *  touches the learner's ink. */
   const redrawMarks = useCallback(() => {
     annotatorRef.current?.clear();
+    for (const [lineId, f] of followedRef.current) {
+      if (f.revealed) annotatorRef.current?.draw(marksFor(f.verdict, lineId, rungRef.current), lookupBounds);
+    }
     for (const f of revealedFindings()) {
       const symbol = locateOperator(f.strokes, f.raw);
       annotatorRef.current?.draw(marksFor(f.verdict, f.lineId, f.rung, symbol, f.premiseLineId), lookupBounds);
@@ -385,7 +391,8 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       // A re-read of the same line supersedes whatever we said about it. Without
       // this, a bad provisional read leaves an obsolete accusation open: the learner
       // finishes the line correctly and the tutor still discusses the broken version.
-      if (findingsRef.current.delete(lineId)) redrawMarks();
+      const hadTick = followedRef.current.delete(lineId);
+      if (findingsRef.current.delete(lineId) || hadTick) redrawMarks();
       if (openRef.current?.lineId === lineId) {
         openRef.current = null;
         pendingSpeechRef.current = null;
@@ -403,6 +410,10 @@ export function Whiteboard({ subject }: { subject: Subject }) {
         data.confidence >= DEFAULT_CONFIG.recognitionConfidenceFloor;
 
       const held = modeRef.current === "when-done";
+      if (verdict?.kind === "equivalent" && trusted) {
+        followedRef.current.set(lineId, { verdict, revealed: !held });
+        if (!held) redrawMarks();
+      }
       const wrong = verdict && verdict.kind !== "equivalent" && verdict.kind !== "undetermined";
       if (wrong && trusted && premise) {
         const finding: Finding = {
@@ -499,6 +510,7 @@ export function Whiteboard({ subject }: { subject: Subject }) {
     const fresh = [...findingsRef.current.values()]
       .filter((f) => !f.revealed)
       .sort((a, b) => a.lineId - b.lineId);
+    for (const f of followedRef.current.values()) f.revealed = true;
     for (const f of fresh) {
       f.revealed = true;
       f.provisional = false;
@@ -688,6 +700,7 @@ export function Whiteboard({ subject }: { subject: Subject }) {
     finalizedRef.current.clear();
     openRef.current = null;
     findingsRef.current.clear();
+    followedRef.current.clear();
     historyRef.current = [];
     boundsRef.current.clear();
     const editor = editorRef.current;
