@@ -1,18 +1,14 @@
 "use client";
 
 import { useMemo, useReducer, useState } from "react";
-import { Board } from "@/components/Board";
 import { ProviderSelect } from "@/components/ProviderSelect";
 import { ensureAnonymousSession } from "@/lib/auth-client";
-import { applyActions } from "@/lib/board";
 import { ensureOk } from "@/lib/ndjson";
 import type { ProviderId, ProviderInfo } from "@/lib/providers/types";
-import type { ProblemStatus } from "@/lib/schema";
 import {
   NEXT_STATUS,
   classSummary,
   finalProblems,
-  percent,
   reduce,
   scoreOf,
   splitPages,
@@ -23,20 +19,13 @@ import {
 } from "@/lib/teacher/grading";
 import { pagesOf } from "@/lib/whiteboard/pdf";
 import { cn } from "@/lib/utils";
+import { GradedPaper, STATUS_STYLE, card } from "./GradedPaper";
 
 /** A class set scanned as one PDF: 35 students at two pages each, with room to spare. */
 const MAX_STACK_PAGES = 80;
 /** Pages graded at once. Enough to feel quick, few enough to stay under provider rate limits. */
 const PARALLEL = 3;
 
-const STATUS_STYLE: Record<ProblemStatus, string> = {
-  correct: "bg-(--wb-good) text-(--wb-good-ink)",
-  partial: "bg-(--wb-butter) text-(--wb-butter-ink)",
-  wrong: "bg-(--wb-bad) text-(--wb-bad-ink)",
-  blank: "bg-(--wb-hover) text-(--wb-muted)",
-};
-
-const card = "rounded-3xl border border-(--wb-line) bg-(--wb-card) shadow-[0_2px_10px_rgb(59_42_31/0.06)]";
 const primaryButton =
   "inline-flex min-h-11 items-center justify-center rounded-xl bg-(--wb-primary) px-5 text-(--wb-card) transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50";
 const quietButton =
@@ -298,56 +287,7 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
         </section>
       )}
 
-      {open && <Detail submission={open} />}
+      {open && <GradedPaper submission={open} />}
     </div>
-  );
-}
-
-function Detail({ submission }: { submission: Submission }) {
-  const { state, pages } = submission;
-  const score = scoreOf(state);
-  return (
-    <section className={cn(card, "grid gap-6 p-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]")}>
-      <div className="grid gap-4">
-        {pages.map((page, i) => (
-          <div key={i} className="overflow-hidden rounded-2xl border border-(--wb-line)">
-            <Board
-              elements={state.kind === "graded" ? applyActions([], state.marks[i] ?? []) : []}
-              width={page.w}
-              height={page.h}
-              background={page.src}
-              plain
-              canDraw={false}
-              penColor="red"
-              onStroke={() => {}}
-            />
-          </div>
-        ))}
-      </div>
-      <div>
-        <h2 className="wb-serif text-2xl">{submission.student}</h2>
-        {score && (
-          <p className="mt-1 text-(--wb-muted)">
-            {score.earned} of {score.possible} · {percent(score)}%
-          </p>
-        )}
-        {state.kind === "graded" && (
-          <>
-            <p className="mt-4 rounded-2xl bg-(--wb-butter)/60 p-4 leading-relaxed">{state.feedback}</p>
-            <ul className="mt-4 grid gap-2">
-              {finalProblems(state).map((p, i) => (
-                <li key={i} className="flex items-baseline gap-3">
-                  <span className={cn("flex-none rounded-lg px-2 py-0.5 text-sm", STATUS_STYLE[p.status])}>
-                    {p.label} · {p.status}
-                  </span>
-                  <span className="text-sm text-(--wb-muted)">{p.note}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        {state.kind !== "graded" && <p className="mt-4 text-(--wb-muted)">Not graded yet.</p>}
-      </div>
-    </section>
   );
 }
