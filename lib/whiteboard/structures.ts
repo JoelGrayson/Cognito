@@ -9,7 +9,7 @@ import type { Editor, TLShapeId } from "tldraw";
 import { clusterByGap } from "./cluster";
 import { depict, type RDKit } from "./rdkit";
 import type { Bounds } from "./strokes";
-import { judgeStructure, type KeyEntry, type StructureVerdict } from "./structure-key";
+import { judgeStructure, trustedVerdict, type KeyEntry, type StructureVerdict } from "./structure-key";
 import { problemFor, type ProblemAnchor } from "./worksheet";
 
 export interface StructureReading {
@@ -71,7 +71,7 @@ export async function readStructures(
         smiles: data?.smiles ?? null,
         confidence: data?.confidence ?? null,
         svg: drawn.svg,
-        verdict: drawn.canonical ? judgeStructure(drawn.canonical, key, asked) : null,
+        verdict: trustedVerdict(drawn.canonical ? judgeStructure(drawn.canonical, key, asked) : null, data.confidence ?? null),
       };
     }),
   );
