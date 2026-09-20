@@ -105,7 +105,9 @@ export default async function Home() {
                         ? "Steps checked as you write"
                         : subject.checker === "structure-key"
                           ? "Structures checked against the answer key"
-                          : "Checking coming soon"}
+                          : subject.checker === "circuit-laws"
+                            ? "KVL and KCL checked against the solved circuit"
+                            : "Checking coming soon"}
                     </p>
                     <Link
                       href={`/dev/whiteboard?subject=${subject.id}`}
