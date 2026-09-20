@@ -236,6 +236,9 @@ export function Whiteboard({ subject }: { subject: Subject }) {
    *  response that arrives 800ms late redraws a mark the learner has already fixed,
    *  or speaks about a line they have since rewritten. */
   const genRef = useRef(0);
+  /** The newest read of each line, by generation. A line has its own history: work on
+   *  line 5 does not invalidate the read of line 4, only a re-read of line 4 does. */
+  const lineGenRef = useRef<Map<number, number>>(new Map());
   const [voiceId, setVoiceId] = useState<string>(VOICE_OPTIONS[0][0]);
   const pttRef = useRef<PushToTalk | null>(null);
   const [listening, setListening] = useState(false);
@@ -355,6 +358,9 @@ export function Whiteboard({ subject }: { subject: Subject }) {
     if (!payload) return;
 
     const gen = ++genRef.current;
+    lineGenRef.current.set(lineId, gen);
+    /** Has a newer read of THIS line started while we were waiting? */
+    const current = () => lineGenRef.current.get(lineId) === gen;
 
     // Remember where this line is before anything async happens.
     const lineBounds = strokes.length
@@ -405,7 +411,9 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       // the line turned out wrong, correct, untrusted or unparseable. Leaving the
       // marker behind let a LATER provisional read of a resumed line consume it and
       // speak while the learner was still writing.
-      const wasFinalized = finalizedRef.current.delete(lineId);
+      // Only the newest read of the line may consume it: a stale read taking the
+      // marker leaves the read that replaced it waiting for an event that is gone.
+      const wasFinalized = current() && finalizedRef.current.delete(lineId);
 
       // A re-read of the same line supersedes whatever we said about it. Without
       // this, a bad provisional read leaves an obsolete accusation open: the learner
@@ -442,12 +450,12 @@ export function Whiteboard({ subject }: { subject: Subject }) {
       // unavailable returns null, and nothing about this path changes.
       const errorConfidence = wrong && trusted && premise ? await confirmError(premise.text, parsed, verdict) : null;
 
-      // Waiting means the line can settle underneath us. Finalization arriving mid-ask
-      // finds no speech held and leaves its marker; pick it up rather than holding
-      // words for an event that already passed. And a newer read of this line owns it:
-      // a late confirmation must not resurrect the reading it replaced.
+      // Waiting means the line can settle underneath us: finalization arriving mid-ask
+      // finds no speech held and leaves its marker behind. Pick it up rather than
+      // holding words for an event that already passed - but only if this is still the
+      // line's newest read, or a late confirmation resurrects the reading it replaced.
+      if (!current()) return;
       const finalized = wasFinalized || finalizedRef.current.delete(lineId);
-      if (gen !== genRef.current) return;
 
       const doubted = errorConfidence !== null && errorConfidence < DEFAULT_CONFIG.errorConfidenceFloor;
 

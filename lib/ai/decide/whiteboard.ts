@@ -38,6 +38,9 @@ const REAL_ERROR =
   "cannot model — substituting a value, operating on both sides, starting a sub-derivation, " +
   "restating a definition, or beginning a new problem.";
 
+/** Jev answers in well under a second; past this the learner has moved on. */
+const DEADLINE_MS = 1500;
+
 const READABLE =
   "Do `premise` and `current` read like mathematics a person actually wrote, rather than a " +
   "garbled transcription? No if symbols are missing, duplicated or nonsensical in a way that " +
@@ -56,6 +59,10 @@ export async function confirmError(step: StepEvidence): Promise<ErrorConfidence 
       }),
       readable: noul(READABLE),
     },
+    // The learner is writing while we ask. A second opinion that has not landed
+    // by then is worth less than the board staying responsive: give up and let
+    // the existing path decide.
+    { timeoutMs: DEADLINE_MS },
   );
   if (!result) return null;
 
