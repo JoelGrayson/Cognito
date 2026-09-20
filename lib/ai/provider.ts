@@ -5,7 +5,14 @@
  */
 import { validateGraph } from "@/lib/graph/validate";
 import { ConceptsResponse } from "@/lib/onboarding/schemas";
-import { PROVIDERS, defaultProviderId, isProviderId, type ProviderContext, type ProviderId } from "@/lib/providers";
+import {
+  PROVIDERS,
+  ProviderError,
+  defaultProviderId,
+  isProviderId,
+  type ProviderContext,
+  type ProviderId,
+} from "@/lib/providers";
 import { DraftGraph, type LearnerProfile } from "@/types/learning";
 import { GENERATE_CONCEPTS_SYSTEM } from "./functions/generateConcepts";
 import { GENERATE_GRAPH_SYSTEM, buildGenerateGraphPrompt } from "./functions/generateGraph";
@@ -37,14 +44,25 @@ export async function generateGraphWithProvider(
       ctx,
     );
 
-  const first = await request(prompt);
-  let errors = validateGraph(first.output);
-  if (errors.ok) return first.output;
+  // A schema miss (e.g. more than 30 nodes) gets the same one retry as a failed graph check.
+  const firstErrors: string[] = [];
+  const first = await request(prompt).catch((error: unknown) => {
+    if (error instanceof ProviderError && error.status === 502) {
+      firstErrors.push(error.message);
+      return null;
+    }
+    throw error;
+  });
+  if (first) {
+    const checks = validateGraph(first.output);
+    if (checks.ok) return first.output;
+    firstErrors.push(...checks.errors);
+  }
 
   const retry = await request(
-    `${prompt}\n\nThe previous draft failed these checks: ${errors.errors.join("; ")}. Return a corrected roadmap.`,
+    `${prompt}\n\nThe previous draft failed these checks: ${firstErrors.join("; ")}. Return a corrected roadmap.`,
   );
-  errors = validateGraph(retry.output);
+  const errors = validateGraph(retry.output);
   if (!errors.ok) throw new AiValidationError(errors.errors);
   return retry.output;
 }

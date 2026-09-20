@@ -67,6 +67,12 @@ export async function listProviders(ctx?: ProviderContext): Promise<ProviderInfo
  * dropdown order (what screen 1 shows selected), or Anthropic when none is.
  */
 export async function defaultProviderId(ctx?: ProviderContext): Promise<ProviderId> {
-  const infos = await listProviders(ctx).catch(() => [] as ProviderInfo[]);
-  return infos.find((p) => p.configured)?.id ?? "anthropic";
+  for (const id of PROVIDER_ORDER) {
+    try {
+      if ((await PROVIDERS[id].info(ctx)).configured) return id;
+    } catch {
+      // One unavailable provider must not hide the remaining configured ones.
+    }
+  }
+  return "anthropic";
 }
