@@ -1,8 +1,9 @@
 import { drizzleOnboardingRepo } from "./onboarding.drizzle";
 import { drizzlePlanRepo } from "./plans.drizzle";
 import { drizzleRoadmapRepo } from "./roadmaps.drizzle";
-import { memoryOnboardingRepo, memoryPlanRepo, memoryRoadmapRepo } from "./memory";
-import type { OnboardingRepo, PlanRepo, RoadmapRepo } from "./types";
+import { drizzleWaitlistRepo } from "./waitlist.drizzle";
+import { memoryOnboardingRepo, memoryPlanRepo, memoryRoadmapRepo, memoryWaitlistRepo } from "./memory";
+import type { OnboardingRepo, PlanRepo, RoadmapRepo, WaitlistRepo } from "./types";
 
 export type { NewPlan, OnboardingPatch, OnboardingRepo, PlanRepo } from "./types";
 export type { NewRoadmap, RoadmapRecord, RoadmapRepo, RoadmapSummary } from "./types";
@@ -19,3 +20,4 @@ if (impl === "memory" && process.env.NODE_ENV === "production") {
 export const onboardingRepo: OnboardingRepo = impl === "drizzle" ? drizzleOnboardingRepo : memoryOnboardingRepo;
 export const planRepo: PlanRepo = impl === "drizzle" ? drizzlePlanRepo : memoryPlanRepo;
 export const roadmapRepo: RoadmapRepo = impl === "drizzle" ? drizzleRoadmapRepo : memoryRoadmapRepo;
+export const waitlistRepo: WaitlistRepo = impl === "drizzle" ? drizzleWaitlistRepo : memoryWaitlistRepo;
