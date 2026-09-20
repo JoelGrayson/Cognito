@@ -198,9 +198,9 @@ export default function App() {
             <MarkLayer marks={marks} visible={layers.marks.visible} />
             {checking && <div className="scan" />}
           </div>
-          {zoom.view.scale !== 1 && (
-            <button className="zoom-badge" onClick={zoom.reset} title="Reset zoom">
-              {Math.round(zoom.view.scale * 100)}%
+          {(zoom.view.scale !== 1 || zoom.view.x !== 0 || zoom.view.y !== 0) && (
+            <button className="zoom-badge" onClick={zoom.reset} title="Reset view">
+              {Math.round(zoom.view.scale * 100)}% · reset
             </button>
           )}
         </div>

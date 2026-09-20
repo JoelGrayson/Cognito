@@ -33,7 +33,9 @@ export function useZoomPan(ref: RefObject<HTMLElement | null>, fingerPans: boole
     const zoomAt = (factor: number, cx: number, cy: number, dx = 0, dy = 0) => {
       const v = viewRef.current;
       const r = el.getBoundingClientRect();
-      const px = cx - r.left, py = cy - r.top;
+      // Focal point relative to the page's untransformed layout origin (offsetLeft/Top ignore transforms).
+      const page = el.firstElementChild as HTMLElement | null;
+      const px = cx - r.left - (page?.offsetLeft ?? 0), py = cy - r.top - (page?.offsetTop ?? 0);
       const scale = clamp(v.scale * factor, MIN, MAX);
       const k = scale / v.scale;
       setView({ scale, x: px - (px - v.x) * k + dx, y: py - (py - v.y) * k + dy });
