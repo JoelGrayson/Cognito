@@ -10,7 +10,6 @@ import Link from "next/link";
 import {
   AgentProvider,
   useAgentClientTool,
-  useAgentMicrophone,
   useAgentMode,
   useAgentPlayer,
   useAgentSession,
@@ -28,6 +27,7 @@ import "tldraw/tldraw.css";
 import "./whiteboard.css";
 import { Mascot } from "@/components/Mascot";
 import { Dock, Icon, Library, MasteryPanel, Rail, Tag, TutorBubble, type PenColor, type PenSize } from "./ui";
+import { usePushToTalk } from "./usePushToTalk";
 import { latexToMathjs, isMultiLineReading } from "@/lib/whiteboard/ink";
 import { createAnnotator, type Annotator, type Mark } from "@/lib/whiteboard/annotate";
 import { marksFor } from "@/lib/whiteboard/marks";
@@ -191,6 +191,9 @@ export function Whiteboard({ subject, autoSheet = false }: { subject: Subject; a
         input: { encoding: "linear16", sampleRate: 16000 },
         output: { encoding: "linear16", sampleRate: 24000 },
       },
+      // Most of a whiteboard session is spent writing with the mic muted.
+      // The SDK's ten-second default can race the service's idle timeout.
+      keepAliveInterval: 5000,
       reconnect: { enabled: true, maxAttempts: 3 },
     }),
     [subject.name, subject.panels],
@@ -203,7 +206,7 @@ export function Whiteboard({ subject, autoSheet = false }: { subject: Subject; a
       microphone={micLive}
       microphoneOptions={{
         echoCancellation: true,
-        noiseSuppression: true,
+        noiseSuppression: false,
         autoGainControl: true,
         sampleRate: 16000,
       }}
@@ -279,7 +282,7 @@ function Notebook({
   const session = useAgentSession();
   const { state: agentState } = useAgentState();
   const { mode: agentMode } = useAgentMode();
-  const { micActive, setMicMuted } = useAgentMicrophone();
+  const { holding, listening, beginTalking, endTalking } = usePushToTalk(onMicLive);
   const { setOutputMuted } = useAgentPlayer();
   const [voiceOn, setVoiceOn] = useState(true);
   const voiceOnRef = useRef(voiceOn);
@@ -299,10 +302,7 @@ function Notebook({
    *  or speaks about a line they have since rewritten. */
   const genRef = useRef(0);
   const [voiceId, setVoiceId] = useState<string>(TUTOR_VOICE_MODEL);
-  const [listening, setListening] = useState(false);
-  /** Held down right now. A ref as well as state: the microphone opens asynchronously
-   *  on the first press and the effect that mutes it must see the CURRENT hold. */
-  const holdingRef = useRef(false);
+  const [heard, setHeard] = useState<string | null>(null);
   /** The step currently under discussion. Set when a mark is drawn, cleared once the
    *  learner names the error - that is what makes "speaking is the hint request"
    *  possible without a button. */
@@ -431,13 +431,6 @@ function Notebook({
   // The voice toggle silences the tutor without dropping the session: the learner
   // can still talk to it and read the answer in the bubble.
   useEffect(() => setOutputMuted(!voiceOn), [voiceOn, setOutputMuted]);
-
-  // The microphone is live only while the key is held, and it opens UNMUTED - so a
-  // press shorter than the permission/startup round trip has to be caught here, or
-  // the room stays on air after the learner has let go.
-  useEffect(() => {
-    if (micActive && !holdingRef.current) setMicMuted(true);
-  }, [micActive, setMicMuted]);
 
   /** Redraw from scratch rather than patching: with several steps marked at once,
    *  escalating one of them must not wipe the others. Marks are tagged, so this never
@@ -734,22 +727,6 @@ function Notebook({
     speak(utterance);
   }, [checkStructures, redrawMarks, speak, subject.checker]);
 
-  const beginTalking = useCallback(() => {
-    if (holdingRef.current) return;
-    holdingRef.current = true;
-    setListening(true);
-    // First hold acquires the microphone; later holds just unmute the open one.
-    onMicLive();
-    setMicMuted(false);
-  }, [onMicLive, setMicMuted]);
-
-  const endTalking = useCallback(() => {
-    if (!holdingRef.current) return;
-    holdingRef.current = false;
-    setListening(false);
-    setMicMuted(true);
-  }, [setMicMuted]);
-
   /** The learner just named the error, and the agent has not been told yet. */
   const justFoundRef = useRef(false);
 
@@ -822,6 +799,7 @@ function Notebook({
         return;
       }
       if (msg.role !== "user") return;
+      setHeard(msg.content);
       const open = openRef.current;
       if (!open) return;
 
@@ -841,33 +819,6 @@ function Notebook({
     return () => void session.off("conversation-text", onText);
   }, [session, redrawMarks, revealedFindings]);
 
-  // Hold SPACE to talk. A key rather than a button because the learner's hand is
-  // already on a pen -- reaching for a target on screen breaks the thought.
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || e.repeat) return;
-      const el = e.target as HTMLElement | null;
-      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
-      e.preventDefault();
-      beginTalking();
-    };
-    const up = (e: KeyboardEvent) => {
-      if (e.code !== "Space") return;
-      e.preventDefault();
-      endTalking();
-    };
-    // A key held down while the tab loses focus never sends its keyup, and the
-    // microphone would stay open in a window the learner has walked away from.
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    window.addEventListener("blur", endTalking);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-      window.removeEventListener("blur", endTalking);
-    };
-  }, [beginTalking, endTalking]);
-
   /** Clears the learner's ink and the tutor's marks. An uploaded sheet stays. */
   const reset = useCallback(() => {
     setReadings([]);
@@ -877,6 +828,7 @@ function Notebook({
     setError(null);
     recorderRef.current?.clear();
     setSaid(null);
+    setHeard(null);
     heldRef.current = null;
     pendingSpeechRef.current = null;
     finalizedRef.current.clear();
@@ -1313,6 +1265,7 @@ function Notebook({
                 voiceOn={voiceOn}
                 onVoiceOn={setVoiceOn}
                 listening={listening}
+                holding={holding}
                 onTalkStart={beginTalking}
                 onTalkEnd={endTalking}
                 onReset={reset}
@@ -1339,6 +1292,8 @@ function Notebook({
             <div className="min-w-0 flex-1 pt-1">
               {listening ? (
                 <TutorBubble text="I'm listening…" />
+              ) : holding ? (
+                <TutorBubble text={agentState === "connected" ? "Opening your microphone… Keep holding, and wait for “I'm listening”." : "Connecting to your tutor…"} />
               ) : agentMode === "thinking" ? (
                 <TutorBubble text="Let me think…" />
               ) : said ? (
@@ -1352,6 +1307,7 @@ function Notebook({
                       : "Draw away. Hold space, or the mic, to ask me something."}
                 </p>
               )}
+              {heard && <p className="mt-2 text-xs text-(--wb-muted)">Heard: “{heard}”</p>}
             </div>
           </div>
           <h2 className="wb-serif shrink-0 px-5 pb-2 pt-4 text-xl">{checksSteps ? "Your steps" : "Your structures"}</h2>
