@@ -33,32 +33,16 @@
  */
 "use client";
 
-import { useRef, useState } from "react";
-import Script from "next/script";
+import { useEffect, useRef, useState } from "react";
 import { Tldraw, createShapeId, toRichText, type Editor, type TLShapeId } from "tldraw";
 import "tldraw/tldraw.css";
 import { clusterByGap } from "@/lib/whiteboard/cluster";
 import type { Bounds } from "@/lib/whiteboard/strokes";
+import { answerKeyFor } from "@/lib/whiteboard/answer-keys";
+import { canonicalKey, depict, loadRDKit, type RDKit } from "@/lib/whiteboard/rdkit";
 import { judgeStructure, type KeyEntry, type StructureVerdict } from "@/lib/whiteboard/structure-key";
-import sheetKey from "@/fixtures/structures/ochem-practice.key.json";
 
-/** RDKit is 7 MB of WebAssembly. It comes from the CDN at the installed version
- *  rather than through the bundler, the same way the worksheet takes its pdf.js worker. */
-const RDKIT_BASE = "https://unpkg.com/@rdkit/rdkit@2026.3.6/dist/";
-
-interface RDKitMol {
-  get_smiles(): string;
-  get_svg(w: number, h: number): string;
-  delete(): void;
-}
-interface RDKit {
-  get_mol(smiles: string): RDKitMol | null;
-}
-declare global {
-  interface Window {
-    initRDKitModule?: (opts: { locateFile: (file: string) => string }) => Promise<RDKit>;
-  }
-}
+const SHEET_KEY = answerKeyFor("ochem-practice.pdf") ?? [];
 
 interface Reading {
   n: number;
@@ -116,15 +100,16 @@ export default function ChemReadPage() {
   const [readings, setReadings] = useState<Reading[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  function canonicalOf(smiles: string | null): { canonical: string | null; svg: string | null } {
-    const mol = smiles ? rdkitRef.current?.get_mol(smiles) : null;
-    if (!mol) return { canonical: null, svg: null };
-    try {
-      return { canonical: mol.get_smiles(), svg: mol.get_svg(220, 160) };
-    } finally {
-      mol.delete();
-    }
-  }
+  useEffect(() => {
+    void loadRDKit().then((rdkit) => {
+      rdkitRef.current = rdkit;
+      keyRef.current = canonicalKey(rdkit, SHEET_KEY);
+      setRdkitReady(true);
+    });
+  }, []);
+
+  const canonicalOf = (smiles: string | null) =>
+    rdkitRef.current ? depict(rdkitRef.current, smiles) : { canonical: null, svg: null };
 
   async function read() {
     const editor = editorRef.current;
@@ -197,24 +182,6 @@ export default function ChemReadPage() {
 
   return (
     <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-neutral-950 text-neutral-100">
-      <Script
-        src={`${RDKIT_BASE}RDKit_minimal.js`}
-        onReady={() => {
-          void window.initRDKitModule?.({ locateFile: (file) => RDKIT_BASE + file }).then((rdkit) => {
-            rdkitRef.current = rdkit;
-            keyRef.current = sheetKey.answers.flatMap((a) => {
-              const smiles = canonicalOf(a.smiles).canonical;
-              if (!smiles) return [];
-              const commonWrong = (a.commonWrong ?? []).flatMap((w) => {
-                const wrong = canonicalOf(w.smiles).canonical;
-                return wrong ? [{ name: w.name, smiles: wrong }] : [];
-              });
-              return [{ problem: a.problem, name: a.name, smiles, commonWrong }];
-            });
-            setRdkitReady(true);
-          });
-        }}
-      />
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-800 px-3 py-2">
         <h1 className="text-sm font-semibold">Structure reading test</h1>
         <label className="flex items-center gap-1.5 text-xs text-neutral-400">
@@ -225,7 +192,7 @@ export default function ChemReadPage() {
             className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
           >
             <option value="">auto-detect</option>
-            {sheetKey.answers.map((a) => (
+            {SHEET_KEY.map((a) => (
               <option key={a.problem} value={a.problem}>
                 {a.problem}
               </option>
