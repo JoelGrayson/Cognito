@@ -126,7 +126,8 @@ export async function POST(request: Request) {
   const diagram = (data?.line_data ?? []).find((l: { subtype?: string }) => l.subtype === "chemistry");
   const mathpixSmiles = found[0] ?? null;
   const mathpixConfidence = (diagram?.confidence ?? data?.confidence ?? null) as number | null;
-  const unsure = !mathpixSmiles || (mathpixConfidence !== null && mathpixConfidence < SECOND_OPINION_BELOW);
+  // No score is no evidence of being above the bar, so it counts as unsure.
+  const unsure = !mathpixSmiles || mathpixConfidence === null || mathpixConfidence < SECOND_OPINION_BELOW;
   const second = unsure ? await secondReading(image) : null;
 
   const reading = {
