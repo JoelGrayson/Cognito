@@ -22,9 +22,12 @@ export const topicsRouter = router({
 
   get: protectedProcedure.input(roadmapInput).query(async ({ input, ctx }) => {
     const userId = ctx.session.user.id;
-    const roadmap = await roadmapRepo.get(input.id, userId);
+    const [roadmap, written, provider] = await Promise.all([
+      roadmapRepo.get(input.id, userId),
+      roadmapRepo.lessonNodeIds(input.id, userId),
+      providerFor(userId),
+    ]);
     if (!roadmap) throw new TRPCError({ code: "NOT_FOUND", message: "Roadmap not found." });
-    const [written, provider] = await Promise.all([roadmapRepo.lessonNodeIds(input.id, userId), providerFor(userId)]);
     return { roadmap, written, provider };
   }),
 
@@ -41,14 +44,14 @@ export const topicsRouter = router({
 
   lesson: protectedProcedure.input(moduleInput).query(async ({ input, ctx }) => {
     const userId = ctx.session.user.id;
-    const roadmap = await roadmapRepo.get(input.id, userId);
-    const node = roadmap && findNode(roadmap.graph, input.nodeId);
-    if (!roadmap || !node) throw new TRPCError({ code: "NOT_FOUND", message: "Module not found." });
-    const [lesson, written, provider] = await Promise.all([
+    const [roadmap, lesson, written, provider] = await Promise.all([
+      roadmapRepo.get(input.id, userId),
       roadmapRepo.getLesson(input.id, userId, input.nodeId),
       roadmapRepo.lessonNodeIds(input.id, userId),
       providerFor(userId),
     ]);
+    const node = roadmap && findNode(roadmap.graph, input.nodeId);
+    if (!roadmap || !node) throw new TRPCError({ code: "NOT_FOUND", message: "Module not found." });
     return { roadmap, node, lesson, written, provider };
   }),
 

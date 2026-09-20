@@ -32,6 +32,22 @@ export const drizzleOnboardingRepo: OnboardingRepo = {
   },
 
   async update(userId, patch) {
+    const { profile, ...rest } = patch;
+    // Without a profile merge, the upsert needs no prior read: one round trip.
+    if (!profile) {
+      const set = {
+        ...(rest.step !== undefined && { step: rest.step }),
+        ...(rest.draftGraph !== undefined && { draftGraph: rest.draftGraph }),
+        ...(rest.activeRoadmapId !== undefined && { activeRoadmapId: rest.activeRoadmapId }),
+        ...(rest.messages !== undefined && { messages: rest.messages }),
+      };
+      const [row] = await getDb()
+        .insert(onboardingSessions)
+        .values({ userId, ...set })
+        .onConflictDoUpdate({ target: onboardingSessions.userId, set: { ...set, updatedAt: new Date() } })
+        .returning();
+      return toState(row);
+    }
     return getDb().transaction(async (tx) => {
       const [row] = await tx
         .select()
@@ -39,11 +55,10 @@ export const drizzleOnboardingRepo: OnboardingRepo = {
         .where(eq(onboardingSessions.userId, userId))
         .for("update");
       const current = row ? toState(row) : emptyState();
-      const { profile, ...rest } = patch;
       const next: OnboardingState = {
         ...current,
         ...rest,
-        profile: profile ? mergeProfile(current.profile, profile) : current.profile,
+        profile: mergeProfile(current.profile, profile),
       };
       const values = {
         userId,
