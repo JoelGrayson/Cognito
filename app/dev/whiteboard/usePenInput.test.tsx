@@ -16,7 +16,7 @@ function fakeEditor(container: HTMLElement, opts: { penMode?: boolean; pointing?
     getZoomLevel: () => camera.z,
     getCamera: () => ({ ...camera }),
     setCamera: (to: { x: number; y: number; z: number }) => Object.assign(camera, to),
-    inputs: { getIsPointing: () => opts.pointing ?? true, getIsPinching: () => false },
+    inputs: { getIsPointing: () => opts.pointing ?? false, getIsPinching: () => false },
     dispatch,
   };
   return { editor: editor as unknown as Editor, dispatch, camera };
@@ -62,21 +62,21 @@ afterEach(() => {
 
 describe("usePenInput", () => {
   it("ends the stroke when the system cancels the pen", () => {
-    const { editor, dispatch } = fakeEditor(host);
+    const { editor, dispatch } = fakeEditor(host, { pointing: true });
     mount(editor);
     send(pointer("pointercancel", { x: 30, y: 40 }, 1, "pen"));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ name: "pointer_up", isPen: true }));
   });
 
   it("ends the stroke when the capture is taken away", () => {
-    const { editor, dispatch } = fakeEditor(host);
+    const { editor, dispatch } = fakeEditor(host, { pointing: true });
     mount(editor);
     send(pointer("lostpointercapture", { x: 30, y: 40 }, 1, "pen"));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ name: "pointer_up" }));
   });
 
   it("leaves a finished stroke alone", () => {
-    const { editor, dispatch } = fakeEditor(host, { pointing: false });
+    const { editor, dispatch } = fakeEditor(host);
     mount(editor);
     send(pointer("lostpointercapture", { x: 30, y: 40 }, 1, "pen"));
     expect(dispatch).not.toHaveBeenCalled();
@@ -88,6 +88,14 @@ describe("usePenInput", () => {
     send(pointer("pointerdown", { x: 100, y: 300 }));
     send(pointer("pointermove", { x: 100, y: 200 }));
     expect(camera).toEqual({ x: 0, y: -100, z: 1 });
+  });
+
+  it("does not pan under a palm while the pen writes", () => {
+    const { editor, camera } = fakeEditor(host, { pointing: true });
+    mount(editor);
+    send(pointer("pointerdown", { x: 100, y: 300 }));
+    send(pointer("pointermove", { x: 100, y: 200 }));
+    expect(camera).toEqual({ x: 0, y: 0, z: 1 });
   });
 
   it("leaves two fingers to tldraw's pinch", () => {

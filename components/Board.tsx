@@ -38,6 +38,8 @@ interface Props {
 interface Stroke {
   points: number[];
   erase: boolean;
+  /** Drawn by a stylus rather than a finger. */
+  pen: boolean;
 }
 
 /** A stylus reports its eraser end as button 5, or bit 32 of `buttons` while it moves. */
@@ -103,13 +105,15 @@ export function Board({ elements, canDraw, penColor, erasing, onStroke, width = 
         if (e.pointerType === "pen") sawPen.current = true;
         else if (sawPen.current && e.pointerType === "touch") return;
         // One stroke at a time. A second pointer during a stroke is the other hand
-        // steadying the tablet, and it must not take the line over.
-        if (drawingId.current !== null) return;
+        // steadying the tablet, and it must not take the line over. The exception is
+        // the stylus: a palm usually lands just before the pen writes, and the pen must
+        // not be locked out until the hand is lifted. Its ink is dropped as the palm's.
+        if (drawingId.current !== null && !(e.pointerType === "pen" && stroke.current?.pen === false)) return;
         const p = toBoard(e.clientX, e.clientY);
         if (!p) return;
         e.currentTarget.setPointerCapture(e.pointerId);
         drawingId.current = e.pointerId;
-        stroke.current = { points: p, erase: Boolean(erasing) || isEraserEnd(e.button, e.buttons) };
+        stroke.current = { points: p, erase: Boolean(erasing) || isEraserEnd(e.button, e.buttons), pen: e.pointerType === "pen" };
         setCurrent(stroke.current);
       }}
       onPointerMove={(e) => {
