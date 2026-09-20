@@ -36,3 +36,12 @@ for a full-screen, Notability-style app. Pencil, finger and mouse all draw via p
 - `server/check.ts` (Hono + OpenAI SDK) asks the model for a forced `grade` tool call whose
   schema (`shared/types.ts`) is validated with zod: a verdict, plain-text feedback, a list of
   issues, and red-pen marks on a 0–1000 grid that the client scales onto the page.
+
+## Deploy to Vercel
+
+`api/index.ts` wraps the same Hono app with `hono/vercel`, and `vercel.json` rewrites `/api/*` to it,
+so the whole app deploys as static files + one serverless function:
+
+1. Import the repo at vercel.com/new (framework: Vite — auto-detected).
+2. Add `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`) under Project → Settings → Environment Variables.
+3. Deploy.
