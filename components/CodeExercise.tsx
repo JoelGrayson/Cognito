@@ -39,10 +39,22 @@ const LABEL: Record<string, string> = {
   php: "PHP",
 };
 
-/** Lessons with code (or formulas set as code) get a coding exercise; prose-only lessons do not. */
-export function lessonWantsCode(lesson: Lesson): boolean {
+/** Fence tags that mean a code block holds a program rather than a formula or shell transcript of prose. */
+const CODE_FENCE =
+  /```[ \t]*(python|py|javascript|js|jsx|typescript|ts|tsx|rust|rs|go|golang|java|c|cpp|c\+\+|csharp|cs|c#|sql|shell|sh|bash|zsh|ruby|rb|kotlin|kt|swift|php|node)\b/i;
+/** Words that mean the roadmap itself is about programming. */
+const PROGRAMMING_TERMS =
+  /\b(programming|coding|code|software|developer|python|javascript|typescript|react|node(\.js)?|rust|golang|java|kotlin|swift|c\+\+|c#|sql|database|algorithms?|data structures?|api|backend|frontend|web dev(elopment)?|machine learning|pandas|numpy|git|linux|shell scripting|compiler|functional programming|object[- ]oriented)\b/i;
+
+/**
+ * Only lessons that actually teach programming get a coding exercise. That means a
+ * fenced code block in a programming language, or any fenced block in a roadmap that is
+ * about programming. Formulas set in backticks, history, finance and the like do not count.
+ */
+export function lessonWantsCode(topic: string, lesson: Lesson): boolean {
   const text = lesson.sections.map((s) => s.body).join("\n");
-  return text.includes("```") || (text.match(/`[^`\n]+`/g)?.length ?? 0) >= 3;
+  if (CODE_FENCE.test(text)) return true;
+  return text.includes("```") && PROGRAMMING_TERMS.test(`${topic} ${lesson.title}`);
 }
 
 interface Props {
