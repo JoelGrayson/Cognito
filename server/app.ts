@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { check } from "./check.ts";
 
+const MAX_QUESTION_CHARS = 2000;
 const PNG_PREFIX = "data:image/png;base64,";
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -21,7 +22,10 @@ app.post("/api/check", bodyLimit({ maxSize: 8 * 1024 * 1024 }), async (c) => {
   if (typeof image !== "string" || !isPngDataUrl(image)) {
     return c.json({ error: "image must be a PNG data URL" }, 400);
   }
-  return c.json(await check(image, typeof question === "string" ? question : undefined));
+  if (question !== undefined && (typeof question !== "string" || question.length > MAX_QUESTION_CHARS)) {
+    return c.json({ error: `question must be a string of at most ${MAX_QUESTION_CHARS} characters` }, 400);
+  }
+  return c.json(await check(image, question));
 });
 
 app.onError((err, c) => {

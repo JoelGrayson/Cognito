@@ -34,10 +34,12 @@ export default function App() {
   const canvasWrap = useRef<HTMLDivElement>(null);
   const zoom = useZoomPan(canvasWrap, penOnly);
   const checkSeq = useRef(0);
+  const docSeq = useRef(0);
 
   const resetInk = ink.reset;
   const openSample = useCallback(
     (i: number) => {
+      docSeq.current++;
       const q = SAMPLE_QUESTIONS[i];
       setDoc({ id: `sample-${i}`, title: q.title, question: q.question, src: renderQuestionPage(q.title, q.question) });
       resetInk([]);
@@ -70,7 +72,9 @@ export default function App() {
 
   const onUpload = async (file: File | undefined) => {
     if (!file) return;
+    const seq = ++docSeq.current;
     const src = await readFileAsDataUrl(file);
+    if (seq !== docSeq.current) return;
     setDoc({ id: `upload-${Date.now()}`, title: file.name, question: "", src });
     ink.reset([]);
     setMarks([]);
