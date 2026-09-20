@@ -39,7 +39,7 @@ for a full-screen, Notability-style app. Pencil, finger and mouse all draw via p
 
 ## Deploy to Vercel
 
-`api/index.ts` wraps the same Hono app with `hono/vercel`, and `vercel.json` rewrites `/api/*` to it,
+`api/[[...route]].ts` wraps the same Hono app with `hono/vercel`(a catch-all, so `/api/*` reaches Hono with its original path),
 so the whole app deploys as static files + one serverless function:
 
 1. Import the repo at vercel.com/new (framework: Vite — auto-detected).
