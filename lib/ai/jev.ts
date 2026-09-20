@@ -153,6 +153,7 @@ export function jevConfigured(): boolean {
 const isMockJev = () => process.env.MOCK_AI === "true";
 
 export interface AskOptions {
+  /** Total budget for the call, retries and backoff included. Defaults to 10s. */
   timeoutMs?: number;
   signal?: AbortSignal;
 }
@@ -178,9 +179,15 @@ export async function ask<Q extends Record<string, JevQuestion>>(
   if (Object.keys(questions).length === 0) throw new JevError("A Jev request needs at least one question.", 422);
 
   const body = JSON.stringify({ model: JEV_MODEL, state, questions });
+  // One deadline for the whole call, not one per attempt: a caller asking for an
+  // answer within 1.5s is saying how long it can wait, and three attempts plus
+  // backoff would spend three times that before admitting defeat.
+  const deadline = started + (options.timeoutMs ?? TIMEOUT_MS);
   let last: JevError | null = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const res = await post(key, body, options).catch((error: unknown) => {
+    const left = deadline - Date.now();
+    if (left <= 0) break;
+    const res = await post(key, body, { ...options, timeoutMs: left }).catch((error: unknown) => {
       last = new JevError(error instanceof Error ? error.message : String(error));
       return null;
     });
@@ -200,7 +207,8 @@ export async function ask<Q extends Record<string, JevQuestion>>(
       last = new JevError(`Jev request failed with ${res.status}.`, res.status);
       if (!RETRY_STATUSES.has(res.status)) break;
     }
-    if (attempt < MAX_ATTEMPTS) await sleep(BACKOFF_MS * 2 ** (attempt - 1));
+    const backoff = BACKOFF_MS * 2 ** (attempt - 1);
+    if (attempt < MAX_ATTEMPTS && Date.now() + backoff < deadline) await sleep(backoff);
   }
   throw last ?? new JevError("Jev request failed.");
 }

@@ -102,6 +102,17 @@ describe("ask", () => {
     await expect(ask("s", QUESTIONS)).rejects.toBeInstanceOf(JevError);
   });
 
+  it("spends the timeout across the retries, not once per attempt", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 40));
+      return reply({ error: "overloaded" }, 529);
+    });
+    const started = Date.now();
+    await expect(ask("s", QUESTIONS, { timeoutMs: 60 })).rejects.toBeInstanceOf(JevError);
+    expect(Date.now() - started).toBeLessThan(120);
+    expect(fetchMock.mock.calls.length).toBeLessThan(3);
+  });
+
   it("keeps the timeout when the caller passes its own signal", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(reply(ANSWERS));
     const caller = new AbortController();
