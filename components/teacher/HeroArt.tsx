@@ -10,19 +10,19 @@ const ROWS = [
 /** A marked paper in miniature: what comes back, before anyone reads a word. */
 export function HeroArt() {
   return (
-    <div className="mx-auto w-full max-w-sm">
-      {/* In the flow above the paper, never on top of it: the bubble is as wide as the card. */}
-      <div className="mb-3 hidden flex-row-reverse items-end gap-1 sm:flex">
-        <Mascot size={64} />
-        <span className="relative mb-3 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
-          28 papers? Back in a few minutes.
-          <span className="absolute -right-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
-        </span>
-      </div>
-      <div className="relative">
-        <div className="absolute inset-0 translate-x-3 translate-y-3 rotate-3 rounded-3xl border border-(--wb-line) bg-(--wb-blush)" />
-        <div className="absolute inset-0 translate-x-1.5 translate-y-1.5 rotate-[1.5deg] rounded-3xl border border-(--wb-line) bg-(--wb-butter)" />
-        <svg viewBox="0 0 300 230" role="img" aria-label="A worksheet marked with ticks, one circled mistake and a score" className="relative block w-full rounded-3xl border border-(--wb-line) bg-(--wb-card) shadow-[0_6px_24px_rgb(59_42_31/0.12)]">
+    <div className="relative">
+      <div className="absolute inset-0 translate-x-3 translate-y-3 rotate-2 rounded-3xl border border-(--wb-line) bg-(--wb-blush)" />
+      <div className="absolute inset-0 translate-x-1.5 translate-y-1.5 rotate-1 rounded-3xl border border-(--wb-line) bg-(--wb-butter)" />
+      {/* Same card and bubble as the student landing, so switching modes moves nothing. */}
+      <div className="relative rounded-3xl border border-(--wb-line) bg-(--wb-card) p-4 shadow-[0_2px_10px_rgb(59_42_31/0.06)] sm:p-5">
+        <div className="absolute -right-5 -top-9 hidden flex-row-reverse items-start gap-1 sm:flex">
+          <Mascot size={72} />
+          <span className="relative mt-3 rounded-2xl bg-(--wb-primary) px-4 py-2.5 text-[15px] text-(--wb-card) shadow-lg">
+            28 papers? Back in minutes.
+            <span className="absolute -right-1 bottom-3 h-3 w-3 rotate-45 rounded-[3px] bg-(--wb-primary)" />
+          </span>
+        </div>
+        <svg viewBox="0 0 300 230" role="img" aria-label="A worksheet marked with ticks, one circled mistake and a score" className="mx-auto mt-4 block h-auto w-full max-w-105">
           <rect x="28" y="24" width="92" height="9" rx="4.5" fill="var(--wb-ink)" opacity="0.8" />
           {ROWS.map((row) => (
             <g key={row.y}>
@@ -45,6 +45,7 @@ export function HeroArt() {
             </text>
           </g>
         </svg>
+        <p className="mt-2 text-center text-xs text-(--wb-muted)">A worksheet, the way it comes back</p>
       </div>
     </div>
   );

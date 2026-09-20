@@ -124,7 +124,7 @@ export function Grader({ providers, mock = false }: { providers: ProviderInfo[];
   }
 
   return (
-    <div className="mt-10 grid gap-6">
+    <div className="grid gap-6">
       <section className={cn(card, "grid gap-6 p-6 lg:grid-cols-2")}>
         <div>
           <h2 className="wb-serif flex items-center gap-3 text-2xl">
