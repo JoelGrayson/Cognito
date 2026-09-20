@@ -49,6 +49,9 @@ function isEraserEnd(button: number, buttons: number): boolean {
 export function Board({ elements, canDraw, penColor, erasing, onStroke, width = BOARD_W, height = BOARD_H, background, plain }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [current, setCurrent] = useState<Stroke | null>(null);
+  /** The same stroke, for the handlers to read and finish with: `onStroke` tells the
+   *  parent to store it, and a parent cannot be updated from inside a state updater. */
+  const stroke = useRef<Stroke | null>(null);
   /** The one pointer allowed to draw. A tablet reports the palm resting on the glass
    *  as a second pointer, and without this its moves are appended to the line the
    *  stylus is drawing - the line jumps across the page to the heel of the hand. */
@@ -78,11 +81,11 @@ export function Board({ elements, canDraw, penColor, erasing, onStroke, width = 
    *  is kept too: Android cancels the stylus the moment a palm lands, and throwing the
    *  line away would delete work the learner had already written. */
   const finish = () => {
+    const done = stroke.current;
     drawingId.current = null;
-    setCurrent((stroke) => {
-      if (stroke && stroke.points.length >= 4) onStroke(stroke.points, stroke.erase);
-      return null;
-    });
+    stroke.current = null;
+    setCurrent(null);
+    if (done && done.points.length >= 4) onStroke(done.points, done.erase);
   };
 
   return (
@@ -106,21 +109,22 @@ export function Board({ elements, canDraw, penColor, erasing, onStroke, width = 
         if (!p) return;
         e.currentTarget.setPointerCapture(e.pointerId);
         drawingId.current = e.pointerId;
-        setCurrent({ points: p, erase: Boolean(erasing) || isEraserEnd(e.button, e.buttons) });
+        stroke.current = { points: p, erase: Boolean(erasing) || isEraserEnd(e.button, e.buttons) };
+        setCurrent(stroke.current);
       }}
       onPointerMove={(e) => {
         if (drawingId.current !== e.pointerId) return;
+        const drawn = stroke.current;
+        if (!drawn) return;
         const points = movePoints(e);
-        if (points.length === 0) return;
-        setCurrent((stroke) => {
-          if (!stroke) return stroke;
-          const next = [...stroke.points];
-          for (const [x, y] of points) {
-            const [lx, ly] = next.slice(-2);
-            if (Math.hypot(x - lx, y - ly) >= 2) next.push(x, y);
-          }
-          return next.length === stroke.points.length ? stroke : { ...stroke, points: next };
-        });
+        const next = [...drawn.points];
+        for (const [x, y] of points) {
+          const [lx, ly] = next.slice(-2);
+          if (Math.hypot(x - lx, y - ly) >= 2) next.push(x, y);
+        }
+        if (next.length === drawn.points.length) return;
+        stroke.current = { ...drawn, points: next };
+        setCurrent(stroke.current);
       }}
       onPointerUp={(e) => {
         if (drawingId.current !== e.pointerId) return;
