@@ -21,6 +21,13 @@ function createAuth() {
     appName: "Cognito",
     secret,
     baseURL,
+    // Origins besides baseURL allowed to sign in. Without this, the app reached through
+    // a tunnel (a tablet on ngrok) gets a 403 on anonymous sign-in, and everything that
+    // needs a session - the voice tutor first of all - reports it cannot start.
+    trustedOrigins: (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
     database: drizzleAdapter(getDb(), {
       provider: "pg",
       schema: { user, session, account, verification },

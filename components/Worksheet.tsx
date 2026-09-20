@@ -338,8 +338,10 @@ async function pdfInsideNote(file: File): Promise<ArrayBuffer> {
 }
 
 async function renderPdf(data: ArrayBuffer, onPage: (page: Page) => void): Promise<void> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+  // Legacy build and legacy worker: the default build needs Map.getOrInsertComputed,
+  // which iPad browsers (all WebKit) do not have.
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.min.mjs`;
   const doc = await pdfjs.getDocument({ data }).promise;
   for (let n = 1; n <= doc.numPages; n++) {
     const page = await doc.getPage(n);
