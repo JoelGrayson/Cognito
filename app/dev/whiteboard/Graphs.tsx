@@ -9,14 +9,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import Script from "next/script";
 import { Icon } from "./ui";
 import type { Plot } from "@/lib/whiteboard/graph";
+
+/** Desmos's own serialized graph. Opaque here: it is handed straight back. */
+export interface DesmosState {
+  version: number;
+}
 
 /** Only the handful of the Desmos API this page uses. */
 interface DesmosCalculator {
   setExpression(state: { id: string; latex: string; color?: string }): void;
   removeExpression(state: { id: string }): void;
+  getState(): DesmosState;
+  setState(state: DesmosState): void;
   resize(): void;
   destroy(): void;
 }
@@ -44,7 +52,19 @@ const TUTOR_COLOR = "#c74440";
 const SHELL =
   "wb wb-pop fixed inset-0 z-[500] flex flex-col overflow-hidden xl:static xl:z-auto xl:w-[26rem] xl:shrink-0 xl:rounded-3xl xl:border xl:border-(--wb-line) xl:bg-(--wb-card)";
 
-export function GraphsPanel({ plots, onClose, onClear }: { plots: Plot[]; onClose: () => void; onClear: () => void }) {
+export function GraphsPanel({
+  plots,
+  stateRef,
+  onClose,
+  onClear,
+}: {
+  plots: Plot[];
+  /** The learner's own work in the calculator, kept by the page so that closing
+   *  the panel is closing a panel and not throwing their graph away. */
+  stateRef: RefObject<DesmosState | null>;
+  onClose: () => void;
+  onClear: () => void;
+}) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const calcRef = useRef<DesmosCalculator | null>(null);
   const drawnRef = useRef<string[]>([]);
@@ -64,8 +84,11 @@ export function GraphsPanel({ plots, onClose, onClear }: { plots: Plot[]; onClos
       expressionsTopbar: false,
       keypad: false,
     });
+    // Only the learner's expressions were saved; the tutor's are redrawn below
+    // from plots, which is the page's copy and outlives the calculator.
+    if (stateRef.current) calcRef.current.setState(stateRef.current);
     setReady(true);
-  }, []);
+  }, [stateRef]);
 
   // The script may already be on the page from a previous open of this panel,
   // in which case onReady still fires - but an effect covers the case where it
@@ -73,11 +96,18 @@ export function GraphsPanel({ plots, onClose, onClear }: { plots: Plot[]; onClos
   useEffect(() => {
     start();
     return () => {
-      calcRef.current?.destroy();
+      const calc = calcRef.current;
+      if (calc) {
+        // Save what THEY typed. The tutor's curves come out first so they cannot
+        // be restored as learner-owned expressions the sync no longer manages.
+        for (const id of drawnRef.current) calc.removeExpression({ id });
+        stateRef.current = calc.getState();
+        calc.destroy();
+      }
       calcRef.current = null;
       drawnRef.current = [];
     };
-  }, [start]);
+  }, [start, stateRef]);
 
   // The plots are held by the page, not in here, so closing the panel and
   // reopening it redraws whatever the tutor last graphed.

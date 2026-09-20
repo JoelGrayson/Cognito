@@ -41,7 +41,7 @@ import { assessExplanation } from "@/lib/whiteboard/explanation";
 import { spokenFor, ASK_WHY } from "@/lib/whiteboard/voice";
 import { workContext, type StepView } from "@/lib/whiteboard/context";
 import { parsePlotArgs, planPlot, type Plot } from "@/lib/whiteboard/graph";
-import { GraphsPanel } from "./Graphs";
+import { GraphsPanel, type DesmosState } from "./Graphs";
 import { PLOT_GRAPH, READ_WORK, TUTOR_VOICES, TUTOR_VOICE_MODEL, whiteboardAgentSettings } from "@/lib/ai/whiteboard-agent";
 import { ensureAnonymousSession } from "@/lib/auth-client";
 import { DEFAULT_CONFIG, type HintLevel } from "@/lib/whiteboard/policy";
@@ -176,14 +176,14 @@ export function Whiteboard({ subject }: { subject: Subject }) {
           return ((await res.json()) as { access_token: string }).access_token;
         },
       },
-      agent: whiteboardAgentSettings(subject.name),
+      agent: whiteboardAgentSettings(subject.name, subject.panels.includes("graphs")),
       audio: {
         input: { encoding: "linear16", sampleRate: 16000 },
         output: { encoding: "linear16", sampleRate: 24000 },
       },
       reconnect: { enabled: true, maxAttempts: 3 },
     }),
-    [subject.name],
+    [subject.name, subject.panels],
   );
 
   return (
@@ -317,6 +317,10 @@ function Notebook({
   /** What the tutor has drawn on the graph. The panel is a view of this, so
    *  closing it and opening it again shows the same curves. */
   const [plots, setPlots] = useState<Plot[]>([]);
+  /** Whatever the learner typed into the calculator, held across closings of the
+   *  panel - the calculator itself only exists while the panel is open. */
+  const graphStateRef = useRef<DesmosState | null>(null);
+  const canGraph = subject.panels.includes("graphs");
   /** The anchors again, as state: the mastery panel renders from them. */
   const [problems, setProblems] = useState<ProblemAnchor[]>([]);
   const [sheets, setSheets] = useState<SavedSheet[]>([]);
@@ -703,16 +707,22 @@ function Notebook({
    *  off the same rung that gates its words - see lib/whiteboard/graph.ts. */
   useAgentClientTool(
     PLOT_GRAPH,
-    useCallback((fn: { arguments: string }) => {
-      const plan = planPlot(parsePlotArgs(fn.arguments), openRef.current?.rung ?? null);
-      if (!plan.ok) return plan.message;
-      setPlots(plan.plots);
-      // No point drawing into a panel they cannot see. On a narrow screen this
-      // covers the canvas, which is the right trade when a graph was asked for -
-      // but wiping the graph is no reason to open it.
-      if (plan.plots.length > 0) setPanel("graphs");
-      return plan.message;
-    }, []),
+    useCallback(
+      (fn: { arguments: string }) => {
+        // The tool is not offered on a subject without a graph panel, but a model
+        // that calls it anyway is told no rather than opening one.
+        if (!canGraph) return `There is no graph on the ${subject.name} page. Say it instead.`;
+        const plan = planPlot(parsePlotArgs(fn.arguments), openRef.current?.rung ?? null);
+        if (!plan.ok) return plan.message;
+        setPlots(plan.plots);
+        // No point drawing into a panel they cannot see. On a narrow screen this
+        // covers the canvas, which is the right trade when a graph was asked for -
+        // but wiping the graph is no reason to open it.
+        if (plan.plots.length > 0) setPanel("graphs");
+        return plan.message;
+      },
+      [canGraph, subject.name],
+    ),
   );
 
   // Every learner turn is also a move in the hint ladder. The agent decides the
@@ -1081,7 +1091,12 @@ function Notebook({
           onToggle={(id) => setPanel((open) => (open === id ? null : id))}
         />
         {panel === "graphs" && (
-          <GraphsPanel plots={plots} onClose={() => setPanel(null)} onClear={() => setPlots([])} />
+          <GraphsPanel
+            plots={plots}
+            stateRef={graphStateRef}
+            onClose={() => setPanel(null)}
+            onClear={() => setPlots([])}
+          />
         )}
         {panel === "mastery" && (
           <MasteryPanel mastery={masteryOf(readings, problems)} onClose={() => setPanel(null)} />
