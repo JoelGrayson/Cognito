@@ -18,7 +18,11 @@ type Drawn = Exclude<ResolvedAction, { type: "erase" } | { type: "clear" }>;
 /** Something on the board. `key` is unique per placement, so redrawn elements animate again. */
 export type BoardElement =
   | (Drawn & { key: string; delay: number })
-  | { type: "stroke"; id: string; key: string; delay: number; points: number[]; color: BoardColor };
+  | { type: "stroke"; id: string; key: string; delay: number; points: number[]; color: BoardColor }
+  | { type: "rub"; id: string; key: string; delay: number; points: number[]; size: number };
+
+/** How wide the eraser is, in board units. */
+export const RUB_SIZE = 44;
 
 let placed = 0;
 
@@ -44,6 +48,71 @@ export function applyActions(elements: BoardElement[], actions: ResolvedAction[]
 export function learnerStroke(points: number[], color: BoardColor, n: number): BoardElement {
   placed += 1;
   return { type: "stroke", id: `you${n}`, key: `you${n}:${placed}`, delay: 0, points: simplifyStroke(points), color };
+}
+
+/**
+ * A white stroke that covers the page underneath. Digital ink is deleted
+ * outright; anything printed into the page itself can only be painted over.
+ */
+export function rubStroke(points: number[], n: number, size = RUB_SIZE): BoardElement {
+  placed += 1;
+  return { type: "rub", id: `rub${n}`, key: `rub${n}:${placed}`, delay: 0, points: simplifyStroke(points), size };
+}
+
+/** Shortest distance from (x, y) to the segment (ax, ay)-(bx, by). */
+function distToSegment(x: number, y: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = dx * dx + dy * dy;
+  const t = len === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len));
+  return Math.hypot(x - (ax + t * dx), y - (ay + t * dy));
+}
+
+function nearPolyline(points: number[], x: number, y: number, r: number): boolean {
+  const pts = pairs(points);
+  if (pts.length === 1) return Math.hypot(x - pts[0][0], y - pts[0][1]) <= r;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    if (distToSegment(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]) <= r) return true;
+  }
+  return false;
+}
+
+function nearBox(x: number, y: number, r: number, bx: number, by: number, bw: number, bh: number): boolean {
+  return x >= bx - r && x <= bx + bw + r && y >= by - r && y <= by + bh + r;
+}
+
+/** True when the eraser, centred at (x, y) with radius r, touches this element. */
+export function elementNear(e: BoardElement, x: number, y: number, r: number): boolean {
+  switch (e.type) {
+    case "stroke":
+      return nearPolyline(e.points, x, y, r);
+    case "rub":
+      return nearPolyline(e.points, x, y, r + e.size / 2);
+    case "path":
+      return nearPolyline(e.closed ? [...e.points, e.points[0], e.points[1]] : e.points, x, y, r);
+    case "line":
+      return distToSegment(x, y, e.x1, e.y1, e.x2, e.y2) <= r;
+    case "circle":
+      return Math.hypot(x - e.cx, y - e.cy) <= e.r + r;
+    case "rect":
+    case "image":
+    case "plot":
+      return nearBox(x, y, r, e.x, e.y, e.w, e.h);
+    case "text": {
+      const size = e.size === "small" ? 18 : e.size === "medium" ? 24 : 34;
+      const lines = e.text.split("\n");
+      const widest = Math.max(...lines.map((l) => l.length));
+      return nearBox(x, y, r, e.x, e.y, widest * size * 0.55, lines.length * size * 1.2);
+    }
+    default:
+      return false;
+  }
+}
+
+/** Drop every element the eraser stroke passed over. */
+export function rubOut(elements: BoardElement[], points: number[], r = RUB_SIZE / 2): BoardElement[] {
+  const path = pairs(points);
+  return elements.filter((e) => !path.some(([x, y]) => elementNear(e, x, y, r)));
 }
 
 export function pairs(points: number[]): [number, number][] {
