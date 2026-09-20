@@ -3,6 +3,13 @@
   --tl-color-background: var(--wb-card);
 }
 
+/* The notebook canvas is always visible. Keep its transformed PDF and ink layers
+   painted when OCR results resize the surrounding tablet layout, rather than
+   letting content-visibility: auto skip the entire drawing surface. */
+.wb .tl-canvas {
+  content-visibility: visible;
+}
+
 .wb-pop {
   animation: wb-pop 180ms ease-out;
 }
