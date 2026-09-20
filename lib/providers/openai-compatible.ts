@@ -40,6 +40,8 @@ export interface OpenAICompatibleConfig {
   preferModel?: string;
   /** Whether the server accepts `reasoning_effort` (OpenAI does; most others reject it). */
   supportsReasoningEffort?: boolean;
+  /** Extra body fields every request carries, e.g. OpenRouter's provider routing. */
+  extraBody?: Record<string, unknown>;
 }
 
 type ResponseFormat = NonNullable<ChatCompletionCreateParamsNonStreaming["response_format"]>;
@@ -136,6 +138,7 @@ export function createOpenAICompatibleProvider(cfg: OpenAICompatibleConfig): Pro
         ],
         ...(attempt.format ? { response_format: attempt.format } : {}),
         ...(cfg.supportsReasoningEffort && req.effort ? { reasoning_effort: req.effort } : {}),
+        ...cfg.extraBody,
       };
       try {
         let text = "";
