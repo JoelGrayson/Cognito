@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { roadmapLessons, roadmaps } from "@/db/schema";
 import { countModules } from "@/lib/modules";
+import type { Lesson } from "@/lib/schema";
 import type { RoadmapRecord, RoadmapRepo } from "./types";
 
 type Row = typeof roadmaps.$inferSelect;
@@ -80,15 +81,26 @@ export const drizzleRoadmapRepo: RoadmapRepo = {
     return row?.lesson ?? null;
   },
   async saveLesson(id, userId, nodeId, lesson) {
-    const db = getDb();
-    const [owner] = await db.select({ id: roadmaps.id }).from(roadmaps).where(owned(id, userId));
-    if (!owner) throw new Error("Roadmap not found.");
-    await db
+    // The ownership check rides along in the insert's source query: one round trip.
+    const saved = await getDb()
       .insert(roadmapLessons)
-      .values({ roadmapId: id, nodeId, lesson })
+      .select((qb) =>
+        qb
+          .select({
+            roadmapId: roadmaps.id,
+            nodeId: sql<string>`${nodeId}::text`.as("node_id"),
+            lesson: sql<Lesson>`${JSON.stringify(lesson)}::jsonb`.as("lesson"),
+            createdAt: sql<Date>`now()`.as("created_at"),
+            updatedAt: sql<Date>`now()`.as("updated_at"),
+          })
+          .from(roadmaps)
+          .where(owned(id, userId)),
+      )
       .onConflictDoUpdate({
         target: [roadmapLessons.roadmapId, roadmapLessons.nodeId],
         set: { lesson, updatedAt: sql`now()` },
-      });
+      })
+      .returning({ nodeId: roadmapLessons.nodeId });
+    if (saved.length === 0) throw new Error("Roadmap not found.");
   },
 };

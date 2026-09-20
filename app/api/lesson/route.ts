@@ -33,12 +33,11 @@ export const POST = apiHandler(async (request) => {
   const userId = session.user.id;
 
   const body = await readJson(request, BodySchema);
-  const roadmap = await roadmapRepo.get(body.roadmapId, userId);
+  const [roadmap, { profile }] = await Promise.all([roadmapRepo.get(body.roadmapId, userId), onboardingRepo.get(userId)]);
   if (!roadmap) return NextResponse.json({ error: "That roadmap does not exist." }, { status: 404 });
   const node = findNode(roadmap.graph, body.nodeId);
   if (!node) return NextResponse.json({ error: "That module is not in the roadmap." }, { status: 404 });
 
-  const { profile } = await onboardingRepo.get(userId);
   const provider = PROVIDERS[isProviderId(profile.provider) ? profile.provider : "anthropic"];
   const ctx = lessonRequest(roadmap.goal, roadmap.graph, node);
   const started = Date.now();
