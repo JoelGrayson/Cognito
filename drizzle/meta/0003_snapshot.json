@@ -1,5 +1,5 @@
 {
-  "id": "2f178120-091a-4375-87de-f0f800ac8615",
+  "id": "40931f86-35e7-4fc0-ab71-cddb3b41dd7b",
   "prevId": "78dc4e0b-877a-46d5-a932-7e5615214c2f",
   "version": "7",
   "dialect": "postgresql",
@@ -146,218 +146,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.legacy_lessons": {
-      "name": "legacy_lessons",
-      "schema": "",
-      "columns": {
-        "roadmap_id": {
-          "name": "roadmap_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "lesson": {
-          "name": "lesson",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "legacy_lessons_roadmap_id_legacy_roadmaps_id_fk": {
-          "name": "legacy_lessons_roadmap_id_legacy_roadmaps_id_fk",
-          "tableFrom": "legacy_lessons",
-          "tableTo": "legacy_roadmaps",
-          "columnsFrom": [
-            "roadmap_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "legacy_lessons_roadmap_id_key_pk": {
-          "name": "legacy_lessons_roadmap_id_key_pk",
-          "columns": [
-            "roadmap_id",
-            "key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "legacy_lessons_key_nonempty": {
-          "name": "legacy_lessons_key_nonempty",
-          "value": "length(btrim(\"legacy_lessons\".\"key\")) > 0"
-        },
-        "legacy_lessons_lesson_object": {
-          "name": "legacy_lessons_lesson_object",
-          "value": "jsonb_typeof(\"legacy_lessons\".\"lesson\") = 'object'"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.legacy_roadmaps": {
-      "name": "legacy_roadmaps",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "topic": {
-          "name": "topic",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "details": {
-          "name": "details",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "instruction": {
-          "name": "instruction",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "map": {
-          "name": "map",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "complete": {
-          "name": "complete",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "model": {
-          "name": "model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "generation_ms": {
-          "name": "generation_ms",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "legacy_roadmaps_user_created_idx": {
-          "name": "legacy_roadmaps_user_created_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "legacy_roadmaps_user_id_user_id_fk": {
-          "name": "legacy_roadmaps_user_id_user_id_fk",
-          "tableFrom": "legacy_roadmaps",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "legacy_roadmaps_map_object": {
-          "name": "legacy_roadmaps_map_object",
-          "value": "jsonb_typeof(\"legacy_roadmaps\".\"map\") = 'object'"
-        }
-      },
       "isRLSEnabled": true
     },
     "public.node_content": {
@@ -535,6 +323,82 @@
         "onboarding_messages_array": {
           "name": "onboarding_messages_array",
           "value": "jsonb_typeof(\"onboarding_sessions\".\"messages\") = 'array'"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.roadmap_lessons": {
+      "name": "roadmap_lessons",
+      "schema": "",
+      "columns": {
+        "roadmap_id": {
+          "name": "roadmap_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_id": {
+          "name": "node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lesson": {
+          "name": "lesson",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "roadmap_lessons_roadmap_id_roadmaps_id_fk": {
+          "name": "roadmap_lessons_roadmap_id_roadmaps_id_fk",
+          "tableFrom": "roadmap_lessons",
+          "tableTo": "roadmaps",
+          "columnsFrom": [
+            "roadmap_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "roadmap_lessons_roadmap_id_node_id_pk": {
+          "name": "roadmap_lessons_roadmap_id_node_id_pk",
+          "columns": [
+            "roadmap_id",
+            "node_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "roadmap_lessons_node_id_valid": {
+          "name": "roadmap_lessons_node_id_valid",
+          "value": "\"roadmap_lessons\".\"node_id\" ~ '^[a-z0-9_]{1,60}$'"
+        },
+        "roadmap_lessons_lesson_object": {
+          "name": "roadmap_lessons_lesson_object",
+          "value": "jsonb_typeof(\"roadmap_lessons\".\"lesson\") = 'object'"
         }
       },
       "isRLSEnabled": true

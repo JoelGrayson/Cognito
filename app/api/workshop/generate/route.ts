@@ -45,7 +45,7 @@ async function respondWithStored(userId: string, state: OnboardingState) {
         .catch((error) => console.error("roadmap record sync failed", error));
     }
   }
-  return Response.json({ graph, usedFallback: false });
+  return Response.json({ graph, roadmapId: state.activeRoadmapId, usedFallback: false });
 }
 
 /**
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
           return null;
         });
       await onboardingRepo.update(userId, { draftGraph: graph, activeRoadmapId: record?.id ?? null });
-      return Response.json({ graph, usedFallback });
+      return Response.json({ graph, roadmapId: record?.id ?? null, usedFallback });
     })();
     inflightGraphs.set(userId, work.then(() => {}));
     try {

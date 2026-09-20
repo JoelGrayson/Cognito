@@ -2,7 +2,7 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { legacyRoadmaps, onboardingSessions, roadmaps, studyPlans } from "@/db/schema";
+import { onboardingSessions, roadmaps, studyPlans } from "@/db/schema";
 
 /** Called by Better Auth before it deletes the linked anonymous identity. */
 export async function migrateUserData(fromUserId: string, toUserId: string): Promise<void> {
@@ -14,10 +14,6 @@ export async function migrateUserData(fromUserId: string, toUserId: string): Pro
     // Roadmap history follows the user; the session's activeRoadmapId keeps pointing at it.
     await tx.update(roadmaps).set({ userId: toUserId })
       .where(eq(roadmaps.userId, fromUserId));
-
-    // Lessons hang off the roadmap row, so they follow it.
-    await tx.update(legacyRoadmaps).set({ userId: toUserId })
-      .where(eq(legacyRoadmaps.userId, fromUserId));
 
     const [source] = await tx.select().from(onboardingSessions)
       .where(eq(onboardingSessions.userId, fromUserId)).for("update");

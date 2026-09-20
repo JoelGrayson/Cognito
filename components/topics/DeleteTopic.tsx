@@ -16,8 +16,9 @@ export function DeleteTopic({ id, title }: { id: string; title: string }) {
       aria-label={`Remove ${title}`}
       title="Remove"
       onClick={() => {
+        if (!window.confirm(`Remove "${title}" and its lessons?`)) return;
         setRemoving(true);
-        trpc.legacy.delete
+        trpc.topics.delete
           .mutate({ id })
           .then(() => router.refresh())
           .catch(() => {})

@@ -2,33 +2,12 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getAuth } from "@/lib/auth";
 import { keepReachable } from "@/lib/links";
-import { writeLesson } from "@/lib/lesson";
-import {
-  QUIZ_SYSTEM_PROMPT,
-  SYSTEM_PROMPT,
-  TUTOR_SYSTEM_PROMPT,
-  quizPrompt,
-  tutorPrompt,
-  userPrompt,
-} from "@/lib/prompt";
+import { QUIZ_SYSTEM_PROMPT, TUTOR_SYSTEM_PROMPT, quizPrompt, tutorPrompt } from "@/lib/prompt";
 import { PROVIDERS, listProviders } from "@/lib/providers";
-import {
-  ChatMessageSchema,
-  LessonSchema,
-  MindMapInputSchema,
-  MindMapSchema,
-  NodeSchema,
-  PhaseSchema,
-  QuizSchema,
-  TutorReplySchema,
-  type GenerateRequest,
-  type Lesson,
-  type Quiz,
-} from "@/lib/schema";
+import { ChatMessageSchema, LessonSchema, QuizSchema, TutorReplySchema, type Lesson, type Quiz } from "@/lib/schema";
 import { findHelpfulVideo } from "@/lib/video";
-import { legacyRouter } from "./legacy";
+import { topicsRouter } from "./topics";
 import { publicProcedure, router } from "./trpc";
-import { tidyMap } from "@/lib/roadmap";
 
 const ProviderIdSchema = z.enum(["anthropic", "openai", "chatgpt", "xai", "local"]);
 const providerInput = {
@@ -36,86 +15,13 @@ const providerInput = {
   model: z.string().optional(),
 };
 
-const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  const session = await getAuth().api.getSession({ headers: ctx.headers });
-  if (!session) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Your session has expired. Please try again.",
-    });
-  }
-  return next({ ctx: { session } });
-});
-
 export const appRouter = router({
-  legacy: legacyRouter,
+  topics: topicsRouter,
 
   providers: publicProcedure.query(async ({ ctx }) => {
     const session = await getAuth().api.getSession({ headers: ctx.headers });
     return listProviders(session ? { userId: session.user.id } : undefined);
   }),
-
-  mindMap: protectedProcedure
-    .input(
-      z.object({
-        topic: z.string().trim().min(1, "Tell me what you want to learn.").max(500, "Keep the topic under 500 characters."),
-        ...providerInput,
-        current: MindMapInputSchema.optional(),
-        instruction: z.string().trim().max(2000, "Keep the modification under 2000 characters.").optional(),
-        details: z.string().trim().max(2000, "Keep the details under 2000 characters.").optional(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const provider = PROVIDERS[input.provider];
-      const request: GenerateRequest = { topic: input.topic, details: input.details || undefined };
-
-      if (input.current !== undefined || input.instruction !== undefined) {
-        if (!input.current) throw new TRPCError({ code: "BAD_REQUEST", message: "The current roadmap is required." });
-        if (!input.instruction) throw new TRPCError({ code: "BAD_REQUEST", message: "Tell me what to change." });
-        request.current = input.current;
-        request.instruction = input.instruction;
-      }
-
-      const started = Date.now();
-      const result = await provider.structured(
-        { name: "mind_map", schema: MindMapSchema, system: SYSTEM_PROMPT, user: userPrompt(request) },
-        input.model,
-        { userId: ctx.session.user.id },
-      );
-
-      return {
-        mindMap: tidyMap(result.output),
-        provider: provider.id,
-        model: result.model,
-        ms: Date.now() - started,
-      };
-    }),
-
-  lesson: publicProcedure
-    .input(
-      z.object({
-        topic: z.string().trim().min(1).max(500),
-        node: NodeSchema,
-        phase: PhaseSchema,
-        map: MindMapInputSchema,
-        ...providerInput,
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const session = await getAuth().api.getSession({ headers: ctx.headers });
-      const provider = PROVIDERS[input.provider];
-      const started = Date.now();
-      // Same two-phase pipeline as the streaming route, without the progress events.
-      const { lesson, model } = await writeLesson(
-        provider,
-        { topic: input.topic, node: input.node, phase: input.phase, map: input.map },
-        input.model,
-        () => {},
-        session ? { userId: session.user.id } : undefined,
-      );
-
-      return { lesson, provider: provider.id, model, ms: Date.now() - started };
-    }),
 
   tutor: publicProcedure
     .input(

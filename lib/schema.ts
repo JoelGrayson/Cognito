@@ -10,115 +10,8 @@ export const NodeSchema = z.object({
   description: z.string().describe("One sentence on what this covers and why"),
 });
 
-/** How a stage relates to the stage (or any-order group) directly above it. */
-export const StageLinkSchema = z.enum(["requires", "any-order", "recommended"]);
-
-export const StageSchema = z.object({
-  why: z
-    .string()
-    .describe("One plain line, at most 15 words, shown above this stage: why it comes at this point in the roadmap"),
-  phase: PhaseSchema.describe(
-    "prerequisite = background needed before the topic itself; core = the topic proper; advanced = deeper or applied material that builds on the core",
-  ),
-  core: NodeSchema.describe("The main thing to learn at this stage; these form the spine"),
-  supporting: z
-    .array(NodeSchema)
-    .describe("0-2 things learned alongside the core node at this stage"),
-  link: StageLinkSchema.describe(
-    "How this stage relates to the stage directly above it. requires = it cannot be understood without that stage (or that whole any-order group): a true prerequisite; any-order = it and the stage above can be learned in either order, so they share an any-order group; recommended = no hard dependency, the order above is just a sensible default. Use recommended for the first stage.",
-  ),
-});
-
-export const MindMapSchema = z.object({
-  topic: z.string().describe("The topic, cleaned up as a short title"),
-  summary: z
-    .string()
-    .describe("One sentence on what the learner will be able to do"),
-  startingPoint: z
-    .array(z.string())
-    .describe(
-      "What you need to know before starting: 1-3 specific, checkable skills, e.g. 'Write a JavaScript function that loops over an array'. One item 'Nothing: this starts from zero' if none",
-    ),
-  outcome: z
-    .array(z.string())
-    .describe(
-      "What you will know at the end: 3-4 specific, testable tasks the learner will be able to do, each naming a concrete thing to build, calculate, write or explain",
-    ),
-  order: z
-    .enum(["chronological", "difficulty", "parts", "mixed"])
-    .describe(
-      "What decides the order of the stages: chronological = by time, because later work answers earlier work; difficulty = easiest and most load-bearing first; parts = the parts of one system; mixed = none of these dominates",
-    ),
-  plan: z
-    .string()
-    .describe(
-      "How this roadmap is ordered and why, in 2-3 plain sentences a learner reads before starting: the shape (by time, by difficulty, by parts of a system), what comes first and why, and what the any-order groups are for",
-    ),
-  stages: z
-    .array(StageSchema)
-    .describe("Stages in learning order, top to bottom: 1 for a single concept, up to about 8 for a broad field"),
-  nextSteps: z
-    .array(
-      z.object({
-        topic: z.string().describe("A short topic name the learner could type next, e.g. 'Power equations'"),
-        why: z.string().describe("One short line on what it adds"),
-      }),
-    )
-    .describe("2-4 topics to learn after this roadmap; none of them are blocks in this map"),
-});
-
-export type NextStep = z.infer<typeof MindMapSchema>["nextSteps"][number];
-
 export type Phase = z.infer<typeof PhaseSchema>;
 export type MapNode = z.infer<typeof NodeSchema>;
-export type Stage = z.infer<typeof StageSchema>;
-export type MindMap = z.infer<typeof MindMapSchema>;
-export type StageLink = z.infer<typeof StageLinkSchema>;
-
-/**
- * A roadmap sent by the browser. Roadmaps saved before stage links existed have
- * none; they are read as a plain recommended order.
- */
-export const MindMapInputSchema = z.preprocess((value) => {
-  if (typeof value !== "object" || value === null) return value;
-  const stages = (value as { stages?: unknown }).stages;
-  if (!Array.isArray(stages)) return value;
-  return {
-    ...value,
-    // Added later: the order label, plan note and intro lists at the top of the map.
-    order: ["chronological", "difficulty", "parts"].includes((value as { order?: unknown }).order as string)
-      ? (value as { order: string }).order
-      : "mixed",
-    plan: typeof (value as { plan?: unknown }).plan === "string" ? (value as { plan: string }).plan : "",
-    startingPoint: asList((value as { startingPoint?: unknown }).startingPoint),
-    outcome: asList((value as { outcome?: unknown }).outcome),
-    nextSteps: Array.isArray((value as { nextSteps?: unknown }).nextSteps)
-      ? (value as { nextSteps: unknown[] }).nextSteps
-      : [],
-    stages: stages.map((s) =>
-      typeof s === "object" && s !== null
-        ? { link: "recommended", why: "", ...(s as Record<string, unknown>) }
-        : s,
-    ),
-  };
-}, MindMapSchema);
-
-/** A list field that older roadmaps stored as one string, or not at all. */
-export function asList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
-  return typeof value === "string" && value.trim() ? [value] : [];
-}
-
-/** What the client sends to generate or revise a map. */
-export interface GenerateRequest {
-  topic: string;
-  /** What the learner added about their goal and what they already know. */
-  details?: string;
-  /** When revising: the map as it currently stands. */
-  current?: MindMap;
-  /** When revising: what to change. */
-  instruction?: string;
-}
 
 /* ---------- Lessons ---------- */
 
@@ -443,14 +336,6 @@ export const CodeReviewSchema = z.object({
 export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
 export type Exercise = z.infer<typeof ExerciseSchema>;
 export type CodeReview = z.infer<typeof CodeReviewSchema>;
-
-/** The roadmap assistant's reply, with the revised roadmap when it changed one. */
-export const MapChatReplySchema = z.object({
-  reply: z
-    .string()
-    .describe("Answer to the learner: fact-dense, a few '- ' bullets or short sentences. Say briefly what you changed when you changed the map"),
-  updatedMap: MindMapSchema.nullable().describe("The complete revised roadmap when the learner asked to change it; otherwise null"),
-});
 
 /* ---------- Explainer: a narrated, drawn walkthrough of a topic ---------- */
 

@@ -1,5 +1,4 @@
-import type { ProviderId } from "@/lib/providers/types";
-import type { Lesson, MindMap } from "@/lib/schema";
+import type { Lesson } from "@/lib/schema";
 import type { DraftGraph, OnboardingState, StudyPlan } from "@/types/learning";
 
 export type OnboardingPatch = Partial<Omit<OnboardingState, "profile">> & {
@@ -37,7 +36,11 @@ export interface RoadmapRecord {
 }
 
 /** What the history list needs — the graph stays out of list payloads. */
-export type RoadmapSummary = Pick<RoadmapRecord, "id" | "title" | "goal" | "createdAt" | "updatedAt">;
+export type RoadmapSummary = Pick<RoadmapRecord, "id" | "title" | "goal" | "createdAt" | "updatedAt"> & {
+  /** Nodes the learner can open as modules (scope "included"). */
+  modules: number;
+  lessonsWritten: number;
+};
 
 export type NewRoadmap = Pick<RoadmapRecord, "title" | "goal" | "graph">;
 
@@ -49,63 +52,11 @@ export interface RoadmapRepo {
   create(userId: string, roadmap: NewRoadmap): Promise<RoadmapRecord>;
   /** Null when the record does not exist or belongs to someone else. */
   update(id: string, userId: string, patch: Partial<NewRoadmap>): Promise<RoadmapRecord | null>;
-}
-
-/** A roadmap from the legacy (stage/block) flow at /legacy. */
-export interface LegacyRoadmapRecord {
-  id: string;
-  userId: string;
-  /** What the learner typed. */
-  topic: string;
-  /** What the learner added about their goal and what they already know. */
-  details: string | null;
-  provider: ProviderId;
-  /** For a revised map: the change the learner asked for. */
-  instruction: string | null;
-  map: MindMap;
-  /** False while the map is still streaming in. */
-  complete: boolean;
-  /** Set when generation failed; `map` is whatever arrived before. */
-  error: string | null;
-  model: string | null;
-  generationMs: number | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type NewLegacyRoadmap = Pick<LegacyRoadmapRecord, "topic" | "details" | "provider" | "instruction" | "map"> & {
-  /** True when the map is already final (a revision the assistant made); defaults to false. */
-  complete?: boolean;
-};
-
-export type LegacyRoadmapPatch = Partial<Pick<LegacyRoadmapRecord, "map" | "complete" | "error" | "model" | "generationMs">>;
-
-/** One finished roadmap, as the /legacy home page lists it. */
-export interface LegacyRoadmapSummary {
-  id: string;
-  topic: string;
-  /** The map's own cleaned-up title. */
-  title: string;
-  instruction: string | null;
-  blocks: number;
-  lessonsWritten: number;
-  createdAt: string;
-}
-
-export interface LegacyRoadmapRepo {
-  /** Finished roadmaps, newest first. */
-  list(userId: string): Promise<LegacyRoadmapSummary[]>;
-  /** Null when the roadmap does not exist or belongs to someone else. */
-  get(id: string, userId: string): Promise<LegacyRoadmapRecord | null>;
-  create(userId: string, roadmap: NewLegacyRoadmap): Promise<LegacyRoadmapRecord>;
-  /** Null when the roadmap does not exist or belongs to someone else. */
-  update(id: string, userId: string, patch: LegacyRoadmapPatch): Promise<LegacyRoadmapRecord | null>;
-  /** Removes the roadmap and its lessons. */
+  /** Removes the roadmap and its lessons. No-op when it is missing or someone else's. */
   delete(id: string, userId: string): Promise<void>;
-  /** Keys of the lessons written for a roadmap. */
-  lessonKeys(id: string, userId: string): Promise<string[]>;
-  getLesson(id: string, userId: string, key: string): Promise<Lesson | null>;
-  saveLesson(id: string, userId: string, key: string, lesson: Lesson): Promise<void>;
-  /** Carry lessons over to a revised map, for the blocks it kept. */
-  copyLessons(fromId: string, toId: string, userId: string, keys: string[]): Promise<void>;
+  /** Ids of the nodes whose lesson has been written. */
+  lessonNodeIds(id: string, userId: string): Promise<string[]>;
+  getLesson(id: string, userId: string, nodeId: string): Promise<Lesson | null>;
+  /** Upserts; throws when the roadmap is missing or someone else's. */
+  saveLesson(id: string, userId: string, nodeId: string, lesson: Lesson): Promise<void>;
 }

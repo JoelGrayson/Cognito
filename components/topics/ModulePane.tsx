@@ -4,38 +4,39 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { LessonView, type LessonState } from "@/components/Lesson";
 import { emptyDraft, type LessonDraft, type OutlineDraft } from "@/lib/drafts";
-import { moduleChatPath, modulePath, topicPath } from "@/lib/legacy-paths";
+import { lessonRequest, moduleChatPath, topicPath } from "@/lib/modules";
 import { ensureOk, readNdjson } from "@/lib/ndjson";
-import type { LegacyRoadmapRecord } from "@/lib/repo";
-import { lessonKey, nodeAt, type NodeRef } from "@/lib/roadmap";
-import type { Lesson, MapNode, Resource, Video } from "@/lib/schema";
+import type { ProviderId } from "@/lib/providers/types";
+import type { RoadmapRecord } from "@/lib/repo";
+import type { Lesson, Resource, Video } from "@/lib/schema";
 import { trpc } from "@/lib/trpc";
+import type { DraftNode } from "@/types/learning";
+import { ModuleList } from "./ModuleList";
 
 interface Props {
-  roadmap: LegacyRoadmapRecord;
-  /** The block this page is about. */
-  selected: NodeRef;
+  roadmap: RoadmapRecord;
+  /** The node this page is about. */
+  node: DraftNode;
   /** Null when the lesson has not been written yet; it is written on open. */
   lesson: Lesson | null;
-  writtenKeys: string[];
+  written: string[];
+  providerId: ProviderId;
 }
 
-/** One block's lesson. Writes it the first time the block is opened. */
-export function LessonPane({ roadmap, selected, lesson, writtenKeys }: Props) {
+/** One node's lesson. Writes it the first time the node is opened. */
+export function ModulePane({ roadmap, node, lesson, written, providerId }: Props) {
   const router = useRouter();
-  const map = roadmap.map;
-  const key = lessonKey(nodeAt(map, selected)!.node);
   const [state, setState] = useState<LessonState>(lesson ? { status: "ready", lesson } : { status: "loading" });
-  const written = new Set(writtenKeys);
   const abort = useRef<AbortController | null>(null);
+  // The same framing the server writes from: name, subtitle, description and phase.
+  const { node: heading, phase } = lessonRequest(roadmap.goal, roadmap.graph, node);
 
-  /** Stream the lesson in, saving it on the server as it finishes. */
+  /** Stream the lesson in; the server saves it as it finishes. */
   function write() {
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
-    const node = nodeAt(map, selected)!.node;
-    let draft = emptyDraft(node);
+    let draft = emptyDraft(heading);
     const show = (next: LessonDraft) => {
       draft = next;
       setState({ status: "streaming", draft: next });
@@ -47,7 +48,7 @@ export function LessonPane({ roadmap, selected, lesson, writtenKeys }: Props) {
           method: "POST",
           signal: controller.signal,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roadmapId: roadmap.id, key }),
+          body: JSON.stringify({ roadmapId: roadmap.id, nodeId: node.id }),
         });
         await ensureOk(res);
         let finished = false;
@@ -57,8 +58,8 @@ export function LessonPane({ roadmap, selected, lesson, writtenKeys }: Props) {
               const o = event.outline as OutlineDraft;
               show({
                 ...draft,
-                title: o.title || node.name,
-                summary: o.summary || node.description,
+                title: o.title || heading.name,
+                summary: o.summary || heading.description,
                 tldr: o.tldr,
                 sections: o.sections.map((sec, i) => ({
                   heading: sec.heading,
@@ -107,7 +108,7 @@ export function LessonPane({ roadmap, selected, lesson, writtenKeys }: Props) {
     })();
   }
 
-  // Written once, the first time the block is opened.
+  // Written once, the first time the node is opened.
   const started = useRef(false);
   useEffect(() => {
     if (lesson || started.current) return;
@@ -120,29 +121,22 @@ export function LessonPane({ roadmap, selected, lesson, writtenKeys }: Props) {
   /** The tutor rewrote the lesson. */
   async function onLessonChange(next: Lesson) {
     setState({ status: "ready", lesson: next });
-    await trpc.legacy.saveLesson.mutate({ id: roadmap.id, key, lesson: next });
+    await trpc.topics.saveLesson.mutate({ id: roadmap.id, nodeId: node.id, lesson: next });
     router.refresh();
   }
 
-  const hrefFor = (ref: NodeRef) => {
-    const at = nodeAt(map, ref);
-    return at ? modulePath(roadmap.id, lessonKey(at.node)) : undefined;
-  };
-
   return (
     <LessonView
-      topic={roadmap.topic}
-      map={map}
-      selected={selected}
+      topic={roadmap.title}
+      node={heading}
+      phase={phase}
       state={state}
-      providerId={roadmap.provider}
-      onSelectNode={(ref) => router.push(hrefFor(ref) ?? topicPath(roadmap.id))}
-      onBack={() => router.push(topicPath(roadmap.id))}
+      providerId={providerId}
+      backHref={topicPath(roadmap.id)}
+      minimap={<ModuleList roadmapId={roadmap.id} graph={roadmap.graph} written={written} currentId={node.id} compact />}
       onRetry={write}
       onLessonChange={(next) => void onLessonChange(next)}
-      lessonHref={hrefFor}
-      isReady={(node: MapNode) => written.has(lessonKey(node))}
-      chatHref={moduleChatPath(roadmap.id, key)}
+      chatHref={moduleChatPath(roadmap.id, node.id)}
     />
   );
 }
