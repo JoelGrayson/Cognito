@@ -123,7 +123,7 @@ export function useZoomPan(
         }
         tap = null;
       }
-      if (fingers.size === 0) firstDown = null;
+      firstDown = fingers.size === 1 ? [...fingers.values()][0] : null;
       last = fingers.size === 2 ? pinch() : null;
       drag = fingers.size === 1 && fingerPansRef.current ? [...fingers.values()][0] : null;
     };
