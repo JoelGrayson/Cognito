@@ -77,6 +77,19 @@ pnpm dev
 
 Open http://localhost:3000.
 
+## Whiteboard deployment
+
+The tldraw worksheet needs a valid [license or trial key](https://tldraw.dev/pricing)
+for the deployed domain. Set `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` in Vercel's environment
+settings for each deployment environment, then redeploy: Next.js embeds this public
+key at build time.
+
+Without a valid key, tldraw 5.4.2 unmounts the canvas after five seconds on production
+HTTPS sites. The PDF and ink disappear while our toolbar and OCR results remain;
+the timing can look like an OCR failure. Development and localhost allow unlicensed
+use, so a local smoke test will not catch this. Verify the deployed whiteboard stays
+usable for more than five seconds, then write again after a recognition result.
+
 ## Database
 
 Drizzle is configured for Supabase Postgres. Set `DATABASE_URL` in `.env.local`,

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "../node_modules/streamdown/styles.css";
-@import "katex/dist/katex.min.css";
+@import "../node_modules/katex/dist/katex.min.css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 

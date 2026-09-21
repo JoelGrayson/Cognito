@@ -249,6 +249,7 @@ function Notebook({
   const editorRef = useRef<Editor | null>(null);
   /** The same editor, as state: the Dock renders from it, the callbacks read the ref. */
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [drawingUnavailable, setDrawingUnavailable] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [readings, setReadings] = useState<Reading[]>([]);
@@ -276,6 +277,20 @@ function Notebook({
     });
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+
+  // tldraw 5.4.2 replaces the editor with this marker after five seconds for an
+  // invalid production license. Its license state is not a public API. Observe
+  // only the container's direct children, not the shapes changed by every stroke.
+  // The notice lives outside tldraw, so it survives the editor being removed.
+  useEffect(() => {
+    const container = boxRef.current?.querySelector(".tl-container");
+    if (!container) return;
+    const observer = new MutationObserver(() => {
+      setDrawingUnavailable(container.querySelector('[data-testid="tl-license-expired"]') !== null);
+    });
+    observer.observe(container, { childList: true });
+    return () => observer.disconnect();
   }, []);
 
   // Readings mirrored into a ref: the commit callback is registered once at mount
@@ -909,6 +924,8 @@ function Notebook({
       setError(null);
       try {
         const pages = await pagesOf(file);
+        // License validation can unmount the editor while the PDF is rendering.
+        if (editor.isDisposed) return;
         void saveSheet(file, pages).then(refreshSheets, () => {});
         // A new sheet is a new session: old working would be anchored to problems
         // that are no longer there.
@@ -1231,6 +1248,7 @@ function Notebook({
           <div className="absolute inset-0">
             <Tldraw
               components={NOTEBOOK_UI}
+              licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY}
               onMount={(editor) => {
                 editorRef.current = editor;
                 setEditor(editor);
@@ -1258,7 +1276,7 @@ function Notebook({
                 // React dev-mode mounts twice. Without this, two store listeners end up
                 // registered and every line is submitted twice.
                 recorderRef.current?.stop();
-                recorderRef.current = recordStrokes(
+                const recorder = recordStrokes(
                   editor,
                   (commit) => {
                     const read = submitLine(commit);
@@ -1267,11 +1285,24 @@ function Notebook({
                   },
                   { ...DEFAULT_ENDPOINT_CONFIG, finalLineIdleMs: idleMs },
                 );
+                recorderRef.current = recorder;
+                return () => recorder.stop();
               }}
             />
           </div>
 
-          {(error ?? voiceError) && (
+          {drawingUnavailable && (
+            <div role="alert" className="absolute inset-0 z-[300] grid place-items-center bg-(--wb-card) p-8 text-center">
+              <div className="max-w-sm space-y-2">
+                <p className="wb-serif text-2xl">Whiteboard unavailable</p>
+                <p className="text-sm text-(--wb-muted)">
+                  This site&apos;s drawing license is missing or expired. Please contact the site owner.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!drawingUnavailable && (error ?? voiceError) && (
             <div className="wb-pop absolute inset-x-3 top-3 z-[300] mx-auto flex max-w-md items-start gap-2 rounded-2xl border border-(--wb-bad-ink)/15 bg-(--wb-bad) px-4 py-2.5 text-sm text-(--wb-bad-ink)">
               <span className="flex-1">{error ?? voiceError}</span>
               <button
@@ -1291,7 +1322,7 @@ function Notebook({
               canvas together, and a single row pushed the pen off one edge and the button
               off the other. When they do not fit, the button takes its own row ABOVE the
               dock, so the dock stays where the hand expects it. */}
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[300] flex flex-wrap-reverse items-center justify-center gap-2 sm:bottom-4">
+          <div hidden={drawingUnavailable} className="pointer-events-none absolute inset-x-3 bottom-3 z-[300] flex flex-wrap-reverse items-center justify-center gap-2 sm:bottom-4">
             <div className="pointer-events-auto max-w-full">
               <Dock
                 editor={editor}

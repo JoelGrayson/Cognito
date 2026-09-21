@@ -212,6 +212,8 @@ export function Dock({
         aria-label={listening ? "Listening" : holding ? "Connecting microphone" : "Hold to talk, or hold space"}
         aria-pressed={holding}
         title="Hold to talk, or hold space"
+        onContextMenu={(e) => e.preventDefault()}
+        style={{ WebkitTouchCallout: "none" }}
         onPointerDown={(e) => {
           if (e.button !== 0) return;
           e.preventDefault();
