@@ -24,6 +24,9 @@ export interface ProblemAnchor {
   /** mathjs source, or null when the print could not be read as ONE checkable
    *  statement. A null anchor still separates problems; it just offers no premise. */
   parsed: string | null;
+  /** A problem in its own right although it poses no statement: its work is judged
+   *  against something else (an answer key, a circuit) and tracked as one problem. */
+  keyed?: boolean;
 }
 
 /** One printed line as the OCR reports it, already in page space. */

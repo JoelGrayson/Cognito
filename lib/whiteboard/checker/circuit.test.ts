@@ -2,12 +2,13 @@
  * Fixture table for the circuit checker: the sample sheet's circuits, and the lines a
  * learner would write under each. Run: node --experimental-strip-types lib/whiteboard/checker/circuit.test.ts
  */
-import { checkCircuitLine, solveCircuit, stripUnits, type Circuit } from "./circuit.ts";
+import { checkCircuitLine, dimensionsOf, solveCircuit, stripUnits, type Circuit } from "./circuit.ts";
 import { latexToMathjs } from "../ink.ts";
 import key from "../../../fixtures/circuits/circuits-practice.key.json" with { type: "json" };
 
 const circuits = key.circuits as (Circuit & { problem: number })[];
-const by = (problem: number) => solveCircuit(circuits.find((c) => c.problem === problem)!);
+const circuit = (problem: number) => circuits.find((c) => c.problem === problem)!;
+const by = (problem: number) => solveCircuit(circuit(problem));
 
 const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
 let failures = 0;
@@ -43,6 +44,14 @@ const CASES: [number, string, string, string][] = [
   [1, "I = 3",                  "wrong-value",  "right method, wrong arithmetic"],
   [1, "12 = 4I + 2I + 3",       "not-holding",  "made-up term"],
   [1, "I > 0",                  "undetermined", "not an equation"],
+  [1, "1 = 1",                  "undetermined", "true, and about nothing"],
+  [1, "I = R2",                 "undetermined", "2 = 2, but amps are not ohms"],
+  [1, "V1 + I = 14",            "undetermined", "adds volts to amps"],
+  [1, "I = 2000 mA",            "holds",        "milliamps scaled, not stripped"],
+  [1, "I = 2000 \\mathrm{~mA}",  "holds",        "milliamps as Mathpix writes them"],
+  [1, "R1 = 0.004 k\\Omega",     "holds",        "kilo-ohms scaled"],
+  [1, "I = 2 mA",               "wrong-value",  "2 mA is not 2 A"],
+  [1, "V1 = 12 V",              "holds",        "a given, restated"],
 
   [2, "I = I1 + I2",            "holds",        "KCL at the top node"],
   [2, "I - I1 - I2 = 0",        "holds",        "KCL written as a sum to zero"],
@@ -69,7 +78,7 @@ const CASES: [number, string, string, string][] = [
 ];
 
 for (const [problem, line, expected, note] of CASES) {
-  const verdict = checkCircuitLine(stripUnits(latexToMathjs(line)), by(problem));
+  const verdict = checkCircuitLine(stripUnits(latexToMathjs(line)), by(problem), dimensionsOf(circuit(problem)));
   check(`Q${problem} "${line}" -> ${verdict.kind} (${note})`, verdict.kind === (expected === "holds" ? "equivalent" : expected));
 }
 

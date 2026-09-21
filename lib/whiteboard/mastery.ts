@@ -42,13 +42,14 @@ function stateOf(steps: StepMark[]): ProblemState {
 }
 
 export function masteryOf(lines: JudgedLine[], anchors: ProblemAnchor[]): Mastery {
-  const printed = anchors.filter((a) => a.parsed).sort((a, b) => a.bounds.minY - b.bounds.minY);
+  const printed = anchors.filter((a) => a.parsed || a.keyed).sort((a, b) => a.bounds.minY - b.bounds.minY);
   const known = new Set(printed.map((a) => a.id));
   const loose = lines.filter((l) => l.problemId === null || !known.has(l.problemId));
 
   const problems: ProblemMastery[] = printed.map((anchor, i) => {
     const steps = lines.filter((l) => l.problemId === anchor.id).map(markOf);
-    return { id: anchor.id, label: `Problem ${i + 1}`, steps, state: stateOf(steps) };
+    const label = anchor.keyed ? `Problem ${Math.abs(anchor.id)}` : `Problem ${i + 1}`;
+    return { id: anchor.id, label, steps, state: stateOf(steps) };
   });
   if (loose.length > 0 || printed.length === 0) {
     const steps = loose.map(markOf);
